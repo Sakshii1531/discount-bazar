@@ -1,0 +1,12 @@
+node_modules/
+.env
+
+logs/
+*.log
+
+coverage/
+
+# Ignore all dynamic uploaded images/files
+public/uploads/*
+# Keep directory structure tracked
+!public/uploads/.gitkeep

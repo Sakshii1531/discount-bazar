@@ -1,0 +1,37 @@
+/**
+ * Product Rating System Constants
+ */
+
+export const RATING_STATUSES = {
+  ACTIVE: "ACTIVE",
+  FLAGGED: "FLAGGED",
+  HIDDEN: "HIDDEN",
+  REMOVED: "REMOVED",
+};
+
+export const POSITIVE_FEEDBACK_TAGS = [
+  "GOOD_QUALITY",
+  "FRESH",
+  "GOOD_TASTE",
+  "GOOD_VALUE",
+  "GOOD_PACKAGING",
+  "AS_EXPECTED",
+];
+
+export const NEGATIVE_FEEDBACK_TAGS = [
+  "POOR_QUALITY",
+  "NOT_FRESH",
+  "DAMAGED",
+  "WRONG_PRODUCT",
+  "PACKAGING_ISSUE",
+  "NOT_AS_EXPECTED",
+  "EXPIRY_ISSUE",
+  "OTHER",
+];
+
+export const ALL_PRODUCT_FEEDBACK_TAGS = [
+  ...POSITIVE_FEEDBACK_TAGS,
+  ...NEGATIVE_FEEDBACK_TAGS,
+];
+
+export const RATING_WINDOW_DAYS = 7;
