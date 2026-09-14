@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: discount-bazar-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_DISABLED
+        value: "true"
+      - key: FRONTEND_URL
+        value: https://discount-bazar-phi.vercel.app
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://discount-bazar-phi.vercel.app
