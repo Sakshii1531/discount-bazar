@@ -100,6 +100,11 @@ function parseAllowedOrigins() {
     .filter(Boolean);
 
   const expanded = new Set(parsed);
+  // Ensure discount-bazar-phi.vercel.app and local origins are always allowed
+  expanded.add("https://discount-bazar-phi.vercel.app");
+  expanded.add("http://localhost:5173");
+  expanded.add("http://localhost:3000");
+
   for (const origin of parsed) {
     try {
       const url = new URL(origin);
@@ -114,6 +119,23 @@ function parseAllowedOrigins() {
   }
 
   return [...expanded];
+}
+
+function isOriginAllowed(origin, allowedOrigins) {
+  if (!origin) return true; // Allow non-browser clients (Postman, curl, server-to-server)
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    // Allow exact vercel deployment
+    if (url.hostname === "discount-bazar-phi.vercel.app") return true;
+    // Allow any discount-bazar vercel preview deployments
+    if (url.hostname.endsWith(".vercel.app") && url.hostname.includes("discount-bazar")) return true;
+    // Allow local development
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return true;
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -137,8 +159,37 @@ function createApp() {
 
   app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
 
+  // Serverless cold-start handler for Vercel
+  let serverlessStartupPromise = null;
+  app.use(async (req, res, next) => {
+    if (process.env.VERCEL) {
+      if (!serverlessStartupPromise) {
+        serverlessStartupPromise = startup().catch((err) => {
+          logger.error("Vercel serverless startup failed", { error: err.message });
+          serverlessStartupPromise = null;
+          throw err;
+        });
+      }
+      try {
+        await serverlessStartupPromise;
+      } catch (err) {
+        return res.status(500).json({
+          success: false,
+          error: true,
+          message: "Database connection failed during serverless startup",
+        });
+      }
+    }
+    next();
+  });
+
   const corsOptions = {
-    origin: true,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin, allowedOrigins)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: [
@@ -148,7 +199,15 @@ function createApp() {
       "X-Correlation-Id",
       "X-Request-Id",
       "X-Admin-Bootstrap-Secret",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
     ],
+    exposedHeaders: [
+      "X-Correlation-Id",
+      "X-Request-Id",
+    ],
+    optionsSuccessStatus: 204,
   };
 
   // Middleware
@@ -235,18 +294,24 @@ function createApp() {
   return app;
 }
 
+const app = createApp();
+
 /**
  * Start HTTP server (API role)
  */
 async function startHttpServer() {
-  const app = createApp();
   const server = http.createServer(app);
 
   // Initialize Socket.IO
   const allowedOrigins = parseAllowedOrigins();
   const io = new Server(server, {
     cors: {
-      origin: true,
+      origin: (origin, callback) => {
+        if (isOriginAllowed(origin, allowedOrigins)) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -487,7 +552,10 @@ async function main() {
   }
 }
 
-// Start the application
-main();
+// Start the application when not running in Vercel serverless environment
+if (!process.env.VERCEL) {
+  main();
+}
 
-// hello
+export { app, createApp };
+export default app;

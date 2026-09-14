@@ -15,46 +15,31 @@ const REDIS_ERROR_LOG_INTERVAL_MS = () =>
  * will throw an error if Redis is not properly configured.
  */
 export function isRedisEnabled() {
-  const d = process.env.REDIS_DISABLED;
-  const e = process.env.REDIS_ENABLED;
-  const isProduction = process.env.NODE_ENV === "production";
+  const d = String(process.env.REDIS_DISABLED ?? "").trim().toLowerCase();
+  const e = String(process.env.REDIS_ENABLED ?? "").trim().toLowerCase();
 
-  // Default: disable Redis in Jest to avoid open handles + noisy retries.
-  // Opt-in by setting REDIS_ENABLED=true.
-  if (process.env.NODE_ENV === "test" && !(e === "true" || e === "1")) return false;
-  if (d === "true" || d === "1") {
-    if (isProduction) {
-      throw new Error(
-        "Redis cannot be disabled in production mode (NODE_ENV=production). " +
-        "Redis is required for distributed operations, queues, and caching."
-      );
-    }
-    return false;
-  }
-  if (e === "false" || e === "0") {
-    if (isProduction) {
-      throw new Error(
-        "Redis is required in production mode (NODE_ENV=production). " +
-        "Set REDIS_ENABLED=true or provide REDIS_URL/REDIS_HOST configuration."
-      );
-    }
+  // Explicit override: disable Redis via REDIS_DISABLED in any environment (dev, test, production)
+  if (d === "true" || d === "1" || d === "ture" || d === "yes") {
     return false;
   }
 
-  // In production, verify Redis configuration is present
-  if (isProduction) {
-    const hasConfig = !!(
-      process.env.REDIS_URL ||
-      process.env.REDIS_HOST ||
-      e === "true" ||
-      e === "1"
-    );
-    if (!hasConfig) {
-      throw new Error(
-        "Redis is required in production mode (NODE_ENV=production). " +
-        "Please set REDIS_URL or REDIS_HOST environment variable."
-      );
-    }
+  // Explicit override: disable Redis via REDIS_ENABLED=false in any environment
+  if (e === "false" || e === "0" || e === "no") {
+    return false;
+  }
+
+  // Explicit override: enable Redis via REDIS_ENABLED=true in any environment
+  if (e === "true" || e === "1" || e === "yes") {
+    return true;
+  }
+
+  // Default: disable Redis in Jest to avoid open handles + noisy retries
+  if (process.env.NODE_ENV === "test") return false;
+
+  // In production or development: if no Redis connection info is provided, disable Redis gracefully
+  const hasConfig = !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+  if (!hasConfig) {
+    return false;
   }
 
   return true;
@@ -81,10 +66,7 @@ function attachRedisErrorHandler(client) {
     const interval = REDIS_ERROR_LOG_INTERVAL_MS();
     if (now - _lastSharedErrorLog > interval) {
       _lastSharedErrorLog = now;
-      const isProduction = process.env.NODE_ENV === "production";
-      const message = isProduction
-        ? `[Redis] ERROR: ${err?.code || err?.message || String(err)} - Redis is required in production`
-        : `[Redis] ${err?.code || err?.message || String(err)} — set REDIS_DISABLED=true to run without Redis.`;
+      const message = `[Redis] ${err?.code || err?.message || String(err)} — set REDIS_DISABLED=true to run without Redis.`;
       console.warn(message);
     }
   });

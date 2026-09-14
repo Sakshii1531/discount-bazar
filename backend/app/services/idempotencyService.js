@@ -69,6 +69,14 @@ export async function checkIdempotency(key, payload = null) {
   }
   
   const redis = getRedisClient();
+  if (!redis) {
+    return {
+      exists: false,
+      inProgress: false,
+      checksumMismatch: false,
+    };
+  }
+
   const resultKey = RESULT_KEY_PREFIX + key;
   const lockKey = LOCK_KEY_PREFIX + key;
   const errorKey = ERROR_KEY_PREFIX + key;
@@ -170,6 +178,9 @@ export async function acquireIdempotencyLock(key, ttlSeconds = LOCK_TTL_SECONDS)
   }
   
   const redis = getRedisClient();
+  if (!redis) {
+    return true; // No-op lock when Redis is disabled
+  }
   const lockKey = LOCK_KEY_PREFIX + key;
   const lockValue = `${Date.now()}`; // Timestamp as lock value
   
@@ -205,6 +216,7 @@ export async function storeIdempotencyResult(key, result, payload = null, ttlSec
   }
   
   const redis = getRedisClient();
+  if (!redis) return;
   const resultKey = RESULT_KEY_PREFIX + key;
   const lockKey = LOCK_KEY_PREFIX + key;
   
@@ -246,6 +258,7 @@ export async function storeIdempotencyError(key, error, payload = null, ttlSecon
   }
   
   const redis = getRedisClient();
+  if (!redis) return;
   const errorKey = ERROR_KEY_PREFIX + key;
   const lockKey = LOCK_KEY_PREFIX + key;
   
@@ -288,6 +301,7 @@ export async function releaseIdempotencyLock(key) {
   }
   
   const redis = getRedisClient();
+  if (!redis) return;
   const lockKey = LOCK_KEY_PREFIX + key;
   
   try {

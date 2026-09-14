@@ -73,6 +73,7 @@ export async function enqueueProductIndex(productId) {
   
   try {
     const queue = getSearchIndexQueue();
+    if (!queue) return;
     await queue.add("index", { productId }, {
       jobId: `index-${productId}`, // Prevent duplicate jobs
     });
@@ -97,6 +98,7 @@ export async function enqueueProductRemoval(productId) {
   
   try {
     const queue = getSearchIndexQueue();
+    if (!queue) return;
     await queue.add("remove", { productId }, {
       jobId: `remove-${productId}`, // Prevent duplicate jobs
     });
@@ -186,6 +188,10 @@ export async function startSearchIndexWorker() {
   
   try {
     const queue = getSearchIndexQueue();
+    if (!queue) {
+      logger.info("[SearchSync] Search index worker skipped (Redis disabled)");
+      return;
+    }
     
     // Process jobs
     queue.process("index", 5, processSearchIndexJob); // 5 concurrent index jobs
