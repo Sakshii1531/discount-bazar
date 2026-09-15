@@ -350,33 +350,33 @@ const CustomerAuth = () => {
                         </div>
                     </motion.div>
 
-                    {/* Circular Carousel Control */}
-                    <div className="relative -mt-14 flex justify-center z-20">
-                        <div className="w-28 h-28 rounded-full bg-white border-4 border-white shadow-[0_15px_40px_rgba(97,218,251,0.2)] flex items-center justify-center overflow-hidden transition-shadow duration-1000" style={{ boxShadow: `0 15px 40px ${activeCategory.shadow}` }}>
-                            <AnimatePresence mode="wait">
+                    {/* Brand Logo / Category Control */}
+                    <div className="relative -mt-10 sm:-mt-12 flex justify-center z-20">
+                        {logoUrl ? (
+                            <div className="px-4 py-2 min-w-[130px] max-w-[180px] h-14 sm:h-16 rounded-2xl bg-white border-2 border-white shadow-xl flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={logoUrl}
+                                    alt={`${appName} logo`}
+                                    loading="lazy"
+                                    className="max-h-full max-w-full w-auto h-auto object-contain"
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-24 h-24 rounded-full bg-white border-4 border-white shadow-[0_15px_40px_rgba(97,218,251,0.2)] flex items-center justify-center overflow-hidden transition-shadow duration-1000" style={{ boxShadow: `0 15px 40px ${activeCategory.shadow}` }}>
+                                <AnimatePresence mode="wait">
                                     <motion.div
                                         key={carouselIndex}
                                         initial={{ opacity: 0, scale: 0.5, rotate: -20 }}
                                         animate={{ opacity: 1, scale: 1, rotate: 0 }}
                                         exit={{ opacity: 0, scale: 1.5, rotate: 20 }}
-                                        className="w-full h-full"
-                                        style={{ color: activeCategory.text }}
+                                        className="w-full h-full flex items-center justify-center"
+                                        style={{ color: activeCategory.text, backgroundColor: activeCategory.color }}
                                     >
-                                        {logoUrl ? (
-                                            <img
-                                                src={logoUrl}
-                                                alt={`${appName} logo`}
-                                                loading="lazy"
-                                                className="w-full h-full object-contain p-3"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: activeCategory.color }}>
-                                                {activeCategory.icon}
-                                            </div>
-                                        )}
+                                        {activeCategory.icon}
                                     </motion.div>
-                            </AnimatePresence>
-                        </div>
+                                </AnimatePresence>
+                            </div>
+                        )}
                     </div>
 
 

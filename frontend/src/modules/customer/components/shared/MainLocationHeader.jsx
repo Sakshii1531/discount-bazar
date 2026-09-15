@@ -420,13 +420,13 @@ const MainLocationHeader = ({
               <div
                 onClick={() => navigate("/")}
                 className="flex items-center gap-3 cursor-pointer group shrink-0">
-                <div className="group-hover:scale-105 transition-all duration-300 drop-shadow-[0_2px_8px_rgba(255,255,255,0.2)] rounded-2xl overflow-hidden">
+                <div className="group-hover:scale-105 transition-all duration-300 drop-shadow-[0_2px_8px_rgba(255,255,255,0.2)] rounded-xl overflow-hidden">
                   {logoUrl ? (
                     <img
                       src={logoUrl}
                       alt={`${appName} Logo`}
                       loading="lazy"
-                      className="h-14 lg:h-16 w-auto object-contain rounded-2xl overflow-hidden shadow-sm"
+                      className="h-9 lg:h-10 w-auto object-contain rounded-xl overflow-hidden shadow-sm"
                     />
                   ) : (
                     <span 

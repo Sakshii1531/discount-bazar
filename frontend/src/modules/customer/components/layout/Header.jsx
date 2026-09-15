@@ -108,7 +108,7 @@ const Header = () => {
                                 <img
                                     src={settings.logoUrl}
                                     alt={settings?.appName || 'App Logo'}
-                                    className="h-14 md:h-16 w-auto object-contain rounded-2xl overflow-hidden shadow-sm"
+                                    className="h-9 md:h-10 w-auto object-contain rounded-xl overflow-hidden shadow-sm"
                                 />
                             ) : (
                                 <span className="text-2xl md:text-3xl font-black tracking-tight" style={{ color: settings?.primaryColor || 'var(--primary)' }}>{settings?.appName || 'App'}</span>
