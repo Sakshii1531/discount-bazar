@@ -41,8 +41,8 @@ const AdminAuth = () => {
     const logoUrl = settings?.logoUrl || '';
 
     const [formData, setFormData] = useState({
-        email: 'admin123@gmail.com',
-        password: 'admin123',
+        email: '',
+        password: '',
         name: '',
         adminCode: '',
         phone: ''
