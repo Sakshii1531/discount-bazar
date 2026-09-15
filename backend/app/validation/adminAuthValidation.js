@@ -16,7 +16,7 @@ export const bootstrapAdminSchema = Joi.object({
 
 export const loginAdminSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
-  password: Joi.string().min(8).max(128).required(),
+  password: Joi.string().min(1).max(128).required(),
 });
 
 export function validateSchema(schema, payload) {
