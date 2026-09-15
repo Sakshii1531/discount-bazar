@@ -8,32 +8,20 @@ export const checkOnlineStatus = async () => {
     return false;
   }
   try {
-    // Lightweight HEAD ping with cache busting to verify genuine connectivity
+    // Ping standard public connectivity check to verify genuine internet access
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(`/api/health?_t=${Date.now()}`, {
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    await fetch(`https://www.google.com/generate_204?_t=${Date.now()}`, {
       method: "HEAD",
+      mode: "no-cors",
       cache: "no-store",
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    return res.ok || res.status < 500;
+    return true;
   } catch {
-    // If backend ping fails, try standard public ping as fallback
-    try {
-      const controller2 = new AbortController();
-      const timeoutId2 = setTimeout(() => controller2.abort(), 3000);
-      await fetch(`https://www.google.com/generate_204?_t=${Date.now()}`, {
-        method: "HEAD",
-        mode: "no-cors",
-        cache: "no-store",
-        signal: controller2.signal,
-      });
-      clearTimeout(timeoutId2);
-      return true;
-    } catch {
-      return false;
-    }
+    // If public ping is blocked or fails, rely on browser's native online status
+    return typeof navigator !== "undefined" ? navigator.onLine : true;
   }
 };
 
@@ -67,10 +55,12 @@ const OfflineDetector = () => {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Custom event dispatched by axios interceptor on network failure
+    // Only set offline if device is genuinely offline
     const handleAppOffline = () => {
-      setIsOffline(true);
-      wasOfflineRef.current = true;
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsOffline(true);
+        wasOfflineRef.current = true;
+      }
     };
     window.addEventListener("app:offline", handleAppOffline);
 

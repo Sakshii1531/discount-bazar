@@ -111,8 +111,8 @@ axiosInstance.interceptors.response.use(
                 );
             }
         }
-        // Detect offline or network failure
-        if (!error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || (typeof navigator !== 'undefined' && !navigator.onLine))) {
+        // Only notify offline if the device itself is genuinely offline
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('app:offline'));
             }
