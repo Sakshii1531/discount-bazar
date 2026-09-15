@@ -218,12 +218,11 @@ const AdminAuth = () => {
                                         type={showPassword ? "text" : "password"}
                                         name="password"
                                         required
-                                        minLength={10}
                                         maxLength={128}
                                         autoComplete="current-password"
                                         value={formData.password}
                                         onChange={handleChange}
-                                        placeholder="Password (min 10 chars)"
+                                        placeholder="Password"
                                         className="w-full pl-14 pr-14 py-4 bg-[#f8f9ff] border-2 border-transparent rounded-[24px] text-sm font-bold text-gray-700 outline-none focus:bg-white focus:border-brand-100 focus:ring-8 focus:ring-brand-50/50 transition-all placeholder:text-gray-300"
                                     />
                                     <button
