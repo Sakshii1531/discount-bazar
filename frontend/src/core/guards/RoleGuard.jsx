@@ -12,7 +12,8 @@ const RoleGuard = ({ children, allowedRoles }) => {
     if (!isAuthenticated || !role || !allowedRoles.includes(role)) {
         // Redirect to their respective dashboard if they are logged in but trying to access the wrong area
         if (isAuthenticated && role) {
-            return <Navigate to={`/${role}`} replace />;
+            const redirectPath = role === 'customer' ? '/' : `/${role}`;
+            return <Navigate to={redirectPath} replace />;
         }
         return <Navigate to="/unauthorized" replace />;
     }

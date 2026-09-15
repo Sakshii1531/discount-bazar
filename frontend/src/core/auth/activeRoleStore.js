@@ -40,12 +40,18 @@ function inferRoleFromUrl() {
 }
 
 /**
- * Returns the current role. If no router has explicitly set the role yet,
- * falls back to URL inference for the very first call.
+ * Returns the current role. If URL clearly indicates a specific portal,
+ * that portal's role takes precedence to avoid cross-portal session confusion.
  */
 export function getActiveRole() {
+    if (typeof window !== 'undefined') {
+        const urlRole = inferRoleFromUrl();
+        if (urlRole !== ROLES.CUSTOMER) {
+            return urlRole;
+        }
+    }
     if (_activeRole != null) return _activeRole;
-    return inferRoleFromUrl();
+    return ROLES.CUSTOMER;
 }
 
 /**

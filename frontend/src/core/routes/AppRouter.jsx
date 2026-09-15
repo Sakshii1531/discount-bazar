@@ -1,5 +1,5 @@
 import React, { lazy, useMemo, useEffect, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Outlet, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Outlet, Navigate, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../guards/ProtectedRoute';
 import RoleGuard from '../guards/RoleGuard';
 import { UserRole } from '../constants/roles';
@@ -55,6 +55,25 @@ const DeliveryModule = lazy(() => import('../../modules/delivery/routes/index'))
 
 import CustomerLayout from '../../modules/customer/components/layout/CustomerLayout';
 
+const RootLayout = () => {
+    const location = useLocation();
+
+    useEffect(() => {
+        const path = location.pathname;
+        if (path.startsWith('/admin')) {
+            setActiveRole(ROLES.ADMIN);
+        } else if (path.startsWith('/seller')) {
+            setActiveRole(ROLES.SELLER);
+        } else if (path.startsWith('/delivery')) {
+            setActiveRole(ROLES.DELIVERY);
+        } else {
+            setActiveRole(ROLES.CUSTOMER);
+        }
+    }, [location.pathname]);
+
+    return <Outlet />;
+};
+
 const CustomerLayoutWrapper = () => {
     useEffect(() => {
         setActiveRole(ROLES.CUSTOMER);
@@ -84,7 +103,7 @@ const AppRouter = () => {
     const router = useMemo(() => createBrowserRouter([
         {
             path: '/',
-            element: <Outlet />,
+            element: <RootLayout />,
             errorElement: <RootErrorBoundary />,
             children: [
                 {
@@ -100,6 +119,10 @@ const AppRouter = () => {
                     element: <Auth />,
                 },
                 {
+                    path: 'seller/login',
+                    element: <Navigate to="/seller/auth" replace />,
+                },
+                {
                     path: 'seller/pending-approval',
                     element: <ApplicationPending />,
                 },
@@ -108,8 +131,16 @@ const AppRouter = () => {
                     element: <AdminAuth />,
                 },
                 {
+                    path: 'admin/login',
+                    element: <Navigate to="/admin/auth" replace />,
+                },
+                {
                     path: 'delivery/auth',
                     element: <DeliveryAuth />,
+                },
+                {
+                    path: 'delivery/login',
+                    element: <Navigate to="/delivery/auth" replace />,
                 },
                 {
                     path: 'delivery/terms',
