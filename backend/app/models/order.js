@@ -148,6 +148,30 @@ const orderSchema = new mongoose.Schema(
       default: "CREATED",
       index: true,
     },
+    // POS (in-store) sale support. `orderSource` distinguishes a walk-in
+    // counter sale from a normal online app order; everything else on the
+    // Order (payout/finance, StockHistory, seller Orders/Earnings views)
+    // is reused as-is. `posPaymentMethod` records how the walk-in customer
+    // actually paid — kept separate from `paymentMode` (gateway-oriented:
+    // ONLINE/COD) since no gateway is involved in a counter sale.
+    orderSource: {
+      type: String,
+      enum: ["APP", "POS"],
+      default: "APP",
+      index: true,
+    },
+    posPaymentMethod: {
+      type: String,
+      enum: ["CASH", "CARD", "QR"],
+      default: undefined,
+    },
+    // Embedded snapshot (same convention as `address`) for an optional
+    // walk-in identity. `customer` still always points at the seller's
+    // placeholder walk-in User — see posSaleService.resolveWalkInCustomer.
+    walkInCustomer: {
+      name: { type: String, trim: true },
+      phone: { type: String, trim: true },
+    },
     stockReservation: {
       status: {
         type: String,

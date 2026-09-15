@@ -526,10 +526,13 @@ async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
 }
 
 async function uploadToCloudinary(fileBuffer, folder = "categories", options = {}) {
-  if (storageProvider() === "local" || !process.env.CLOUDINARY_CLOUD_NAME) {
+  const hasCloudinaryCredentials =
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET;
+  if (!hasCloudinaryCredentials) {
     return uploadToLocal(fileBuffer, folder, options);
   }
-  validateStorageConfig();
   configureCloudinary();
   const mimeType = String(options.mimeType || "").trim().toLowerCase();
   const resourceType = String(options.resourceType || "").trim().toLowerCase();
