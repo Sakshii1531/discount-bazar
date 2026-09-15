@@ -899,7 +899,7 @@ const OrderDetailPage = () => {
           key: paymentData.keyId,
           amount: paymentData.amount,
           currency: paymentData.currency || "INR",
-          name: "ZetBasket",
+          name: "Discount Bazar",
           description: `Order #${order.orderId.slice(-8)}`,
           order_id: paymentData.razorpayOrderId,
           prefill: {

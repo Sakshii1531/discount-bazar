@@ -14,7 +14,7 @@ import { useSettings } from "@core/context/SettingsContext";
 
 const InvoiceModal = ({ isOpen, onClose, order }) => {
   const { settings } = useSettings();
-  const appName = settings?.appName || "Zetbasket";
+  const appName = settings?.appName || "Discount Bazar";
   const primaryColor = settings?.primaryColor || "var(--primary)";
 
   useEffect(() => {

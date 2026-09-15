@@ -161,7 +161,7 @@ const ProductDetailPage = () => {
         const effectivePrice = (product.salePrice && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price))
             ? product.salePrice
             : product.price;
-        const appName = settings?.siteTitle || 'Zetbasket';
+        const appName = settings?.siteTitle || 'Discount Bazar';
         const shareData = {
             title: `${product.name} on ${appName}`,
             text: `Check out ${product.name} on ${appName} for ₹${effectivePrice}!`,

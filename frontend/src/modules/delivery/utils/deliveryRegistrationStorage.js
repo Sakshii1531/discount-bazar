@@ -5,7 +5,7 @@
  * using IndexedDB (avoiding localStorage/sessionStorage 5MB quota restrictions for binary blobs).
  */
 
-const DB_NAME = "zetbasket_delivery_registration_db";
+const DB_NAME = "discount_bazar_delivery_registration_db";
 const DB_VERSION = 1;
 const STORE_NAME = "registration_files";
 

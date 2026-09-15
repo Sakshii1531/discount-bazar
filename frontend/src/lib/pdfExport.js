@@ -51,7 +51,7 @@ const drawHeader = (doc, title, subtitle) => {
     doc.setFontSize(15);
     doc.setFont(undefined, 'bold');
     doc.setTextColor(...WHITE);
-    doc.text('ZetBasket', MARGIN, 13);
+    doc.text('Discount Bazar', MARGIN, 13);
     // Seller tag
     doc.setFontSize(8);
     doc.setFont(undefined, 'normal');
@@ -70,7 +70,7 @@ const drawHeader = (doc, title, subtitle) => {
 };
 
 /** Running header for continuation pages (page 2+) */
-const drawRunningHeader = (doc, title = 'ZetBasket Seller Portal Report') => {
+const drawRunningHeader = (doc, title = 'Discount Bazar Seller Portal Report') => {
     const W = doc.internal.pageSize.getWidth();
     doc.setFillColor(...BRAND_RED);
     doc.rect(0, 0, W, 8, 'F');

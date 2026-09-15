@@ -616,7 +616,7 @@ const OrderDetail = () => {
                                 {settings?.logoUrl ? (
                                     <img src={settings.logoUrl} alt="Logo" width="140" style={{ display: "block", marginBottom: "8px" }} crossOrigin="anonymous" />
                                 ) : (
-                                    <div style={{ fontSize: "32px", fontWeight: "900", color: "#0f172a", tracking: "-1px" }}>{settings?.appName || 'ZETBASKET'}</div>
+                                    <div style={{ fontSize: "32px", fontWeight: "900", color: "#0f172a", tracking: "-1px" }}>{settings?.appName || 'DISCOUNT BAZAR'}</div>
                                 )}
                                 <div style={{ fontSize: "12px", color: "#475569", fontWeight: "700" }}>Express Grocery & Essentials</div>
                             </div>

@@ -45,7 +45,7 @@ export class RazorpayAdapter extends PaymentProviderPort {
    * Server-calculated payable amount in paise is used.
    *
    * @param {Object} params
-   * @param {string} params.merchantOrderId - ZetBasket tracking order ID (e.g. CHK-XXXX-A1)
+   * @param {string} params.merchantOrderId - Discount Bazar tracking order ID (e.g. CHK-XXXX-A1)
    * @param {number} params.amountPaise - Amount in paise
    * @param {string} [params.currency] - Currency (default: "INR")
    * @returns {Promise<Object>}

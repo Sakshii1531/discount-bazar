@@ -904,7 +904,7 @@ const CheckoutPage = () => {
                 key: paymentData.keyId,
                 amount: paymentData.amount,
                 currency: paymentData.currency || "INR",
-                name: "ZetBasket",
+                name: "Discount Bazar",
                 description: `Order #${mainOrderId.slice(-8)}`,
                 order_id: paymentData.razorpayOrderId,
                 prefill: {
