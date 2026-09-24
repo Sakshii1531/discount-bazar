@@ -177,6 +177,21 @@ const settingSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        // POS sales bypass platform commission by default (seller keeps 100%).
+        // When enabled, POS sales apply the same category-based admin commission
+        // as regular checkout orders.
+        posCommissionEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        // POS sales don't accept admin coupons by default. When enabled,
+        // sellers can apply an admin-created coupon code at the POS
+        // checkout, validated/applied by the same finance/couponService
+        // engine regular checkout uses.
+        posCouponsEnabled: {
+            type: Boolean,
+            default: false,
+        },
         productApproval: {
             sellerCreateRequiresApproval: {
                 type: Boolean,

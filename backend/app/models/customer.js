@@ -140,6 +140,14 @@ const userSchema = new mongoose.Schema(
             default: true,
         },
 
+        // True for the synthetic per-seller placeholder User created to
+        // satisfy Order.customer on POS (walk-in) sales. Lets admin
+        // tooling/exports exclude these from real-customer reports.
+        isWalkInPlaceholder: {
+            type: Boolean,
+            default: false,
+        },
+
         lastLogin: Date,
     },
     {

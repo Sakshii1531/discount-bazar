@@ -42,6 +42,9 @@ const orderSchema = new mongoose.Schema(
         },
         variantSlot: String,
         image: String,
+        // Snapshots at time of sale (POS) for GST + cost-price based P&L.
+        costPrice: { type: Number, default: undefined },
+        gstPercent: { type: Number, default: undefined },
         returnPolicy: {
           isReturnable: {
             type: Boolean,
@@ -162,9 +165,27 @@ const orderSchema = new mongoose.Schema(
     },
     posPaymentMethod: {
       type: String,
-      enum: ["CASH", "CARD", "QR"],
+      enum: ["CASH", "CARD", "QR", "CREDIT", "OTHER", "SPLIT"],
       default: undefined,
     },
+    // SPLIT only: how the bill total was divided across tender types.
+    posPayments: {
+      type: [
+        {
+          _id: false,
+          method: { type: String, enum: ["CASH", "CARD", "QR", "OTHER"] },
+          amount: { type: Number, min: 0 },
+        },
+      ],
+      default: undefined,
+    },
+    // Cash handed over by the customer (CASH bills) — change = tendered - total.
+    posCashTendered: { type: Number, default: undefined },
+    // Counter customer on credit (udhaar) sales + how much was paid up front.
+    posCustomer: { type: mongoose.Schema.Types.ObjectId, ref: "PosCustomer", default: undefined },
+    posAmountPaid: { type: Number, default: undefined },
+    // Audit trail of edits made to a posted POS bill (see posEditService).
+    posEdits: { type: [mongoose.Schema.Types.Mixed], default: undefined },
     // Embedded snapshot (same convention as `address`) for an optional
     // walk-in identity. `customer` still always points at the seller's
     // placeholder walk-in User — see posSaleService.resolveWalkInCustomer.
@@ -622,6 +643,7 @@ orderSchema.index(
   },
 );
 orderSchema.index({ "stockReservation.status": 1, "stockReservation.expiresAt": 1 });
+orderSchema.index({ seller: 1, orderSource: 1, createdAt: -1 });
 orderSchema.index({ checkoutGroupId: 1, createdAt: -1 });
 orderSchema.index({ checkoutGroupId: 1, checkoutGroupIndex: 1 });
 orderSchema.index(

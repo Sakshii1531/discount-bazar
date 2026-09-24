@@ -56,6 +56,8 @@ const ALLOWED_KEYS = [
   "codEnabled",
   "onlineEnabled",
   "lowStockAlertsEnabled",
+  "posCommissionEnabled",
+  "posCouponsEnabled",
   "productApproval",
 ];
 
@@ -136,6 +138,8 @@ const updateSettingsSchema = Joi.object({
   codEnabled: Joi.boolean(),
   onlineEnabled: Joi.boolean(),
   lowStockAlertsEnabled: Joi.boolean(),
+  posCommissionEnabled: Joi.boolean(),
+  posCouponsEnabled: Joi.boolean(),
   productApproval: Joi.object({
     sellerCreateRequiresApproval: Joi.boolean(),
     sellerEditRequiresApproval: Joi.boolean(),
@@ -160,7 +164,7 @@ export const getPublicSettings = async (req, res) => {
       async () => {
         const existing = await Setting.findOne(filter)
           .select(
-            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee handlingFeeStrategy codEnabled onlineEnabled lowStockAlertsEnabled productApproval createdAt",
+            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee handlingFeeStrategy codEnabled onlineEnabled lowStockAlertsEnabled posCommissionEnabled posCouponsEnabled productApproval createdAt",
           )
           .lean();
         return existing || null;

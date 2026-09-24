@@ -186,6 +186,20 @@ export function onDeliveryBroadcastWithdrawn(getToken, handler) {
   return () => s.off("delivery:broadcast:withdrawn", handler);
 }
 
+/**
+ * Live stock delta — fires after any stock-mutating write on the backend
+ * (online order reservation, POS counter sale, manual restock). This is a
+ * nudge only, not the source of truth: consumers should patch the matching
+ * product's stock from the payload if it's currently rendered, and still
+ * rely on a normal fetch/refetch for the authoritative value otherwise.
+ */
+export function onStockChanged(getToken, handler) {
+  const s = getOrderSocket(getToken);
+  if (!s || typeof handler !== "function") return () => {};
+  s.on("stock:changed", handler);
+  return () => s.off("stock:changed", handler);
+}
+
 export function onSellerOrderNew(getToken, handler) {
   const s = getOrderSocket(getToken);
   if (!s || typeof handler !== "function") return () => {};

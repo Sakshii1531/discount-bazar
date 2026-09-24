@@ -57,6 +57,14 @@ export function getApprovedOrLegacyFilter() {
   };
 }
 
+// Quick Commerce visibility: a product with no image is hidden (no placeholder).
+export function getCustomerVisibleFilter() {
+  return {
+    ...APPROVED_OR_LEGACY_FILTER,
+    mainImage: { $exists: true, $nin: [null, ""] },
+  };
+}
+
 export function buildApprovalStatusFilter(rawStatus = "all") {
   const normalized = String(rawStatus || "all").trim().toLowerCase();
 

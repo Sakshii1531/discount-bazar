@@ -1,11 +1,11 @@
 import Wishlist from "../models/wishlist.js";
 import Product from "../models/product.js";
 import handleResponse from "../utils/helper.js";
-import { getApprovedOrLegacyFilter } from "../services/productModerationService.js";
+import { getCustomerVisibleFilter } from "../services/productModerationService.js";
 
 const CUSTOMER_VISIBLE_PRODUCT_MATCH = {
   status: "active",
-  ...getApprovedOrLegacyFilter(),
+  ...getCustomerVisibleFilter(),
 };
 
 function sanitizeWishlist(wishlist) {

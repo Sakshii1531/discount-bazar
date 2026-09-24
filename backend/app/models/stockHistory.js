@@ -14,7 +14,7 @@ const stockHistorySchema = new mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ["Restock", "Sale", "Correction", "Reservation", "Release"],
+            enum: ["Restock", "Sale", "Correction", "Reservation", "Release", "Purchase", "PurchaseReturn", "SaleReturn"],
             required: true,
         },
         quantity: {

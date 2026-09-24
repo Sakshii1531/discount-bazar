@@ -80,6 +80,7 @@ export function buildSellerOrdersQuery({
   statusParam,
   startDate,
   endDate,
+  orderSource,
 }) {
   let sellerFilter = userId;
   if (role !== "admin" && userId) {
@@ -92,6 +93,7 @@ export function buildSellerOrdersQuery({
     ...base,
     workflowStatus: { $ne: WORKFLOW_STATUS.CREATED },
     ...normalizeSellerStatusFilter(statusParam),
+    ...(orderSource && orderSource !== "all" ? { orderSource } : {}),
   };
   return appendDateRange(withStatus, { startDate, endDate });
 }
@@ -104,6 +106,7 @@ export async function fetchSellerOrdersPage({
   endDate,
   skip,
   limit,
+  orderSource,
 }) {
   const query = buildSellerOrdersQuery({
     role,
@@ -111,6 +114,7 @@ export async function fetchSellerOrdersPage({
     statusParam,
     startDate,
     endDate,
+    orderSource,
   });
 
   const [orders, total, summaryRows] = await Promise.all([

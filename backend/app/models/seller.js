@@ -146,6 +146,17 @@ const sellerSchema = new mongoose.Schema(
       type: Number,
       default: 5, // Default 5km
     },
+    // Cached pointer to the lazily-created placeholder User used as
+    // `Order.customer` for this seller's POS (walk-in) sales — see
+    // posSaleService.resolveWalkInCustomer. Avoids a lookup-or-create
+    // race on every sale once resolved once.
+    // IANA timezone used for business-day boundaries (day book, cash register).
+    timezone: { type: String, default: "Asia/Kolkata" },
+    posWalkInCustomerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     lastLogin: Date,
   },
   { timestamps: true },

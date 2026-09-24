@@ -45,7 +45,7 @@ import {
 } from "./idempotencyService.js";
 import { buildCheckoutPricingSnapshot } from "./checkoutPricingService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
-import { emitNewOrderToSeller } from "./orderSocketEmitter.js";
+import { emitNewOrderToSeller, emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import * as logger from "./logger.js";
 
@@ -484,6 +484,7 @@ export async function placeOrderAtomic({
 
     const orders = [];
     const pendingLowStockAlerts = [];
+    const pendingStockUpdates = [];
     const sellerTimeoutMs = DEFAULT_SELLER_TIMEOUT_MS();
     const shouldStartSellerWorkflow = paymentMode === "COD";
 
@@ -496,7 +497,7 @@ export async function placeOrderAtomic({
         : null;
       const orderExpiresAt = orderReservation.expiresAt || sellerPendingUntil || null;
 
-      const sellerLowStockAlerts = await reserveStockForItems({
+      const { lowStockAlerts: sellerLowStockAlerts, stockUpdates: sellerStockUpdates } = await reserveStockForItems({
         items: entry.items,
         sellerId: entry.sellerId,
         orderId,
@@ -505,6 +506,9 @@ export async function placeOrderAtomic({
       });
       if (Array.isArray(sellerLowStockAlerts) && sellerLowStockAlerts.length > 0) {
         pendingLowStockAlerts.push(...sellerLowStockAlerts);
+      }
+      if (Array.isArray(sellerStockUpdates) && sellerStockUpdates.length > 0) {
+        pendingStockUpdates.push(...sellerStockUpdates);
       }
 
       // Audit Phase 4 (C-1): per-seller wallet allocation is now produced
@@ -829,6 +833,8 @@ export async function placeOrderAtomic({
         emitNotificationEvent(NOTIFICATION_EVENTS.LOW_STOCK_ALERT, alertPayload);
       });
     }
+
+    pendingStockUpdates.forEach((update) => emitProductStockUpdate(update));
 
     return { ...resultPayload, duplicate: false };
   } catch (error) {

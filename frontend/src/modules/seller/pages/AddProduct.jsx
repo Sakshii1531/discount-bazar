@@ -50,6 +50,13 @@ const initialFormData = {
   tags: "",
   weight: "",
   brand: "",
+  barcode: "",
+  size: "",
+  colour: "",
+  mrp: "",
+  purchaseCost: "",
+  gstPercent: "",
+  expiryDate: "",
   shelfLife: "",
   countryOfOrigin: "",
   fssaiLicense: "",
@@ -339,6 +346,9 @@ const AddProduct = () => {
       data.append("sku", formData.sku);
       data.append("description", formData.description);
       data.append("brand", formData.brand);
+      ["barcode", "size", "colour", "mrp", "purchaseCost", "gstPercent", "expiryDate"].forEach((k) => {
+        if (formData[k] !== "" && formData[k] != null) data.append(k, formData[k]);
+      });
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -563,6 +573,30 @@ const AddProduct = () => {
                   className="w-full px-4 py-3 bg-slate-100 border-none rounded-2xl text-sm font-semibold min-h-[160px] max-h-[260px] outline-none transition-all focus:ring-2 focus:ring-primary/5 resize-none overflow-y-auto custom-scrollbar"
                   placeholder="Describe the item here..."
                 />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  ["barcode", "Barcode", "text"],
+                  ["size", "Size", "text"],
+                  ["colour", "Colour", "text"],
+                  ["mrp", "MRP", "number"],
+                  ["purchaseCost", "Purchase Cost", "number"],
+                  ["gstPercent", "GST %", "number"],
+                  ["expiryDate", "Expiry Date", "date"],
+                ].map(([key, label, type]) => (
+                  <div key={key} className="space-y-1.5 flex flex-col">
+                    <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      min={type === "number" ? 0 : undefined}
+                      value={formData[key] ?? ""}
+                      onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-semibold outline-none ring-primary/5 focus:ring-2 transition-all"
+                    />
+                  </div>
+                ))}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5 flex flex-col">
@@ -949,10 +983,10 @@ const AddProduct = () => {
               {/* Gallery Section */}
               <div className="space-y-3">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                  Gallery Photos (Max 5)
+                  Gallery Photos (3-4 recommended, max 4) — products without images are hidden from the customer app
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {[1, 2, 3, 4, 5].map((i) => (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="aspect-square rounded-md border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer relative overflow-hidden">

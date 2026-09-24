@@ -14,9 +14,13 @@ import {
   HiOutlineChartBarSquare,
   HiOutlineCreditCard,
   HiOutlineMapPin,
+  HiOutlineCalculator,
+  HiOutlineBookOpen,
 } from "react-icons/hi2";
 
 const Dashboard = React.lazy(() => import("../pages/Dashboard"));
+const PosTerminal = React.lazy(() => import("../pages/PosTerminal"));
+const Business = React.lazy(() => import("../pages/Business"));
 const ProductManagement = React.lazy(
   () => import("../pages/ProductManagement"),
 );
@@ -33,6 +37,29 @@ const Withdrawals = React.lazy(() => import("../pages/Withdrawals"));
 
 const navItems = [
   { label: "Dashboard", path: "/seller", icon: HiOutlineSquares2X2, end: true },
+  {
+    label: "POS",
+    path: "/seller/pos",
+    icon: HiOutlineCalculator,
+    children: [
+      { label: "New Sale", path: "/seller/pos", end: true },
+      { label: "Sales History", path: "/seller/pos/sales" },
+      { label: "Online Orders", path: "/seller/pos/online-orders" },
+      { label: "Returns", path: "/seller/pos/returns" },
+    ],
+  },
+  {
+    label: "Business",
+    path: "/seller/business",
+    icon: HiOutlineBookOpen,
+    children: [
+      { label: "Dashboard", path: "/seller/business", end: true },
+      { label: "Purchases", path: "/seller/business/purchases" },
+      { label: "Ledgers", path: "/seller/business/ledgers" },
+      { label: "Day Book & Cash", path: "/seller/business/cash" },
+      { label: "Reports", path: "/seller/business/reports" },
+    ],
+  },
   { label: "Products", path: "/seller/products", icon: HiOutlineCube },
   { label: "Stock", path: "/seller/inventory", icon: HiOutlineArchiveBox },
   { label: "Orders", path: "/seller/orders", icon: HiOutlineTruck },
@@ -72,6 +99,9 @@ const SellerRoutes = () => {
       <DashboardLayout navItems={navItems} title="Seller Panel">
         <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/pos/:section?" element={<PosTerminal />} />
+        <Route path="/business" element={<Business />} />
+        <Route path="/business/:section" element={<Business />} />
         <Route path="/products" element={<ProductManagement />} />
         <Route path="/products/add" element={<AddProduct />} />
         <Route path="/inventory" element={<StockManagement />} />

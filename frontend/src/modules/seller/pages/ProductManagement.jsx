@@ -203,6 +203,13 @@ const ProductManagement = () => {
     tags: "",
     weight: "",
     brand: "",
+    barcode: "",
+    size: "",
+    colour: "",
+    mrp: "",
+    purchaseCost: "",
+    gstPercent: "",
+    expiryDate: "",
     mainImage: null,
     galleryImages: [],
     returnPolicy: {
@@ -376,6 +383,9 @@ const ProductManagement = () => {
       data.append("subcategoryId", formData.subcategory);
       data.append("status", formData.status);
       data.append("brand", formData.brand);
+      ["barcode", "size", "colour", "mrp", "purchaseCost", "gstPercent", "expiryDate"].forEach((k) => {
+        data.append(k, formData[k] ?? "");
+      });
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -476,6 +486,13 @@ const ProductManagement = () => {
         tags: Array.isArray(item.tags) ? item.tags.join(", ") : item.tags || "",
         weight: item.weight || "",
         brand: item.brand || "",
+        barcode: item.barcode || "",
+        size: item.size || "",
+        colour: item.colour || "",
+        mrp: item.mrp ?? "",
+        purchaseCost: item.purchaseCost ?? "",
+        gstPercent: item.gstPercent ?? "",
+        expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : "",
         shelfLife: item.shelfLife || "",
         countryOfOrigin: item.countryOfOrigin || "",
         fssaiLicense: item.fssaiLicense || "",
@@ -510,6 +527,13 @@ const ProductManagement = () => {
         tags: "",
         weight: "",
         brand: "",
+        barcode: "",
+        size: "",
+        colour: "",
+        mrp: "",
+        purchaseCost: "",
+        gstPercent: "",
+        expiryDate: "",
         shelfLife: "",
         countryOfOrigin: "",
         fssaiLicense: "",
@@ -1052,10 +1076,34 @@ const ProductManagement = () => {
 
                 {/* Modal Content Area */}
                 <div
-                  className="flex-1 p-8 overflow-y-auto min-h-0 overscroll-contain custom-scrollbar"
+                  className="flex-1 p-8 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain custom-scrollbar"
                   onWheel={handleModalScrollWheel}>
                   {modalTab === "general" && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[
+                          ["barcode", "Barcode", "text"],
+                          ["size", "Size", "text"],
+                          ["colour", "Colour", "text"],
+                          ["mrp", "MRP", "number"],
+                          ["purchaseCost", "Purchase Cost", "number"],
+                          ["gstPercent", "GST %", "number"],
+                          ["expiryDate", "Expiry Date", "date"],
+                        ].map(([key, label, type]) => (
+                          <div key={key} className="space-y-1.5 flex flex-col">
+                            <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
+                              {label}
+                            </label>
+                            <input
+                              type={type}
+                              min={type === "number" ? 0 : undefined}
+                              value={formData[key] ?? ""}
+                              onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
+                              className="w-full px-4 py-3 bg-slate-100 border-none rounded-2xl text-sm font-semibold outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-1.5 flex flex-col">
                           <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
@@ -1370,102 +1418,216 @@ const ProductManagement = () => {
                           }}
                           className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-[10px] font-bold">+ ADD</button>
                       </div>
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {formData.variants.map((v, i) => (
-                          <div key={v.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                            <div className="md:col-span-2 space-y-1">
-                              <label className="text-[8px] font-bold text-slate-600 uppercase tracking-widest ml-1">Variant Name</label>
-                              <input value={v.name} onChange={e => {
-                                const news = [...formData.variants];
-                                news[i].name = e.target.value;
-                                setFormData({ ...formData, variants: news });
-                              }} placeholder="e.g. 1kg, 1 pack, 1 liter..." className="w-full bg-white px-3 py-2 rounded-xl text-xs ring-1 ring-slate-100 outline-none" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[8px] font-bold text-slate-600 uppercase tracking-widest ml-1">Price</label>
-                              <input type="number" min="0" onKeyDown={(e) => ['-', '+', 'e', 'E'].includes(e.key) && e.preventDefault()} value={v.price} onChange={e => {
-                                const val = e.target.value;
-                                if (val !== '' && Number(val) < 0) return;
-                                const news = [...formData.variants];
-                                news[i].price = val;
-                                setFormData({ ...formData, variants: news });
-                              }} placeholder="Price" className="w-full bg-white px-3 py-2 rounded-xl text-xs ring-1 ring-slate-100 outline-none" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[8px] font-bold text-brand-400 uppercase tracking-widest ml-1">Sale Price</label>
-                              <input type="number" min="0" onKeyDown={(e) => ['-', '+', 'e', 'E'].includes(e.key) && e.preventDefault()} value={v.salePrice} onChange={e => {
-                                const val = e.target.value;
-                                if (val !== '' && Number(val) < 0) return;
-                                const p = Number(v.price || 0);
-                                const s = Number(val || 0);
-                                if (s > 0 && p > 0 && s > p) {
-                                  toast.error("Sale price cannot be more than Original Price (MRP).");
-                                }
-                                const news = [...formData.variants];
-                                news[i].salePrice = val;
-                                setFormData({ ...formData, variants: news });
-                              }} placeholder="Sale" className={`w-full px-3 py-2 rounded-xl text-xs outline-none transition-all ${
-                                Number(v.salePrice || 0) > Number(v.price || 0) && Number(v.salePrice || 0) > 0 && Number(v.price || 0) > 0
-                                  ? "bg-rose-50 ring-2 ring-rose-500 text-rose-700 font-bold"
-                                  : "bg-brand-50/50 ring-1 ring-brand-100 text-brand-700 font-semibold"
-                              }`} />
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <label className="text-[8px] font-bold text-slate-600 uppercase tracking-widest ml-1">Stock</label>
-                                {editingItem && (
-                                  <span className="text-[8px] font-bold text-amber-700 bg-amber-100/80 px-1 py-0.5 rounded">Locked</span>
+                          <div
+                            key={v.id}
+                            className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 space-y-4 transition-all hover:border-slate-300"
+                          >
+                            {/* Card Header: Variant Index & Remove Action */}
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs">
+                                  <HiOutlineTag className="h-3.5 w-3.5 text-slate-500" />
+                                  Variant #{i + 1}
+                                </span>
+                                {v.name && (
+                                  <span className="text-xs font-bold text-slate-800 truncate max-w-[240px]">
+                                    {v.name}
+                                  </span>
                                 )}
                               </div>
-                              <input
-                                type="number"
-                                min="0"
-                                value={v.stock}
-                                disabled={Boolean(editingItem)}
-                                title={editingItem ? "Stock cannot be changed in Edit. Use Stock Management to update inventory." : ""}
-                                onChange={e => {
-                                  if (editingItem) return;
-                                  const val = e.target.value;
-                                  if (val !== '' && Number(val) < 0) return;
-                                  const news = [...formData.variants];
-                                  news[i].stock = val;
-                                  setFormData({ ...formData, variants: news });
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData((prev) => {
+                                    const remaining = prev.variants
+                                      .map((variant, idx) => ({ variant, oldIndex: idx + 1 }))
+                                      .filter((item, idx) => idx !== i)
+                                      .map((item, newIdx) => {
+                                        const shouldAuto =
+                                          !item.variant.sku ||
+                                          isAutoSku(item.variant.sku, prev.name, item.oldIndex);
+                                        return shouldAuto
+                                          ? { ...item.variant, sku: makeSku(prev.name, newIdx + 1) }
+                                          : item.variant;
+                                      });
+                                    return { ...prev, variants: remaining };
+                                  });
                                 }}
-                                placeholder="Stock"
-                                className={`w-full px-3 py-2 rounded-xl text-xs outline-none transition-all ${
-                                  editingItem
-                                    ? "bg-slate-100 text-slate-500 cursor-not-allowed opacity-80 ring-1 ring-slate-200"
-                                    : "bg-white ring-1 ring-slate-100"
-                                }`}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 space-y-1">
-                                <label className="text-[8px] font-bold text-slate-600 uppercase tracking-widest ml-1">SKU</label>
-                                <input value={v.sku} onChange={e => {
-                                  const news = [...formData.variants];
-                                  news[i].sku = e.target.value;
-                                  setFormData({ ...formData, variants: news });
-                                }} placeholder="SKU" className="w-full bg-white px-3 py-2 rounded-xl text-[10px] ring-1 ring-slate-100 outline-none" />
-                              </div>
-                              <button type="button" onClick={() => {
-                                setFormData((prev) => {
-                                  const remaining = prev.variants
-                                    .map((variant, idx) => ({ variant, oldIndex: idx + 1 }))
-                                    .filter((item, idx) => idx !== i)
-                                    .map((item, newIdx) => {
-                                      const shouldAuto =
-                                        !item.variant.sku ||
-                                        isAutoSku(item.variant.sku, prev.name, item.oldIndex);
-                                      return shouldAuto
-                                        ? { ...item.variant, sku: makeSku(prev.name, newIdx + 1) }
-                                        : item.variant;
-                                    });
-                                  return { ...prev, variants: remaining };
-                                });
-                              }} className="text-rose-500 p-2 hover:bg-rose-50 rounded-lg shrink-0 mb-0.5">
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-colors"
+                                title="Remove variant"
+                              >
                                 <HiOutlineTrash className="h-4 w-4" />
+                                <span>Remove</span>
                               </button>
+                            </div>
+
+                            {/* Section 1: Core Pricing & Stock */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3.5 items-start">
+                              <div className="md:col-span-4 space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Variant Name
+                                </label>
+                                <input
+                                  value={v.name}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i].name = e.target.value;
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="e.g. 250 gram, 1 kg, Pack of 2..."
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-800 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="sm:col-span-1 md:col-span-2 space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Price (MRP)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  onKeyDown={(e) =>
+                                    ["-", "+", "e", "E"].includes(e.key) && e.preventDefault()
+                                  }
+                                  value={v.price}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val !== "" && Number(val) < 0) return;
+                                    const news = [...formData.variants];
+                                    news[i].price = val;
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="0.00"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-800 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="sm:col-span-1 md:col-span-3 space-y-1.5">
+                                <label className="text-[10px] font-bold text-brand-600 uppercase tracking-wider ml-1">
+                                  Sale Price
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  onKeyDown={(e) =>
+                                    ["-", "+", "e", "E"].includes(e.key) && e.preventDefault()
+                                  }
+                                  value={v.salePrice}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val !== "" && Number(val) < 0) return;
+                                    const p = Number(v.price || 0);
+                                    const s = Number(val || 0);
+                                    if (s > 0 && p > 0 && s > p) {
+                                      toast.error("Sale price cannot be more than Original Price (MRP).");
+                                    }
+                                    const news = [...formData.variants];
+                                    news[i].salePrice = val;
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="0.00"
+                                  className={`w-full px-3.5 py-2 rounded-xl text-xs outline-none transition-all border ${
+                                    Number(v.salePrice || 0) > Number(v.price || 0) &&
+                                    Number(v.salePrice || 0) > 0 &&
+                                    Number(v.price || 0) > 0
+                                      ? "bg-rose-50 border-rose-400 text-rose-700 font-bold focus:ring-2 focus:ring-rose-200"
+                                      : "bg-brand-50/50 hover:bg-brand-50 focus:bg-white border-brand-200 text-brand-800 font-semibold focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                                  }`}
+                                />
+                              </div>
+
+                              <div className="sm:col-span-2 md:col-span-3 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                    Stock
+                                  </label>
+                                  {editingItem && (
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded-md">
+                                      Locked
+                                    </span>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={v.stock}
+                                  disabled={Boolean(editingItem)}
+                                  title={
+                                    editingItem
+                                      ? "Stock cannot be changed in Edit. Use Stock Management to update inventory."
+                                      : ""
+                                  }
+                                  onChange={(e) => {
+                                    if (editingItem) return;
+                                    const val = e.target.value;
+                                    if (val !== "" && Number(val) < 0) return;
+                                    const news = [...formData.variants];
+                                    news[i].stock = val;
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="0"
+                                  className={`w-full px-3.5 py-2 rounded-xl text-xs outline-none transition-all border ${
+                                    editingItem
+                                      ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200"
+                                      : "bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-800 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                  }`}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Section 2: Inventory Tracking (SKU, Barcode, Purchase Cost) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  SKU
+                                </label>
+                                <input
+                                  value={v.sku}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i].sku = e.target.value;
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="SKU"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-mono font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Barcode
+                                </label>
+                                <input
+                                  value={v.barcode || ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], barcode: e.target.value };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="Barcode"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Purchase Cost (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={v.purchaseCost ?? ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], purchaseCost: e.target.value };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="0.00"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
                             </div>
                           </div>
                         ))}

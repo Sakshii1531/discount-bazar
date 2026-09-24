@@ -77,6 +77,8 @@ const AdminSettings = () => {
         keywords: [],
         returnDeliveryCommission: 0,
         lowStockAlertsEnabled: true,
+        posCommissionEnabled: false,
+        posCouponsEnabled: false,
         productApproval: {
             sellerCreateRequiresApproval: false,
             sellerEditRequiresApproval: false,
@@ -350,6 +352,56 @@ const AdminSettings = () => {
                                             className={cn(
                                                 "inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200",
                                                 settings.lowStockAlertsEnabled ? "translate-x-7" : "translate-x-1"
+                                            )}
+                                        />
+                                    </button>
+                                </div>
+                                <div className="md:col-span-2 rounded-2xl bg-slate-50 border border-slate-200 px-5 py-4 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-black text-slate-900">Apply Commission on POS Sales</p>
+                                        <p className="text-xs font-bold text-slate-500 mt-1">
+                                            When enabled, walk-in counter (POS) sales apply the same category-based admin commission as regular orders. When disabled, sellers keep 100% of POS sales.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={settings.posCommissionEnabled}
+                                        onClick={() => handleInputChange('posCommissionEnabled', !settings.posCommissionEnabled)}
+                                        className={cn(
+                                            "relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200",
+                                            settings.posCommissionEnabled ? "bg-emerald-500" : "bg-slate-300"
+                                        )}
+                                    >
+                                        <span
+                                            className={cn(
+                                                "inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200",
+                                                settings.posCommissionEnabled ? "translate-x-7" : "translate-x-1"
+                                            )}
+                                        />
+                                    </button>
+                                </div>
+                                <div className="md:col-span-2 rounded-2xl bg-slate-50 border border-slate-200 px-5 py-4 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-black text-slate-900">Allow Coupons on POS Sales</p>
+                                        <p className="text-xs font-bold text-slate-500 mt-1">
+                                            When enabled, sellers can apply an admin-created coupon code to walk-in counter (POS) sales, just like online checkout.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={settings.posCouponsEnabled}
+                                        onClick={() => handleInputChange('posCouponsEnabled', !settings.posCouponsEnabled)}
+                                        className={cn(
+                                            "relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200",
+                                            settings.posCouponsEnabled ? "bg-emerald-500" : "bg-slate-300"
+                                        )}
+                                    >
+                                        <span
+                                            className={cn(
+                                                "inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200",
+                                                settings.posCouponsEnabled ? "translate-x-7" : "translate-x-1"
                                             )}
                                         />
                                     </button>

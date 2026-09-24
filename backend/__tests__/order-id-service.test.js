@@ -5,7 +5,7 @@ describe("orderIdService", () => {
     const ids = new Set();
     for (let i = 0; i < 1000; i += 1) {
       const id = buildPublicOrderId();
-      expect(id).toMatch(/^ORD-[0-9A-Z]{26}$/);
+      expect(id).toMatch(/^ORD-[0-9A-Z]{10}$/);
       ids.add(id);
     }
     expect(ids.size).toBe(1000);
@@ -15,7 +15,7 @@ describe("orderIdService", () => {
     const ids = new Set();
     for (let i = 0; i < 1000; i += 1) {
       const id = buildCheckoutGroupId();
-      expect(id).toMatch(/^CHK-[0-9A-Z]{26}$/);
+      expect(id).toMatch(/^CHK-[0-9A-Z]{10}$/);
       ids.add(id);
     }
     expect(ids.size).toBe(1000);

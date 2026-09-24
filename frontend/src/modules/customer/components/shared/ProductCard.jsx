@@ -10,6 +10,9 @@ import { useCartAnimation } from "../../context/CartAnimationContext";
 import { useLocation as useAppLocation } from "../../context/LocationContext";
 import { formatCurrencyInteger } from "@shared/utils/currency";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
+import { onStockChanged } from "@/core/services/orderSocket";
+import { createSocketTokenReader } from "@core/utils/authStorage";
+import { STORAGE_KEYS } from "@core/utils/storage";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock } from "lucide-react";
@@ -75,6 +78,23 @@ const ProductCard = React.memo(
     const variantKey = String(defaultVariant?.key || "").trim();
     const cartKey = `${productId}::${variantKey || ""}`;
 
+    // Live stock nudge (see stockService.reserveStockForItems / stock:changed
+    // socket event): only trusted here for single-SKU products, since the
+    // broadcast carries the product's aggregate stock, not a per-variant
+    // number — for variant products we intentionally leave this alone and
+    // rely on the normal fetch-on-load + atomic checkout-time stock guard.
+    const hasVariants = Array.isArray(product?.variants) && product.variants.length > 0;
+    const [liveStock, setLiveStock] = React.useState(null);
+    React.useEffect(() => {
+      if (hasVariants || !productId) return undefined;
+      const getToken = createSocketTokenReader(STORAGE_KEYS.AUTH_CUSTOMER);
+      const off = onStockChanged(getToken, (payload) => {
+        if (!payload || String(payload.productId) !== String(productId)) return;
+        setLiveStock(Math.max(0, Number(payload.stock) || 0));
+      });
+      return off;
+    }, [hasVariants, productId]);
+
     const cartItem = React.useMemo(
       () =>
         cart.find(
@@ -129,6 +149,10 @@ const ProductCard = React.memo(
         return 0;
       }
 
+      if (!hasVariants && liveStock !== null) {
+        return liveStock;
+      }
+
       const masterStock =
         product.stock !== undefined && product.stock !== null
           ? Math.max(0, Number(product.stock))
@@ -159,7 +183,7 @@ const ProductCard = React.memo(
       }
 
       return masterStock;
-    }, [product, defaultVariant]);
+    }, [product, defaultVariant, hasVariants, liveStock]);
 
     const isOutOfStock = availableStock <= 0;
 

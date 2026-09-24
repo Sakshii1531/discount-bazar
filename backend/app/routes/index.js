@@ -2,6 +2,8 @@ import customerRoute from "./customerAuth.js";
 import deliveryRoute from "./deliveryAuth.js";
 import adminRoute from "./adminAuth.js";
 import sellerRoute from "./sellerAuth.js";
+import posRoute from "./posRoutes.js";
+import businessRoute from "./businessRoutes.js";
 import categoryRoute from "./categoryRoutes.js";
 import productRoute from "./productRoutes.js";
 import cartRoute from "./cartRoutes.js";
@@ -43,6 +45,8 @@ const setupRoutes = (app) => {
     router.use("/admin/categories", categoryRoute);
     router.use("/admin", adminRoute);
     router.use("/seller", sellerRoute);
+    router.use("/seller/pos", posRoute);
+    router.use("/seller/business", businessRoute);
     router.use("/settings", settingsRoute);
     router.use("/categories", categoryRoute);
     router.use("/products", productRoute);

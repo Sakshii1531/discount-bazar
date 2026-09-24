@@ -87,6 +87,27 @@ export function emitNewOrderToSeller(sellerId, payload = {}) {
   });
 }
 
+/**
+ * Emit a live stock delta after any stock-mutating write (online order
+ * reservation, POS counter sale, manual restock). Global broadcast (no
+ * room) — payload is tiny and infrequent at current scale; a
+ * `product:<id>` room can be added later without changing the event
+ * name/shape if fan-out ever needs targeting. This is a nudge only —
+ * the real overselling backstop is the atomic `$gte` filter inside
+ * stockService.reserveStockForItems, not this socket event.
+ */
+export function emitProductStockUpdate({ productId, sellerId, stock, variantSku }) {
+  const s = getIo();
+  if (!s || !productId) return;
+  s.emit("stock:changed", {
+    productId: String(productId),
+    sellerId: normalizeSellerId(sellerId),
+    stock,
+    variantSku: variantSku || null,
+    at: new Date().toISOString(),
+  });
+}
+
 export function emitToDelivery(deliveryId, { event, payload }) {
   const s = getIo();
   const id = normalizeDeliveryId(deliveryId);

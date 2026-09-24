@@ -512,6 +512,8 @@ export async function getAdminFinanceSummary() {
         {
           $match: {
             paymentMode: "COD",
+            // POS counter sales are collected by the seller in-store; no cash is owed to the platform.
+            orderSource: { $ne: "POS" },
             status: { $ne: "cancelled" },
             orderStatus: { $ne: "cancelled" },
           },
@@ -553,6 +555,8 @@ export async function getAdminFinanceSummary() {
       Order.aggregate([
         {
           $match: {
+            // Platform checkout value only — in-store POS takings never pass through the platform.
+            orderSource: { $ne: "POS" },
             status: { $ne: "cancelled" },
             orderStatus: { $ne: "cancelled" },
           },

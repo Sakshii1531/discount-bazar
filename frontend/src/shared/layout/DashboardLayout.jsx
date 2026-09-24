@@ -518,7 +518,14 @@ const DashboardLayout = ({ children, navItems, title }) => {
         const getToken = createSocketTokenReader(STORAGE_KEYS.AUTH_SELLER);
         getOrderSocket(getToken);
         const unsubscribeSellerNew = onSellerOrderNew(getToken, (payload) => {
-            if (payload?.orderId) {
+            // POS (walk-in) sales also emit `order:new` — so open tabs / the
+            // unified terminal refresh instantly via fetchOrders() below —
+            // but they're created already-completed (workflowStatus:
+            // DELIVERED, no seller-accept step, no delivery assignment) and
+            // must never pop the accept/reject modal or ring the alert.
+            // Reuse the same eligibility check the polling path already
+            // applies so both paths agree on what counts as "needs accept".
+            if (payload?.orderId && isSellerAlertEligible(payload)) {
                 const incoming = {
                     orderId: payload.orderId,
                     ...payload,
@@ -527,9 +534,9 @@ const DashboardLayout = ({ children, navItems, title }) => {
                 setShownOrderIds((prev) => new Set(prev).add(payload.orderId));
                 shownOrderIdsRef.current = new Set(shownOrderIdsRef.current).add(payload.orderId);
                 newOrderAlertRef.current = incoming;
+                startOrderRingtone();
             }
             if (fetchOrdersRef.current) fetchOrdersRef.current();
-            startOrderRingtone();
         });
 
         const unsubscribeReturnReq = onSellerReturnRequested(getToken, (payload) => {

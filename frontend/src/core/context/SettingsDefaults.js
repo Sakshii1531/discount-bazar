@@ -44,6 +44,8 @@ export const DEFAULT_SETTINGS = {
   codEnabled: true,
   onlineEnabled: true,
   lowStockAlertsEnabled: true,
+  posCommissionEnabled: false,
+  posCouponsEnabled: false,
   productApproval: {
     sellerCreateRequiresApproval: true,
     sellerEditRequiresApproval: false,

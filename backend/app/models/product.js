@@ -46,6 +46,14 @@ const productSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        // Item master
+        barcode: { type: String, trim: true, index: true, sparse: true },
+        size: { type: String, trim: true, default: "" },
+        colour: { type: String, trim: true, default: "" },
+        mrp: { type: Number, min: 0, default: 0 },
+        purchaseCost: { type: Number, min: 0, default: 0 },
+        gstPercent: { type: Number, min: 0, max: 100, default: 0 },
+        expiryDate: { type: Date, default: null },
         weight: {
             type: String,
             trim: true,
@@ -72,9 +80,13 @@ const productSchema = new mongoose.Schema(
         mainImage: {
             type: String, // Cloudinary URL
         },
-        galleryImages: [{
-            type: String, // Array of Cloudinary URLs
-        }],
+        galleryImages: {
+            type: [{ type: String }], // Cloudinary URLs, max 4
+            validate: {
+                validator: (v) => !v || v.length <= 4,
+                message: "Gallery supports at most 4 images",
+            },
+        },
         headerId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Category",
@@ -135,6 +147,8 @@ const productSchema = new mongoose.Schema(
                 salePrice: Number,
                 stock: Number,
                 sku: String,
+                barcode: { type: String, trim: true },
+                purchaseCost: { type: Number, min: 0 },
             }
         ],
         isFeatured: {

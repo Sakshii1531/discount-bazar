@@ -3,8 +3,8 @@ import Order from "../models/order.js";
 import CheckoutGroup from "../models/checkoutGroup.js";
 
 const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const TIMESTAMP_PART_LENGTH = 10;
-const RANDOM_PART_LENGTH = 16;
+const TIMESTAMP_PART_LENGTH = 5;
+const RANDOM_PART_LENGTH = 5;
 
 function encodeTimePart(timestampMs) {
   let value = BigInt(timestampMs);

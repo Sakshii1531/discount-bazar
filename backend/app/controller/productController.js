@@ -29,6 +29,7 @@ import {
   PRODUCT_APPROVAL_STATUS,
   getProductApprovalConfig,
   getApprovedOrLegacyFilter,
+  getCustomerVisibleFilter,
   buildApprovalStatusFilter,
   normalizeProductModerationFields,
   sanitizeApprovalNote,
@@ -118,6 +119,34 @@ function parseImageList(input) {
   }
   const single = normalizeUrl(candidate);
   return single ? [single] : [];
+}
+
+// Barcode must be unique per seller (product-level and variant-level), and
+// MRP must not be below the selling price.
+async function assertItemMasterValid(productData, sellerId, excludeId = null) {
+  const codes = [];
+  if (productData.barcode && String(productData.barcode).trim()) codes.push(String(productData.barcode).trim());
+  if (Array.isArray(productData.variants)) {
+    productData.variants.forEach((v) => v?.barcode && String(v.barcode).trim() && codes.push(String(v.barcode).trim()));
+  }
+  if (new Set(codes).size !== codes.length) {
+    throw Object.assign(new Error("Duplicate barcode within this product"), { statusCode: 400 });
+  }
+  if (codes.length) {
+    const clash = await Product.findOne({
+      sellerId,
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+      $or: [{ barcode: { $in: codes } }, { "variants.barcode": { $in: codes } }],
+    }).select("name").lean();
+    if (clash) {
+      throw Object.assign(new Error(`Barcode already used by "${clash.name}"`), { statusCode: 409 });
+    }
+  }
+  const mrp = Number(productData.mrp);
+  const sell = Number(productData.salePrice) > 0 ? Number(productData.salePrice) : Number(productData.price);
+  if (mrp > 0 && sell > 0 && mrp < sell) {
+    throw Object.assign(new Error("MRP cannot be lower than the selling price"), { statusCode: 400 });
+  }
 }
 
 function applyMediaFields(productData) {
@@ -340,7 +369,7 @@ export const getProducts = async (req, res) => {
     let finalQuery = { ...query };
     if (enforceRadius) {
       finalQuery.status = "active";
-      finalQuery = { $and: [finalQuery, getApprovedOrLegacyFilter()] };
+      finalQuery = { $and: [finalQuery, getCustomerVisibleFilter()] };
     } else {
       if (status && status !== "all") {
         finalQuery.status = status;
@@ -753,6 +782,11 @@ export const createProduct = async (req, res) => {
     }
     Object.assign(productData, moderationUpdate);
 
+    try {
+      await assertItemMasterValid(productData, req.user.id);
+    } catch (e) {
+      return handleResponse(res, e.statusCode || 400, e.message);
+    }
     const product = await Product.create(productData);
     
     if (isPendingApproval && product && product._id) {
@@ -973,6 +1007,20 @@ export const updateProduct = async (req, res) => {
     }
     Object.assign(productData, moderationUpdate);
 
+    try {
+      await assertItemMasterValid(
+        {
+          ...productData,
+          price: productData.price ?? product.price,
+          salePrice: productData.salePrice ?? product.salePrice,
+          mrp: productData.mrp ?? product.mrp,
+        },
+        product.sellerId,
+        id,
+      );
+    } catch (e) {
+      return handleResponse(res, e.statusCode || 400, e.message);
+    }
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
       { $set: productData },

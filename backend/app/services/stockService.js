@@ -32,6 +32,7 @@ export async function reserveStockForItems({
 }) {
   const stockType = String(paymentMode || "").toUpperCase() === "ONLINE" ? "Reservation" : "Sale";
   const lowStockAlerts = [];
+  const stockUpdates = [];
 
   for (const item of items) {
     const variantSku = String(item.variantSku || "").trim();
@@ -128,6 +129,17 @@ export async function reserveStockForItems({
       { session },
     );
 
+    // Collected, not emitted here: this write is still inside the caller's
+    // transaction and could yet be rolled back by a later step. Callers
+    // emit these via emitProductStockUpdate() only after their transaction
+    // commits (mirrors the lowStockAlerts pattern below).
+    stockUpdates.push({
+      productId: updated._id,
+      sellerId,
+      stock: updated.stock,
+      variantSku: variantSku || null,
+    });
+
     const previousStock = Number(updated.stock || 0) + Number(item.quantity || 0);
     let previousVariantStock = null;
     let currentVariantStock = null;
@@ -158,7 +170,7 @@ export async function reserveStockForItems({
     }
   }
 
-  return lowStockAlerts;
+  return { lowStockAlerts, stockUpdates };
 }
 
 export async function releaseReservedStockForOrder(order, { session = null, reason = "Reservation released" } = {}) {

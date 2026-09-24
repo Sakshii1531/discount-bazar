@@ -606,7 +606,7 @@ const OrderDetail = () => {
                         padding: "50px 60px",
                         borderRadius: "16px",
                         boxShadow: "0 10px 25px rgba(0,0,0,0.05)",
-                        fontFamily: "'Inter', system-ui, sans-serif",
+                        fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
                         color: "#0f172a",
                         minHeight: "1100px"
                     }}>

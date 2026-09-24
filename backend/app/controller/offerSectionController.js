@@ -5,7 +5,7 @@ import {
   getNearbySellerIdsForCustomer,
 } from "../services/customerVisibilityService.js";
 import { buildKey, getOrSet, getTTL } from "../services/cacheService.js";
-import { getApprovedOrLegacyFilter } from "../services/productModerationService.js";
+import { getCustomerVisibleFilter } from "../services/productModerationService.js";
 
 export const getPublicOfferSections = async (req, res) => {
   try {
@@ -44,7 +44,7 @@ export const getPublicOfferSections = async (req, res) => {
             select: "name slug price salePrice mainImage stock unit sellerId status approvalStatus weight variants",
             match: {
               status: "active",
-              ...getApprovedOrLegacyFilter(),
+              ...getCustomerVisibleFilter(),
             },
           })
           .lean();
