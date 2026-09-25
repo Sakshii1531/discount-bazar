@@ -114,7 +114,7 @@ const productSchema = new mongoose.Schema(
         },
         approvalStatus: {
             type: String,
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved", "rejected", "draft"],
             default: "approved",
         },
         approvalRequestedAt: {
@@ -143,6 +143,8 @@ const productSchema = new mongoose.Schema(
         variants: [
             {
                 name: String,
+                size: { type: String, trim: true },
+                colour: { type: String, trim: true },
                 price: Number,
                 salePrice: Number,
                 stock: Number,

@@ -147,6 +147,8 @@ function buildPosBreakdown({
   commissionEnabled,
   categoryById,
   discountTotal = 0,
+  taxPercent = 0,
+  taxTotal = 0,
 }) {
   let productSubtotal = 0;
   let sellerPayoutTotal = 0;
@@ -176,12 +178,19 @@ function buildPosBreakdown({
     };
   });
 
+  // Calculate taxTotal: if taxTotal is explicitly passed, use that; otherwise calculate from taxPercent or line items
+  const computedTax = taxTotal > 0
+    ? roundCurrency(taxTotal)
+    : taxPercent > 0
+      ? roundCurrency((productSubtotal * taxPercent) / 100)
+      : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+
   // Coupon discount (when Settings.posCouponsEnabled is on) reduces what the
   // walk-in customer pays and what the seller is paid out — the platform
   // does not absorb it (mirrors regular checkout's per-seller discount split).
   const normalizedDiscount = Math.min(roundCurrency(discountTotal || 0), productSubtotal);
-  const grandTotal = roundCurrency(productSubtotal - normalizedDiscount);
-  sellerPayoutTotal = roundCurrency(Math.max(sellerPayoutTotal - normalizedDiscount, 0));
+  const grandTotal = roundCurrency(productSubtotal + computedTax - normalizedDiscount);
+  sellerPayoutTotal = roundCurrency(Math.max(sellerPayoutTotal + computedTax - normalizedDiscount, 0));
 
   return {
     currency: CURRENCY,
@@ -190,7 +199,7 @@ function buildPosBreakdown({
     handlingFeeCharged: 0,
     tipTotal: 0,
     discountTotal: normalizedDiscount,
-    taxTotal: 0,
+    taxTotal: computedTax,
     grandTotal,
     sellerPayoutTotal,
     adminProductCommissionTotal,
@@ -237,7 +246,7 @@ async function hydratePosItems({ sellerId, payloadItems, session = null }) {
           product.purchaseCost ||
           0,
       ),
-      gstPercent: Number(product.gstPercent || 0),
+      gstPercent: item.gstPercent !== undefined ? Number(item.gstPercent) : Number(product.gstPercent || 0),
       headerCategoryId: product.headerId ? String(product.headerId) : "",
     };
   });
@@ -245,7 +254,7 @@ async function hydratePosItems({ sellerId, payloadItems, session = null }) {
 
 /**
  * Read-only totals for the checkout screen: subtotal, coupon discount (same
- * engine and rules as the real sale), manual discount and amount due.
+ * engine and rules as the real sale), manual discount, tax and amount due.
  */
 export async function previewPosSale({ sellerId, payload }) {
   const items = await hydratePosItems({ sellerId, payloadItems: payload.items });
@@ -270,11 +279,18 @@ export async function previewPosSale({ sellerId, payload }) {
   }
 
   const discountTotal = Math.min(roundCurrency(couponDiscount + Number(payload.discount || 0)), subtotal);
+  const computedTax = payload.taxTotal > 0
+    ? roundCurrency(payload.taxTotal)
+    : payload.taxPercent > 0
+      ? roundCurrency((subtotal * payload.taxPercent) / 100)
+      : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+
   return {
     subtotal,
+    taxTotal: computedTax,
     couponDiscount,
     discountTotal,
-    grandTotal: roundCurrency(subtotal - discountTotal),
+    grandTotal: roundCurrency(subtotal + computedTax - discountTotal),
   };
 }
 
@@ -394,6 +410,8 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
       commissionEnabled: posSettings.commissionEnabled,
       categoryById,
       discountTotal: (discountResult?.discountAmount || 0) + Number(payload.discount || 0),
+      taxPercent: Number(payload.taxPercent || 0),
+      taxTotal: Number(payload.taxTotal || 0),
     });
 
     const grandTotal = breakdown.grandTotal;

@@ -282,7 +282,7 @@ export async function listPurchaseBills(sellerId, { from, to, supplierId } = {})
   const q = { seller: sellerId };
   if (supplierId) q.supplier = supplierId;
   if (from || to) q.billDate = { ...(from && { $gte: from }), ...(to && { $lte: to }) };
-  return PurchaseBill.find(q).populate("supplier", "name").sort({ billDate: -1 }).limit(300).lean();
+  return PurchaseBill.find(q).populate("supplier", "name phone gstin address").sort({ billDate: -1 }).limit(300).lean();
 }
 
 /* ---------------- purchase returns ---------------- */

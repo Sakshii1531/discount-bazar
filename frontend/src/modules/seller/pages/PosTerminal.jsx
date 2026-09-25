@@ -70,6 +70,8 @@ const PosTerminal = () => {
     const [completedOrder, setCompletedOrder] = useState(null);
     const [saleCount, setSaleCount] = useState(0);
     const [isHeldOpen, setIsHeldOpen] = useState(false);
+    const [taxMode, setTaxMode] = useState("PERCENT");
+    const [taxValue, setTaxValue] = useState(0);
 
     const catalogRequestRef = useRef(0);
     // One idempotency key per attempted bill: a retry of the same payload after a
@@ -288,6 +290,30 @@ const PosTerminal = () => {
         [cart],
     );
 
+    const taxAmount = useMemo(() => {
+        if (taxMode === "PERCENT") {
+            return Math.round(((subtotal * (Number(taxValue) || 0)) / 100) * 100) / 100;
+        }
+        return Math.round((Number(taxValue) || 0) * 100) / 100;
+    }, [subtotal, taxMode, taxValue]);
+
+    const taxPercent = useMemo(() => {
+        if (taxMode === "PERCENT") {
+            return Number(taxValue) || 0;
+        }
+        return subtotal > 0 ? Math.round(((taxAmount / subtotal) * 100) * 100) / 100 : 0;
+    }, [subtotal, taxMode, taxValue, taxAmount]);
+
+    const totalWithTax = useMemo(
+        () => Math.round((subtotal + taxAmount) * 100) / 100,
+        [subtotal, taxAmount],
+    );
+
+    const handleUpdateTax = useCallback((value, mode = "PERCENT") => {
+        setTaxMode(mode);
+        setTaxValue(Number(value) || 0);
+    }, []);
+
     const saleItems = useMemo(
         () =>
             cart.map((l) => ({
@@ -304,14 +330,25 @@ const PosTerminal = () => {
         (list = heldBills) => {
             if (!cart.length) return list;
             const next = [
-                { id: genIdempotencyKey(), at: new Date().toISOString(), cart, total: subtotal },
+                {
+                    id: genIdempotencyKey(),
+                    at: new Date().toISOString(),
+                    cart,
+                    total: totalWithTax,
+                    taxPercent,
+                    taxAmount,
+                    taxMode,
+                    taxValue,
+                },
                 ...list,
             ];
             saveHeld(next);
             setCart([]);
+            setTaxValue(0);
+            setTaxMode("PERCENT");
             return next;
         },
-        [cart, subtotal, heldBills, saveHeld],
+        [cart, totalWithTax, taxPercent, taxAmount, taxMode, taxValue, heldBills, saveHeld],
     );
 
     const handleHold = () => {
@@ -324,6 +361,8 @@ const PosTerminal = () => {
         const list = holdCurrentCart(heldBills).filter((b) => b.id !== bill.id);
         saveHeld(list);
         setCart(bill.cart || []);
+        setTaxMode(bill.taxMode || "PERCENT");
+        setTaxValue(bill.taxValue !== undefined ? Number(bill.taxValue) : Number(bill.taxPercent) || 0);
         setIsHeldOpen(false);
     };
 
@@ -339,8 +378,12 @@ const PosTerminal = () => {
         discount,
         cashTendered,
         posPayments,
+        taxPercent: checkoutTaxPercent,
+        taxTotal: checkoutTaxTotal,
     }) => {
         setIsSubmitting(true);
+        const resolvedTaxPercent = checkoutTaxPercent !== undefined ? Number(checkoutTaxPercent) : Number(taxPercent) || 0;
+        const resolvedTaxTotal = checkoutTaxTotal !== undefined ? Number(checkoutTaxTotal) : taxAmount;
         const payload = {
             items: saleItems,
             posPaymentMethod,
@@ -351,6 +394,8 @@ const PosTerminal = () => {
             discount,
             cashTendered,
             posPayments,
+            taxPercent: resolvedTaxPercent > 0 ? resolvedTaxPercent : undefined,
+            taxTotal: resolvedTaxTotal > 0 ? resolvedTaxTotal : undefined,
         };
         const signature = JSON.stringify(payload);
         if (!pendingSaleRef.current || pendingSaleRef.current.signature !== signature) {
@@ -381,6 +426,8 @@ const PosTerminal = () => {
             fetchCatalog(catalogParams);
 
             setCart([]);
+            setTaxValue(0);
+            setTaxMode("PERCENT");
             setIsCheckoutOpen(false);
             setSaleCount((n) => n + 1); // fresh checkout form for the next bill
             setCompletedOrder(order || null);
@@ -443,6 +490,12 @@ const PosTerminal = () => {
                             onRemove={removeLine}
                             onCheckout={() => setIsCheckoutOpen(true)}
                             subtotal={subtotal}
+                            taxPercent={taxPercent}
+                            taxMode={taxMode}
+                            taxValue={taxValue}
+                            onUpdateTax={handleUpdateTax}
+                            taxAmount={taxAmount}
+                            totalWithTax={totalWithTax}
                             onHold={handleHold}
                             heldCount={heldBills.length}
                             onShowHeld={() => setIsHeldOpen(true)}
@@ -464,6 +517,8 @@ const PosTerminal = () => {
                 isOpen={isCheckoutOpen}
                 onClose={() => setIsCheckoutOpen(false)}
                 subtotal={subtotal}
+                taxPercent={taxPercent}
+                taxTotal={taxAmount}
                 items={saleItems}
                 onConfirm={handleConfirmSale}
                 isSubmitting={isSubmitting}

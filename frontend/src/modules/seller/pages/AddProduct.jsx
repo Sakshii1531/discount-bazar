@@ -71,10 +71,14 @@ const initialFormData = {
     {
       id: Date.now(),
       name: "",
+      size: "",
+      colour: "",
       price: "",
       salePrice: "",
       stock: "",
       sku: "",
+      barcode: "",
+      purchaseCost: "",
     },
   ],
 };
@@ -346,7 +350,14 @@ const AddProduct = () => {
       data.append("sku", formData.sku);
       data.append("description", formData.description);
       data.append("brand", formData.brand);
-      ["barcode", "size", "colour", "mrp", "purchaseCost", "gstPercent", "expiryDate"].forEach((k) => {
+      // First variant attributes backfilled to top-level for backwards compatibility
+      if (firstVariant.barcode) data.append("barcode", firstVariant.barcode);
+      if (firstVariant.size) data.append("size", firstVariant.size);
+      if (firstVariant.colour) data.append("colour", firstVariant.colour);
+      if (firstVariant.purchaseCost !== undefined && firstVariant.purchaseCost !== "") {
+        data.append("purchaseCost", firstVariant.purchaseCost);
+      }
+      ["gstPercent", "expiryDate"].forEach((k) => {
         if (formData[k] !== "" && formData[k] != null) data.append(k, formData[k]);
       });
       data.append("weight", formData.weight);
@@ -407,6 +418,8 @@ const AddProduct = () => {
       const approvalStatus = response?.data?.result?.approvalStatus;
       if (approvalStatus === "pending") {
         toast.success("Product submitted for admin approval");
+      } else if (approvalStatus === "draft") {
+        toast.success("Product created for POS counter. Upload photo to submit for online approval.");
       } else {
         toast.success(response?.data?.message || "Product saved successfully!");
       }
@@ -574,13 +587,8 @@ const AddProduct = () => {
                   placeholder="Describe the item here..."
                 />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  ["barcode", "Barcode", "text"],
-                  ["size", "Size", "text"],
-                  ["colour", "Colour", "text"],
-                  ["mrp", "MRP", "number"],
-                  ["purchaseCost", "Purchase Cost", "number"],
                   ["gstPercent", "GST %", "number"],
                   ["expiryDate", "Expiry Date", "date"],
                 ].map(([key, label, type]) => (
@@ -699,10 +707,14 @@ const AddProduct = () => {
                         {
                           id: Date.now(),
                           name: "",
+                          size: "",
+                          colour: "",
                           price: "",
                           salePrice: "",
                           stock: "",
                           sku: makeSku(prev.name, prev.variants.length + 1),
+                          barcode: "",
+                          purchaseCost: "",
                         },
                       ],
                     }));
@@ -713,137 +725,23 @@ const AddProduct = () => {
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {(formData.variants || []).map((variant, index) => (
                   <div
                     key={variant.id}
-                    className="p-4 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-12 gap-4 items-end group relative">
-                    <div className="col-span-12 md:col-span-3 space-y-1">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                        Variant Name
-                      </label>
-                      <input
-                        value={variant.name}
-                        onChange={(e) => {
-                          const nextValue = e.target.value;
-                          setFormData((prev) => {
-                            const newVariants = prev.variants.map((item, idx) => {
-                              if (idx !== index) return item;
-                              return { ...item, name: nextValue };
-                            });
-                            return {
-                              ...prev,
-                              variants: newVariants,
-                            };
-                          });
-                        }}
-                        placeholder="e.g. 1kg, 1 pack, 1 liter..."
-                        className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2 space-y-1">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                        Price
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        onKeyDown={(e) => {
-                          if (['-', '+', 'e', 'E'].includes(e.key)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        value={variant.price}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val !== '' && Number(val) < 0) return;
-                          const newVariants = [...formData.variants];
-                          newVariants[index].price = val;
-                          setFormData({ ...formData, variants: newVariants });
-                        }}
-                        placeholder="500"
-                        className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2 space-y-1">
-                      <label className="text-[8px] font-bold text-brand-500 uppercase tracking-widest ml-1">
-                        Sale
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        onKeyDown={(e) => {
-                          if (['-', '+', 'e', 'E'].includes(e.key)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        value={variant.salePrice}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val !== '' && Number(val) < 0) return;
-                          const p = Number(variant.price || 0);
-                          const s = Number(val || 0);
-                          if (s > 0 && p > 0 && s > p) {
-                            toast.error("Sale price cannot be more than Original Price (MRP).");
-                          }
-                          const newVariants = [...formData.variants];
-                          newVariants[index].salePrice = val;
-                          setFormData({ ...formData, variants: newVariants });
-                        }}
-                        placeholder="450"
-                        className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none transition-all ${
-                          Number(variant.salePrice || 0) > Number(variant.price || 0) && Number(variant.salePrice || 0) > 0 && Number(variant.price || 0) > 0
-                            ? "bg-rose-50 ring-2 ring-rose-500 text-rose-700"
-                            : "bg-brand-50 ring-1 ring-brand-100 text-brand-700 focus:ring-2 focus:ring-brand-200"
-                        }`}
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2 space-y-1">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                        Stock
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        onKeyDown={(e) => {
-                          if (['-', '+', 'e', 'E'].includes(e.key)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        value={variant.stock}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val !== '' && Number(val) < 0) return;
-                          const newVariants = [...formData.variants];
-                          newVariants[index].stock = val;
-                          setFormData({ ...formData, variants: newVariants });
-                        }}
-                        placeholder="10"
-                        className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div className="col-span-5 md:col-span-2 space-y-1">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                        Product Code
-                      </label>
-                      <input
-                        value={variant.sku}
-                        onChange={(e) => {
-                          const newVariants = [...formData.variants];
-                          newVariants[index].sku = e.target.value;
-                          setFormData({ ...formData, variants: newVariants });
-                        }}
-                        placeholder={makeSku(formData.name, index + 1)}
-                        className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-end pb-1">
-                      <button
-                        onClick={() => {
-                          if (formData.variants.length > 1) {
+                    className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4 group relative">
+                    {/* Header: Variant Index & Trash */}
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold text-xs">
+                        Variant #{index + 1} {variant.name ? `— ${variant.name}` : ""}
+                      </span>
+                      {formData.variants.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
                             setFormData((prev) => {
                               const remaining = prev.variants
-                                .map((variant, idx) => ({ variant, oldIndex: idx + 1 }))
+                                .map((v, idx) => ({ variant: v, oldIndex: idx + 1 }))
                                 .filter((item) => item.oldIndex !== index + 1)
                                 .map((item, newIdx) => {
                                   const shouldAuto =
@@ -855,11 +753,189 @@ const AddProduct = () => {
                                 });
                               return { ...prev, variants: remaining };
                             });
-                          }
-                        }}
-                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
-                        <HiOutlineTrash className="h-4 w-4" />
-                      </button>
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors">
+                          <HiOutlineTrash className="h-4 w-4" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Row 1: Variant Name, Size, Colour, Price, Sale Price */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3.5 items-end">
+                      <div className="col-span-12 md:col-span-4 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Variant Name
+                        </label>
+                        <input
+                          value={variant.name}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            setFormData((prev) => {
+                              const newVariants = prev.variants.map((item, idx) => {
+                                if (idx !== index) return item;
+                                return { ...item, name: nextValue };
+                              });
+                              return { ...prev, variants: newVariants };
+                            });
+                          }}
+                          placeholder="e.g. 500g, 1kg, Red Pack..."
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="col-span-6 md:col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Size
+                        </label>
+                        <input
+                          value={variant.size || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const newVariants = [...formData.variants];
+                            newVariants[index].size = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="e.g. M, XL, 500ml"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="col-span-6 md:col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Colour
+                        </label>
+                        <input
+                          value={variant.colour || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const newVariants = [...formData.variants];
+                            newVariants[index].colour = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="e.g. Blue, Red"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="col-span-6 md:col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Price (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          onKeyDown={(e) => {
+                            if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                          }}
+                          value={variant.price}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val !== '' && Number(val) < 0) return;
+                            const newVariants = [...formData.variants];
+                            newVariants[index].price = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="500"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="col-span-6 md:col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-brand-500 uppercase tracking-widest ml-1">
+                          Sale Price (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          onKeyDown={(e) => {
+                            if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                          }}
+                          value={variant.salePrice}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val !== '' && Number(val) < 0) return;
+                            const p = Number(variant.price || 0);
+                            const s = Number(val || 0);
+                            if (s > 0 && p > 0 && s > p) {
+                              toast.error("Sale price cannot be more than Original Price (MRP).");
+                            }
+                            const newVariants = [...formData.variants];
+                            newVariants[index].salePrice = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="450"
+                          className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none transition-all ${
+                            Number(variant.salePrice || 0) > Number(variant.price || 0) && Number(variant.salePrice || 0) > 0 && Number(variant.price || 0) > 0
+                              ? "bg-rose-50 ring-2 ring-rose-500 text-rose-700"
+                              : "bg-brand-50 ring-1 ring-brand-100 text-brand-700 focus:ring-2 focus:ring-brand-200"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 2: Stock, Barcode, Purchase Cost */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t border-slate-200/60 items-end">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Stock
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          onKeyDown={(e) => {
+                            if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                          }}
+                          value={variant.stock}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val !== '' && Number(val) < 0) return;
+                            const newVariants = [...formData.variants];
+                            newVariants[index].stock = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="10"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Barcode
+                        </label>
+                        <input
+                          value={variant.barcode || ""}
+                          onChange={(e) => {
+                            const newVariants = [...formData.variants];
+                            newVariants[index].barcode = e.target.value;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="e.g. 8901234567890"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Purchase Cost (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          onKeyDown={(e) => {
+                            if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                          }}
+                          value={variant.purchaseCost ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const newVariants = [...formData.variants];
+                            newVariants[index].purchaseCost = val;
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="e.g. 350"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

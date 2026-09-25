@@ -38,7 +38,16 @@ const inr = (n) => `₹${round2(n).toLocaleString("en-IN")}`;
  * by sale count) so a previous bill's discount, customer or payment choice
  * never carries over to the next one.
  */
-const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSubmitting }) => {
+const CheckoutModal = ({
+    isOpen,
+    onClose,
+    subtotal,
+    taxPercent = 0,
+    taxTotal = 0,
+    items = [],
+    onConfirm,
+    isSubmitting,
+}) => {
     const { settings } = useSettings();
     const [paymentMethod, setPaymentMethod] = useState("CASH");
     const [walkInName, setWalkInName] = useState("");
@@ -47,6 +56,7 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
     const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, couponDiscount }
     const [couponError, setCouponError] = useState("");
     const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+    const [customTax, setCustomTax] = useState(taxTotal > 0 ? String(taxTotal) : "");
     const [discount, setDiscount] = useState("");
     const [customers, setCustomers] = useState([]);
     const [posCustomerId, setPosCustomerId] = useState("");
@@ -56,7 +66,7 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
 
     useEffect(() => {
         if (!isOpen) return;
-        businessApi.listCustomers().then((res) => setCustomers(res?.data?.result || [])).catch(() => {});
+        businessApi.listCustomers().then((res) => setCustomers(res?.data?.results || res?.data?.result || [])).catch(() => {});
     }, [isOpen]);
 
     // Cart changed while the coupon was applied → the coupon amount must be re-checked.
@@ -67,8 +77,10 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
 
     const couponDiscount = appliedCoupon?.couponDiscount || 0;
     const manualDiscount = Math.max(Number(discount) || 0, 0);
-    const discountValue = Math.min(round2(couponDiscount + manualDiscount), subtotal);
-    const payable = round2(subtotal - discountValue);
+    const activeTaxTotal = customTax === "" ? Number(taxTotal) || 0 : Math.max(0, Number(customTax) || 0);
+    const baseTotal = round2(subtotal + activeTaxTotal);
+    const discountValue = Math.min(round2(couponDiscount + manualDiscount), baseTotal);
+    const payable = round2(baseTotal - discountValue);
 
     const typedCoupon = couponCode.trim();
     const couponPending = Boolean(typedCoupon) && appliedCoupon?.code !== typedCoupon;
@@ -87,7 +99,12 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
         setIsApplyingCoupon(true);
         setCouponError("");
         try {
-            const res = await posApi.previewSale({ items, couponCode: typedCoupon });
+            const res = await posApi.previewSale({
+                items,
+                couponCode: typedCoupon,
+                taxPercent: subtotal > 0 ? round2((activeTaxTotal / subtotal) * 100) : undefined,
+                taxTotal: activeTaxTotal || undefined,
+            });
             const data = res?.data?.result;
             setAppliedCoupon({ code: typedCoupon, couponDiscount: Number(data?.couponDiscount || 0) });
         } catch (e) {
@@ -99,6 +116,7 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
     };
 
     const handleConfirm = () => {
+        const activeTaxPercent = subtotal > 0 ? round2((activeTaxTotal / subtotal) * 100) : Number(taxPercent) || 0;
         onConfirm({
             posPaymentMethod: paymentMethod,
             walkInCustomer:
@@ -106,11 +124,13 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
                     ? { name: walkInName.trim(), phone: walkInPhone.trim() }
                     : undefined,
             couponCode: appliedCoupon?.code || undefined,
-            discount: manualDiscount ? Math.min(manualDiscount, subtotal) : undefined,
+            discount: manualDiscount ? Math.min(manualDiscount, baseTotal) : undefined,
             posCustomerId: posCustomerId || undefined,
             amountPaid: paymentMethod === "CREDIT" ? Number(amountPaid) || 0 : undefined,
             cashTendered: paymentMethod === "CASH" && tendered != null ? tendered : undefined,
             posPayments: paymentMethod === "SPLIT" ? splitLines : undefined,
+            taxPercent: activeTaxPercent,
+            taxTotal: activeTaxTotal,
         });
     };
 
@@ -124,11 +144,19 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
                 <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-sm">
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount Due</p>
-                        {discountValue > 0 && (
-                            <p className="text-[11px] font-semibold text-emerald-400 mt-0.5">
-                                {inr(subtotal)} − {inr(discountValue)} off
-                            </p>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold mt-0.5">
+                            <span className="text-slate-300">Subtotal: {inr(subtotal)}</span>
+                            {activeTaxTotal > 0 && (
+                                <span className="text-amber-300 font-bold">
+                                    +{inr(activeTaxTotal)} (GST)
+                                </span>
+                            )}
+                            {discountValue > 0 && (
+                                <span className="text-emerald-400 font-bold">
+                                    −{inr(discountValue)} off
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <p className="text-2xl sm:text-3xl font-black tracking-tight">{inr(payable)}</p>
                 </div>
@@ -159,18 +187,25 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
                 {/* Cash Tendered & Alerts */}
                 {paymentMethod === "CASH" && (
                     <div className="space-y-1.5">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <Input
                                 type="number"
                                 min="0"
-                                placeholder="Cash received (₹, optional)"
+                                placeholder="Cash received (₹)"
                                 value={cashTendered}
                                 onChange={(e) => setCashTendered(e.target.value)}
                             />
                             <Input
                                 type="number"
                                 min="0"
-                                placeholder="Discount (₹, optional)"
+                                placeholder="GST / Tax (₹)"
+                                value={customTax}
+                                onChange={(e) => setCustomTax(e.target.value)}
+                            />
+                            <Input
+                                type="number"
+                                min="0"
+                                placeholder="Discount (₹)"
                                 value={discount}
                                 onChange={(e) => setDiscount(e.target.value)}
                             />
@@ -216,6 +251,35 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
                                   ? `${inr(splitRemaining)} still to allocate`
                                   : `${inr(-splitRemaining)} more than the amount due`}
                         </p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <Input
+                                type="number"
+                                min="0"
+                                placeholder="GST / Tax (₹, optional)"
+                                value={customTax}
+                                onChange={(e) => setCustomTax(e.target.value)}
+                            />
+                            <Input
+                                type="number"
+                                min="0"
+                                placeholder="Discount (₹, optional)"
+                                value={discount}
+                                onChange={(e) => setDiscount(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Non-Cash / Non-Split Discount & Tax row */}
+                {paymentMethod !== "CASH" && paymentMethod !== "SPLIT" && (
+                    <div className="grid grid-cols-2 gap-2">
+                        <Input
+                            type="number"
+                            min="0"
+                            placeholder="GST / Tax (₹, optional)"
+                            value={customTax}
+                            onChange={(e) => setCustomTax(e.target.value)}
+                        />
                         <Input
                             type="number"
                             min="0"
@@ -224,17 +288,6 @@ const CheckoutModal = ({ isOpen, onClose, subtotal, items = [], onConfirm, isSub
                             onChange={(e) => setDiscount(e.target.value)}
                         />
                     </div>
-                )}
-
-                {/* Non-Cash / Non-Split Discount row */}
-                {paymentMethod !== "CASH" && paymentMethod !== "SPLIT" && (
-                    <Input
-                        type="number"
-                        min="0"
-                        placeholder="Discount (₹, optional)"
-                        value={discount}
-                        onChange={(e) => setDiscount(e.target.value)}
-                    />
                 )}
 
                 {/* Ledger Customer */}

@@ -3,7 +3,25 @@ import { HiOutlineMinus, HiOutlinePlus, HiOutlineTrash, HiOutlineShoppingCart, H
 import Button from "@shared/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-const CartPanel = ({ cart, onUpdateQuantity, onUpdatePrice, onRemove, onCheckout, subtotal, onHold, heldCount = 0, onShowHeld }) => {
+const CartPanel = ({
+    cart,
+    onUpdateQuantity,
+    onUpdatePrice,
+    onRemove,
+    onCheckout,
+    subtotal,
+    taxPercent = 0,
+    taxMode = "PERCENT",
+    taxValue = 0,
+    onUpdateTax,
+    taxAmount = 0,
+    totalWithTax,
+    onHold,
+    heldCount = 0,
+    onShowHeld,
+}) => {
+    const finalTotal = totalWithTax != null ? totalWithTax : subtotal;
+
     return (
         <div className="flex flex-col h-full">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
@@ -98,10 +116,89 @@ const CartPanel = ({ cart, onUpdateQuantity, onUpdatePrice, onRemove, onCheckout
             </div>
 
             <div className="border-t border-slate-100 p-4 bg-white">
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-bold text-slate-500">Total</span>
-                    <span className="text-xl font-black text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                {/* Tax / GST Custom Entry */}
+                <div className="mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700">Tax / GST</span>
+                        {taxAmount > 0 && (
+                            <span className="text-xs font-bold text-emerald-600">
+                                +₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {taxMode === "PERCENT" && taxValue > 0 ? ` (${taxValue}%)` : ""}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Custom Input with % / ₹ Toggle */}
+                    <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                            <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder={taxMode === "PERCENT" ? "Custom GST % (e.g. 18)" : "Custom GST ₹ (e.g. 50)"}
+                                value={taxValue === 0 ? "" : taxValue}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const val = raw === "" ? 0 : Math.max(0, Number(raw));
+                                    if (onUpdateTax) onUpdateTax(val, taxMode);
+                                }}
+                                className="w-full text-xs font-bold bg-white border border-slate-200 rounded-lg pl-2.5 pr-7 py-1.5 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary placeholder:text-slate-400 placeholder:font-normal"
+                            />
+                            <span className="absolute right-2.5 top-1.5 text-xs font-bold text-slate-400 pointer-events-none">
+                                {taxMode === "PERCENT" ? "%" : "₹"}
+                            </span>
+                        </div>
+                        <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => onUpdateTax && onUpdateTax(taxValue, "PERCENT")}
+                                className={cn(
+                                    "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                                    taxMode === "PERCENT"
+                                        ? "bg-primary text-white shadow-xs"
+                                        : "text-slate-500 hover:text-slate-800"
+                                )}
+                            >
+                                %
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onUpdateTax && onUpdateTax(taxAmount || 0, "AMOUNT")}
+                                className={cn(
+                                    "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                                    taxMode === "AMOUNT"
+                                        ? "bg-primary text-white shadow-xs"
+                                        : "text-slate-500 hover:text-slate-800"
+                                )}
+                            >
+                                ₹
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
+                {taxAmount > 0 ? (
+                    <div className="space-y-1 mb-3 pt-1 border-t border-slate-100">
+                        <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                            <span>Subtotal</span>
+                            <span>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
+                            <span>Tax / GST {taxMode === "PERCENT" && taxValue > 0 ? `(${taxValue}%)` : ""}</span>
+                            <span className="text-emerald-600">+₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="text-sm font-bold text-slate-700">Total</span>
+                            <span className="text-xl font-black text-slate-900">₹{finalTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold text-slate-500">Total</span>
+                        <span className="text-xl font-black text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                    </div>
+                )}
+
                 <div className="flex gap-2">
                     {onHold && (
                         <Button variant="secondary" size="lg" disabled={cart.length === 0} onClick={onHold} title="Park this bill and serve the next customer">

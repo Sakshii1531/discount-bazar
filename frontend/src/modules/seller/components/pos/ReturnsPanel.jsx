@@ -146,67 +146,44 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
     };
 
     return (
-        <div className="space-y-5 pb-8">
-            {/* Top Page Header & Quick KPIs */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-50/70 via-teal-50/40 to-white rounded-2xl border border-emerald-100/80 p-5 shadow-xs">
-                <div className="flex items-center gap-3.5">
-                    <div className="h-12 w-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-600/20 shrink-0">
-                        <HiOutlineArrowUturnLeft className="h-6 w-6 stroke-2" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-xl font-black text-slate-900 tracking-tight">Returns & Refunds Desk</h1>
-                            <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                                POS
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                            Process walk-in customer returns, inspect item condition, and issue instant refunds.
-                        </p>
-                    </div>
+        <div className="space-y-4 pb-8">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+                <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        Returns & Refunds
+                    </h1>
+                    <p className="text-xs text-slate-500">
+                        Process walk-in returns, inspect items, and issue instant customer refunds
+                    </p>
                 </div>
 
-                {/* Right quick stats */}
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                    <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-slate-200/80 shadow-xs">
-                        <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Logged Returns</p>
-                            <p className="text-sm font-black text-slate-900">{recentReturns.length}</p>
-                        </div>
-                        <div className="h-6 w-px bg-slate-200" />
-                        <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Refunded</p>
-                            <p className="text-sm font-black text-emerald-600">₹{totalRecentRefundAmount.toLocaleString("en-IN")}</p>
-                        </div>
+                <div className="flex items-center gap-3 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto">
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Logged Returns</p>
+                        <p className="text-sm font-black text-slate-900">{recentReturns.length}</p>
+                    </div>
+                    <div className="h-6 w-px bg-slate-100" />
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Refunded</p>
+                        <p className="text-sm font-black text-emerald-600">₹{totalRecentRefundAmount.toLocaleString("en-IN")}</p>
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_370px] gap-5 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_370px] gap-4 items-start">
                 <div className="space-y-4">
                     {/* Bill Search Card */}
-                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                        <div className="flex items-center justify-between mb-3">
-                            <div>
-                                <h2 className="text-sm font-black text-slate-900">Find POS Sale</h2>
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                    Enter or scan the customer's Bill No. / Order ID to load billed items
-                                </p>
-                            </div>
-                            <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
-                                Exact Match
-                            </span>
-                        </div>
-
-                        <div className="flex gap-2.5">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
+                        <div className="flex gap-2">
                             <div className="relative flex-1">
-                                <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                 <Input
-                                    placeholder="Enter Bill No. (e.g. ORD-XXXXXXXXXX)"
+                                    placeholder="Enter or scan Bill No. (e.g. ORD-XXXXXXXXXX)"
                                     value={orderIdSearch}
                                     onChange={(e) => setOrderIdSearch(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-                                    className="pl-11 pr-8 py-2.5 text-sm font-semibold text-slate-900 bg-slate-50/70 border-slate-200 focus:bg-white"
+                                    className="pl-10 pr-8 py-2 text-xs font-semibold text-slate-900 bg-slate-50/60 border-slate-200 focus:bg-white"
                                 />
                                 {orderIdSearch && (
                                     <button
@@ -225,73 +202,31 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                             <Button
                                 onClick={() => handleLookup()}
                                 isLoading={isLooking}
-                                className="px-5 font-bold shadow-sm"
+                                className="px-5 font-bold text-xs"
                             >
-                                <HiOutlineMagnifyingGlass className="h-4 w-4 mr-1.5" />
+                                <HiOutlineMagnifyingGlass className="h-3.5 w-3.5 mr-1.5" />
                                 Search Bill
                             </Button>
                         </div>
 
                         {lookupError && (
-                            <div className="mt-3 flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                            <div className="mt-2.5 flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
                                 <HiOutlineExclamationTriangle className="h-4 w-4 shrink-0 text-rose-500" />
                                 <span>{lookupError}</span>
                             </div>
                         )}
                     </div>
 
-                    {/* Empty State / How Returns Work Guide (Shown when no order is loaded) */}
+                    {/* Empty State */}
                     {!order && !isLooking && (
-                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-                            <div className="text-center max-w-md mx-auto space-y-2 py-2">
-                                <div className="h-14 w-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100 shadow-xs">
-                                    <HiOutlineReceiptPercent className="h-7 w-7" />
-                                </div>
-                                <h3 className="text-base font-black text-slate-900">Ready to Process a Return</h3>
-                                <p className="text-xs text-slate-500 leading-relaxed">
-                                    Search by Bill No. above to view purchased items, select quantities, inspect conditions, and issue instant refunds.
-                                </p>
+                        <div className="bg-white rounded-2xl border border-slate-200 p-12 shadow-2xs text-center flex flex-col items-center justify-center">
+                            <div className="h-12 w-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mb-3 border border-slate-100">
+                                <HiOutlineArrowUturnLeft className="h-6 w-6 stroke-[1.75]" />
                             </div>
-
-                            {/* 3 Step Workflow Graphic */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                                <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5">
-                                    <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs">
-                                        1
-                                    </div>
-                                    <p className="text-xs font-black text-slate-800">Scan or Enter Bill</p>
-                                    <p className="text-[11px] text-slate-500 leading-normal">
-                                        Locate the original POS sale using the bill number printed on customer receipt.
-                                    </p>
-                                </div>
-
-                                <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5">
-                                    <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
-                                        2
-                                    </div>
-                                    <p className="text-xs font-black text-slate-800">Select & Inspect</p>
-                                    <p className="text-[11px] text-slate-500 leading-normal">
-                                        Choose item quantities. Tag as <span className="font-bold text-emerald-700">Good</span> to auto-restock, or <span className="font-bold text-rose-700">Damaged</span>.
-                                    </p>
-                                </div>
-
-                                <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5">
-                                    <div className="h-8 w-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-black text-xs">
-                                        3
-                                    </div>
-                                    <p className="text-xs font-black text-slate-800">Auto Round Refund</p>
-                                    <p className="text-[11px] text-slate-500 leading-normal">
-                                        Calculates proportionate discount per unit, rounds to whole rupees, and prints return slip.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="rounded-xl border border-slate-100 bg-emerald-50/40 p-3.5 flex items-center gap-3">
-                                <HiOutlineShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-                                <p className="text-xs font-medium text-slate-600">
-                                    <strong className="text-slate-900">Safe Accounting:</strong> Returns deduct from total sales, record audit logs, and automatically adjust ledger udhaar if applicable.
-                                </p>
-                            </div>
+                            <h3 className="text-sm font-black text-slate-800">No Bill Selected</h3>
+                            <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+                                Enter or scan the customer's Bill No. above to load items and process a return.
+                            </p>
                         </div>
                     )}
 
@@ -582,11 +517,11 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                 </div>
 
                 {/* Right Sidebar: Recent Returns List */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs h-fit lg:sticky lg:top-24 space-y-3.5">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs h-fit lg:sticky lg:top-24 space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                             <HiOutlineClock className="h-4 w-4 text-slate-400" />
-                            <h2 className="text-sm font-black text-slate-900">Recent Returns</h2>
+                            <h2 className="text-xs font-black uppercase tracking-wider text-slate-700">Recent Returns</h2>
                         </div>
                         <button
                             type="button"
@@ -600,58 +535,56 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
 
                     {isLoadingLog ? (
                         <div className="py-8 text-center space-y-2">
-                            <HiOutlineArrowPath className="h-5 w-5 text-slate-400 animate-spin mx-auto" />
-                            <p className="text-xs text-slate-400 font-medium">Loading returns history…</p>
+                            <HiOutlineArrowPath className="h-4 w-4 text-slate-400 animate-spin mx-auto" />
+                            <p className="text-xs text-slate-400">Loading…</p>
                         </div>
                     ) : recentReturns.length === 0 ? (
-                        <div className="py-8 text-center space-y-1.5">
-                            <div className="h-10 w-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center mx-auto">
-                                <HiOutlineDocumentText className="h-5 w-5" />
-                            </div>
-                            <p className="text-xs font-bold text-slate-700">No returns recorded yet</p>
-                            <p className="text-[11px] text-slate-400">Processed returns will show up here</p>
+                        <div className="py-8 text-center space-y-1">
+                            <HiOutlineDocumentText className="h-6 w-6 text-slate-300 mx-auto" />
+                            <p className="text-xs font-bold text-slate-600">No returns yet</p>
+                            <p className="text-[11px] text-slate-400">Processed returns will appear here</p>
                         </div>
                     ) : (
-                        <div className="space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto pr-0.5">
+                        <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-0.5">
                             {recentReturns.map((ret) => (
                                 <div
                                     key={ret._id}
-                                    className="group rounded-xl border border-slate-200/80 hover:border-emerald-300 bg-white hover:bg-emerald-50/20 p-3 transition-all space-y-1.5 shadow-2xs"
+                                    className="rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 p-2.5 transition-colors space-y-1.5"
                                 >
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="text-xs font-black text-slate-900">
+                                        <span className="text-xs font-black text-slate-900 font-mono truncate" title={ret.orderId}>
                                             #{ret.orderId}
                                         </span>
-                                        <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                                        <span className="text-xs font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
                                             ₹{Math.round(Number(ret.refundTotal || 0)).toLocaleString("en-IN")}
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                    <div className="flex items-center justify-between text-[10px] text-slate-400">
                                         <span>
                                             {new Date(ret.createdAt).toLocaleString("en-IN", {
                                                 dateStyle: "short",
                                                 timeStyle: "short",
                                             })}
                                         </span>
-                                        <span className="font-bold text-slate-700 uppercase text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
+                                        <span className="font-bold text-slate-600 uppercase">
                                             {ret.refundMethod}
                                         </span>
                                     </div>
 
-                                    <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                                    <p className="text-[11px] text-slate-600 truncate">
                                         {(ret.items || [])
                                             .map((it) => `${it.quantity}x ${it.productName || "item"} (${it.condition})`)
                                             .join(", ")}
                                     </p>
 
-                                    <div className="pt-1.5 border-t border-slate-100 flex items-center justify-end">
+                                    <div className="pt-1 border-t border-slate-200/60 flex items-center justify-end">
                                         <button
                                             type="button"
                                             onClick={() => setSlip(ret)}
-                                            className="flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-emerald-700 transition-colors"
+                                            className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-emerald-700 transition-colors"
                                         >
-                                            <HiOutlinePrinter className="h-3.5 w-3.5" />
+                                            <HiOutlinePrinter className="h-3 w-3" />
                                             Print Slip
                                         </button>
                                     </div>

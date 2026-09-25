@@ -4,6 +4,7 @@ export const PRODUCT_APPROVAL_STATUS = Object.freeze({
   PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
+  DRAFT: "draft",
 });
 
 export const DEFAULT_PRODUCT_APPROVAL_CONFIG = Object.freeze({
@@ -74,6 +75,9 @@ export function buildApprovalStatusFilter(rawStatus = "all") {
   if (normalized === PRODUCT_APPROVAL_STATUS.REJECTED) {
     return { approvalStatus: PRODUCT_APPROVAL_STATUS.REJECTED };
   }
+  if (normalized === PRODUCT_APPROVAL_STATUS.DRAFT) {
+    return { approvalStatus: PRODUCT_APPROVAL_STATUS.DRAFT };
+  }
   if (normalized === PRODUCT_APPROVAL_STATUS.APPROVED) {
     return getApprovedOrLegacyFilter();
   }
@@ -85,7 +89,8 @@ export function resolveProductApprovalStatus(product = {}) {
   if (
     status === PRODUCT_APPROVAL_STATUS.PENDING ||
     status === PRODUCT_APPROVAL_STATUS.APPROVED ||
-    status === PRODUCT_APPROVAL_STATUS.REJECTED
+    status === PRODUCT_APPROVAL_STATUS.REJECTED ||
+    status === PRODUCT_APPROVAL_STATUS.DRAFT
   ) {
     return status;
   }

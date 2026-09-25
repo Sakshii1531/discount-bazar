@@ -89,7 +89,7 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
     };
 
     useEffect(() => {
-        if (open) businessApi.listCustomers().then((r) => setCustomers(r?.data?.result || [])).catch(() => {});
+        if (open) businessApi.listCustomers().then((r) => setCustomers(r?.data?.results || r?.data?.result || [])).catch(() => {});
     }, [open]);
 
     const kept = draft.filter((d) => Number(d.quantity) > 0);

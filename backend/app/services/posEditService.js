@@ -100,7 +100,12 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       const pb = order.paymentBreakdown?.toObject ? order.paymentBreakdown.toObject() : { ...order.paymentBreakdown };
       const subtotal = roundCurrency(newItems.reduce((s, i) => s + i.price * i.quantity, 0));
       const discount = Math.min(roundCurrency(payload.discount ?? pb.discountTotal ?? 0), subtotal);
-      const grand = roundCurrency(subtotal - discount);
+      const computedTax = payload.taxTotal != null
+        ? roundCurrency(payload.taxTotal)
+        : payload.taxPercent != null
+          ? roundCurrency((subtotal * payload.taxPercent) / 100)
+          : roundCurrency(pb.taxTotal || 0);
+      const grand = roundCurrency(subtotal + computedTax - discount);
       const oldGrand = pb.grandTotal || 0;
       const payoutRatio = oldGrand > 0 ? (pb.sellerPayoutTotal || 0) / oldGrand : 1;
 
@@ -135,6 +140,7 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
         ...pb,
         productSubtotal: subtotal,
         discountTotal: discount,
+        taxTotal: computedTax,
         grandTotal: grand,
         sellerPayoutTotal: roundCurrency(grand * payoutRatio),
         codCollectedAmount: pay.codCollectedAmount,

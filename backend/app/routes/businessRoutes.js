@@ -124,7 +124,7 @@ router.get("/cash-register/today", wrap(async (req) => {
   return { data: await dayBook(sid(req), req.query.date || todayKey(tz), tz) };
 }));
 const dayKeySchema = Joi.object({
-  dateKey: str.pattern(/^d{4}-d{2}-d{2}$/).required(),
+  dateKey: str.pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
   countedClosingCash: Joi.number().min(0),
 });
 router.post("/cash-register/close", validate(dayKeySchema), wrap(async (req) => ({ message: "Day closed", data: await svc.closeDay(sid(req), req.body.dateKey, req.body.countedClosingCash) })));

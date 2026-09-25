@@ -52,6 +52,7 @@ const ProductManagement = () => {
         limit: pageSize,
         sort: sortBy,
         approvalStatus: filterApproval,
+        imageStatus: filterImage !== "all" ? filterImage : undefined,
       });
       if (res.data.success) {
         // Backend returns handleResponse(..., { items, page, limit, total, totalPages })
@@ -72,6 +73,8 @@ const ProductManagement = () => {
             active: Number(payload.summary.active) || 0,
             lowStock: Number(payload.summary.lowStock) || 0,
             outOfStock: Number(payload.summary.outOfStock) || 0,
+            withImage: Number(payload.summary.withImage) || 0,
+            missingImage: Number(payload.summary.missingImage) || 0,
           });
         } else {
           setSummaryStats(null);
@@ -115,6 +118,7 @@ const ProductManagement = () => {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterApproval, setFilterApproval] = useState("all"); // all | approved | pending | rejected
+  const [filterImage, setFilterImage] = useState("all"); // all | with_image | without_image
   const [sortBy, setSortBy] = useState("newest");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
@@ -185,7 +189,7 @@ const ProductManagement = () => {
 
   React.useEffect(() => {
     fetchProducts(1);
-  }, [searchTerm, filterCategory, filterStatus, filterApproval, sortBy, pageSize]);
+  }, [searchTerm, filterCategory, filterStatus, filterApproval, filterImage, sortBy, pageSize]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -218,7 +222,7 @@ const ProductManagement = () => {
       returnReasons: [],
     },
     variants: [
-      { id: Date.now(), name: "", price: "", salePrice: "", stock: "", sku: "" },
+      { id: Date.now(), name: "", size: "", colour: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", purchaseCost: "" },
     ],
   });
 
@@ -273,11 +277,21 @@ const ProductManagement = () => {
         matchesApproval = normalizedApproval === filterApproval;
       }
 
+      const hasPhoto = Boolean(
+        p.mainImage ||
+        p.image ||
+        (Array.isArray(p.galleryImages) && p.galleryImages.length > 0)
+      );
+      let matchesImage = true;
+      if (filterImage === "with_image") matchesImage = hasPhoto;
+      if (filterImage === "without_image") matchesImage = !hasPhoto;
+
       return (
         matchesSearch &&
         matchesCategory &&
         matchesStatus &&
         matchesApproval &&
+        matchesImage &&
         matchesPrice
       );
     });
@@ -287,6 +301,7 @@ const ProductManagement = () => {
     filterCategory,
     filterStatus,
     filterApproval,
+    filterImage,
     priceMin,
     priceMax,
   ]);
@@ -305,12 +320,29 @@ const ProductManagement = () => {
       active:
         summaryStats?.active ??
         safeProducts.filter((p) => p.status === "active").length,
+      withImage:
+        summaryStats?.withImage ??
+        safeProducts.filter((p) =>
+          Boolean(p.mainImage || p.image || (Array.isArray(p.galleryImages) && p.galleryImages.length > 0))
+        ).length,
+      missingImage:
+        summaryStats?.missingImage ??
+        safeProducts.filter((p) =>
+          !Boolean(p.mainImage || p.image || (Array.isArray(p.galleryImages) && p.galleryImages.length > 0))
+        ).length,
     }),
     [safeProducts, summaryStats, total],
   );
 
   const ApprovalBadge = ({ approvalStatus }) => {
     const normalized = String(approvalStatus || "approved").toLowerCase();
+    if (normalized === "draft") {
+      return (
+        <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+          Draft (No Photo)
+        </span>
+      );
+    }
     if (normalized === "pending") {
       return <Badge variant="warning" className="text-[10px] px-2 py-0.5">Pending Approval</Badge>;
     }
@@ -383,7 +415,14 @@ const ProductManagement = () => {
       data.append("subcategoryId", formData.subcategory);
       data.append("status", formData.status);
       data.append("brand", formData.brand);
-      ["barcode", "size", "colour", "mrp", "purchaseCost", "gstPercent", "expiryDate"].forEach((k) => {
+      const firstVar = (Array.isArray(variantsToSubmit) && variantsToSubmit[0]) || {};
+      if (firstVar.barcode) data.append("barcode", firstVar.barcode);
+      if (firstVar.size) data.append("size", firstVar.size);
+      if (firstVar.colour) data.append("colour", firstVar.colour);
+      if (firstVar.purchaseCost !== undefined && firstVar.purchaseCost !== "") {
+        data.append("purchaseCost", firstVar.purchaseCost);
+      }
+      ["gstPercent", "expiryDate"].forEach((k) => {
         data.append(k, formData[k] ?? "");
       });
       data.append("weight", formData.weight);
@@ -406,6 +445,8 @@ const ProductManagement = () => {
         const approvalStatus = response?.data?.result?.approvalStatus;
         if (approvalStatus === "pending") {
           toast.success("Product changes submitted for admin approval");
+        } else if (approvalStatus === "draft") {
+          toast.success("Product updated. Upload photo to submit for admin approval.");
         } else {
           toast.success(response?.data?.message || "Product updated successfully");
         }
@@ -414,6 +455,8 @@ const ProductManagement = () => {
         const approvalStatus = response?.data?.result?.approvalStatus;
         if (approvalStatus === "pending") {
           toast.success("Product submitted for admin approval");
+        } else if (approvalStatus === "draft") {
+          toast.success("Product created for POS counter. Upload photo to submit for online approval.");
         } else {
           toast.success(response?.data?.message || "Product created successfully");
         }
@@ -499,14 +542,25 @@ const ProductManagement = () => {
         mainImage: item.mainImage || null,
         galleryImages: item.galleryImages || [],
         returnPolicy: item.returnPolicy || { isReturnable: false, returnWindowDays: 0, returnReasons: [] },
-        variants: (item.variants && item.variants.length > 0) ? item.variants.map(v => ({ ...v, id: v._id || Date.now() })) : [
+        variants: (item.variants && item.variants.length > 0) ? item.variants.map(v => ({
+          ...v,
+          id: v._id || Date.now(),
+          size: v.size || "",
+          colour: v.colour || "",
+          barcode: v.barcode || "",
+          purchaseCost: v.purchaseCost ?? "",
+        })) : [
           {
             id: Date.now(),
             name: "",
+            size: item.size || "",
+            colour: item.colour || "",
             price: item.price ?? "",
             salePrice: item.salePrice ?? "",
             stock: item.stock ?? "",
             sku: item.sku || "",
+            barcode: item.barcode || "",
+            purchaseCost: item.purchaseCost ?? "",
           },
         ],
       });
@@ -543,10 +597,14 @@ const ProductManagement = () => {
           {
             id: Date.now(),
             name: "",
+            size: "",
+            colour: "",
             price: "",
             salePrice: "",
             stock: "",
             sku: "",
+            barcode: "",
+            purchaseCost: "",
           },
         ],
       });
@@ -686,7 +744,24 @@ const ProductManagement = () => {
               <option value="all">All Approvals</option>
               <option value="approved">Approved</option>
               <option value="pending">Pending</option>
+              <option value="draft">Draft (Needs Photo)</option>
               <option value="rejected">Rejected</option>
+            </select>
+            <select
+              value={filterImage}
+              onChange={(e) => setFilterImage(e.target.value)}
+              className={cn(
+                "w-full sm:w-auto min-w-0 px-2.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/5 outline-none appearance-none cursor-pointer truncate transition-all",
+                filterImage === "without_image"
+                  ? "bg-amber-50 ring-1 ring-amber-300 text-amber-900"
+                  : "bg-white ring-1 ring-slate-200 text-slate-700"
+              )}
+              aria-label="Filter by photo status"
+              title="Photo Status"
+            >
+              <option value="all">All Photos ({stats.total})</option>
+              <option value="with_image">With Photo ({stats.withImage})</option>
+              <option value="without_image">Missing Photo ({stats.missingImage})</option>
             </select>
             <div className="relative min-w-0">
               <button
@@ -714,6 +789,20 @@ const ProductManagement = () => {
                       <option value="Active">Active</option>
                       <option value="Low Stock">Low Stock</option>
                       <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-[0.18em] mb-1">
+                      Photo Status
+                    </p>
+                    <select
+                      value={filterImage}
+                      onChange={(e) => setFilterImage(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/10 outline-none bg-white"
+                    >
+                      <option value="all">All ({stats.total})</option>
+                      <option value="with_image">With Photo ({stats.withImage})</option>
+                      <option value="without_image">Missing Photo ({stats.missingImage})</option>
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -749,6 +838,7 @@ const ProductManagement = () => {
                         setFilterCategory("all");
                         setFilterStatus("All");
                         setFilterApproval("all");
+                        setFilterImage("all");
                         setPriceMin("");
                         setPriceMax("");
                         setSearchTerm("");
@@ -787,6 +877,74 @@ const ProductManagement = () => {
         </div>
       </Card>
 
+      {/* Quick Image Filter Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setFilterImage("all")}
+          className={cn(
+            "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+            filterImage === "all"
+              ? "bg-slate-900 text-white shadow-xs"
+              : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+          )}
+        >
+          <HiOutlinePhoto className="h-3.5 w-3.5" />
+          <span>All Products</span>
+          <span
+            className={cn(
+              "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+              filterImage === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+            )}
+          >
+            {stats.total}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterImage("with_image")}
+          className={cn(
+            "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+            filterImage === "with_image"
+              ? "bg-emerald-600 text-white shadow-xs"
+              : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+          )}
+        >
+          <HiOutlineCheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+          <span>With Photo</span>
+          <span
+            className={cn(
+              "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+              filterImage === "with_image" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+            )}
+          >
+            {stats.withImage}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterImage("without_image")}
+          className={cn(
+            "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+            filterImage === "without_image"
+              ? "bg-amber-600 text-white shadow-xs"
+              : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+          )}
+        >
+          <HiOutlineExclamationCircle className="h-3.5 w-3.5 text-amber-500" />
+          <span>Missing Photo</span>
+          <span
+            className={cn(
+              "text-[10px] px-1.5 py-0.2 rounded-full font-black",
+              filterImage === "without_image" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+            )}
+          >
+            {stats.missingImage}
+          </span>
+        </button>
+      </div>
 
       {/* Product Table */}
 
@@ -825,27 +983,63 @@ const ProductManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((p) => (
+              {filteredProducts.map((p) => {
+                const hasPhoto = Boolean(
+                  p.mainImage ||
+                  p.image ||
+                  (Array.isArray(p.galleryImages) && p.galleryImages.length > 0)
+                );
+                return (
                 <tr
                   key={p._id || p.id}
                   className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 rounded-lg overflow-hidden bg-slate-100 ring-1 ring-slate-200">
-                        <img
-                          src={
-                            p.mainImage ||
-                            p.image ||
-                            "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400"
+                      <div
+                        onClick={() => {
+                          if (!hasPhoto) {
+                            openEditModal(p);
+                            setModalTab("photos");
                           }
-                          alt={p.name}
-                          className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        />
+                        }}
+                        className={cn(
+                          "h-14 w-14 rounded-xl overflow-hidden flex items-center justify-center shrink-0 relative transition-all",
+                          hasPhoto
+                            ? "bg-slate-100 ring-1 ring-slate-200"
+                            : "bg-amber-50/80 border-2 border-dashed border-amber-300 cursor-pointer hover:border-amber-400 hover:bg-amber-100/60 group-hover:scale-105"
+                        )}
+                        title={!hasPhoto ? "Click to upload photo" : p.name}
+                      >
+                        {hasPhoto ? (
+                          <img
+                            src={p.mainImage || p.image || p.galleryImages?.[0]}
+                            alt={p.name}
+                            className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-amber-600 p-1 text-center">
+                            <HiOutlinePhoto className="h-5 w-5 stroke-[1.75]" />
+                            <span className="text-[8px] font-black uppercase tracking-tight leading-none mt-0.5">No Photo</span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-900">
                           {p.name}
                         </p>
+                        {!hasPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openEditModal(p);
+                              setModalTab("photos");
+                            }}
+                            className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 mt-1 transition-colors w-fit"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            Hidden from customer app · Upload Photo
+                          </button>
+                        )}
                         {String(p.approvalStatus || "").toLowerCase() === "pending" ? (
                           <p className="text-[10px] font-medium text-amber-600">
                             Hidden from customers until admin approval.
@@ -943,7 +1137,8 @@ const ProductManagement = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1080,13 +1275,8 @@ const ProductManagement = () => {
                   onWheel={handleModalScrollWheel}>
                   {modalTab === "general" && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
-                          ["barcode", "Barcode", "text"],
-                          ["size", "Size", "text"],
-                          ["colour", "Colour", "text"],
-                          ["mrp", "MRP", "number"],
-                          ["purchaseCost", "Purchase Cost", "number"],
                           ["gstPercent", "GST %", "number"],
                           ["expiryDate", "Expiry Date", "date"],
                         ].map(([key, label, type]) => (
@@ -1408,10 +1598,14 @@ const ProductManagement = () => {
                                 {
                                   id: Date.now(),
                                   name: "",
+                                  size: "",
+                                  colour: "",
                                   price: "",
                                   salePrice: "",
                                   stock: "",
                                   sku: makeSku(prev.name, prev.variants.length + 1),
+                                  barcode: "",
+                                  purchaseCost: "",
                                 },
                               ],
                             }));
@@ -1463,9 +1657,9 @@ const ProductManagement = () => {
                               </button>
                             </div>
 
-                            {/* Section 1: Core Pricing & Stock */}
+                            {/* Section 1: Core Variant Info & Pricing */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3.5 items-start">
-                              <div className="md:col-span-4 space-y-1.5">
+                              <div className="col-span-12 md:col-span-4 space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
                                   Variant Name
                                 </label>
@@ -1481,7 +1675,39 @@ const ProductManagement = () => {
                                 />
                               </div>
 
-                              <div className="sm:col-span-1 md:col-span-2 space-y-1.5">
+                              <div className="col-span-6 md:col-span-2 space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Size
+                                </label>
+                                <input
+                                  value={v.size || ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], size: e.target.value };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="e.g. M, XL, 500ml"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-800 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="col-span-6 md:col-span-2 space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Colour
+                                </label>
+                                <input
+                                  value={v.colour || ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], colour: e.target.value };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="e.g. Blue, Red"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-800 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="col-span-6 md:col-span-2 space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
                                   Price (MRP)
                                 </label>
@@ -1504,7 +1730,7 @@ const ProductManagement = () => {
                                 />
                               </div>
 
-                              <div className="sm:col-span-1 md:col-span-3 space-y-1.5">
+                              <div className="col-span-6 md:col-span-2 space-y-1.5">
                                 <label className="text-[10px] font-bold text-brand-600 uppercase tracking-wider ml-1">
                                   Sale Price
                                 </label>
@@ -1537,8 +1763,11 @@ const ProductManagement = () => {
                                   }`}
                                 />
                               </div>
+                            </div>
 
-                              <div className="sm:col-span-2 md:col-span-3 space-y-1.5">
+                            {/* Section 2: Stock & Inventory Tracking (Barcode, Purchase Cost) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100 items-start">
+                              <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
                                     Stock
@@ -1573,25 +1802,6 @@ const ProductManagement = () => {
                                       ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200"
                                       : "bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-800 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10"
                                   }`}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Section 2: Inventory Tracking (SKU, Barcode, Purchase Cost) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100">
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                  SKU
-                                </label>
-                                <input
-                                  value={v.sku}
-                                  onChange={(e) => {
-                                    const news = [...formData.variants];
-                                    news[i].sku = e.target.value;
-                                    setFormData({ ...formData, variants: news });
-                                  }}
-                                  placeholder="SKU"
-                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-mono font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
                                 />
                               </div>
 

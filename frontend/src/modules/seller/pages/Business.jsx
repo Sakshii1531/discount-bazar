@@ -28,6 +28,8 @@ import {
     HiOutlineTrash,
     HiOutlinePencilSquare,
     HiOutlineArrowUturnLeft,
+    HiOutlineDocumentText,
+    HiOutlinePrinter,
 } from "react-icons/hi2";
 
 const REPORTS = [
@@ -41,7 +43,7 @@ const REPORTS = [
 let storeTz = "Asia/Kolkata";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: storeTz }).format(new Date());
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-const unwrap = (res) => res?.data?.result ?? res?.data?.data;
+const unwrap = (res) => res?.data?.results ?? res?.data?.result ?? res?.data?.data;
 const errMsg = (e) => e?.response?.data?.message || e?.message || "Something went wrong";
 
 const inputCls = "w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all";
@@ -263,6 +265,7 @@ const PurchasesTab = () => {
     const [editingId, setEditingId] = useState(null);
     const [busy, setBusy] = useState(false);
     const [ret, setRet] = useState(null);
+    const [invoiceBill, setInvoiceBill] = useState(null);
 
     const load = useCallback(() => {
         businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
@@ -383,28 +386,67 @@ const PurchasesTab = () => {
                     </div>
                 </div>
 
-                <div className="space-y-2 border-t border-slate-100 pt-3">
-                    <p className="text-xs font-bold text-slate-700">Line Items</p>
-                    {lines.map((l, i) => (
-                        <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1fr_1fr_1fr_auto] gap-2 items-center bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
-                            <select className={`${inputCls} col-span-2 md:col-span-1`} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })}>
-                                <option value="">Select product</option>
-                                {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
-                            </select>
-                            {products.find((x) => x._id === l.productId)?.variants?.length > 0 && (
-                                <select className={`${inputCls} col-span-2 md:col-span-1`} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
-                                    <option value="">Variant…</option>
-                                    {products.find((x) => x._id === l.productId).variants.map((v) => <option key={v.sku} value={v.sku}>{v.name || v.sku}</option>)}
-                                </select>
-                            )}
-                            <input className={inputCls} type="number" min="1" placeholder="Qty" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
-                            <input className={inputCls} type="number" min="0" placeholder="Cost" value={l.cost} onChange={(e) => setLine(i, { cost: e.target.value })} />
-                            <input className={inputCls} type="number" min="0" placeholder="GST %" value={l.gstPercent} onChange={(e) => setLine(i, { gstPercent: e.target.value })} />
-                            <button type="button" className="p-2 text-slate-400 hover:text-rose-600 rounded-lg" onClick={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, x) => x !== i) : ls))}>
-                                <HiOutlineTrash className="h-4 w-4" />
-                            </button>
-                        </div>
-                    ))}
+                <div className="space-y-3 border-t border-slate-100 pt-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">Purchase Items & Stock Inward</p>
+                        <p className="text-[11px] text-slate-500 font-medium">Enter incoming stock quantity and purchase cost received from supplier</p>
+                    </div>
+
+                    {/* Column Headers for clarity */}
+                    <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
+                        <span>1. Product Name *</span>
+                        <span>2. Variant / Unit</span>
+                        <span>3. Stock Qty (Piece/Kg) *</span>
+                        <span>4. Purchase Cost (₹) *</span>
+                        <span>5. GST %</span>
+                        <span className="w-8"></span>
+                    </div>
+
+                    {lines.map((l, i) => {
+                        const prod = products.find((x) => x._id === l.productId);
+                        const hasVariants = prod?.variants?.length > 0;
+                        return (
+                            <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                                <div className="col-span-2 md:col-span-1">
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Product Name *</label>
+                                    <select className={inputCls} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })}>
+                                        <option value="">— Select product —</option>
+                                        {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-2 md:col-span-1">
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Variant / Unit</label>
+                                    {hasVariants ? (
+                                        <select className={inputCls} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
+                                            <option value="">— Choose variant —</option>
+                                            {prod.variants.map((v) => <option key={v.sku} value={v.sku}>{v.name || v.sku}</option>)}
+                                        </select>
+                                    ) : (
+                                        <select disabled className={`${inputCls} bg-slate-100 text-slate-400 cursor-not-allowed`}>
+                                            <option>Standard (No Variant)</option>
+                                        </select>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Stock Qty *</label>
+                                    <input className={inputCls} type="number" min="1" placeholder="Stock Qty (e.g. 50)" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} title="Stock quantity received" />
+                                </div>
+                                <div>
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Purchase Cost (₹) *</label>
+                                    <input className={inputCls} type="number" min="0" step="0.01" placeholder="Cost Price ₹ (per unit)" value={l.cost} onChange={(e) => setLine(i, { cost: e.target.value })} title="Cost price per unit" />
+                                </div>
+                                <div>
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">GST %</label>
+                                    <input className={inputCls} type="number" min="0" placeholder="GST % (e.g. 0)" value={l.gstPercent} onChange={(e) => setLine(i, { gstPercent: e.target.value })} />
+                                </div>
+                                <div className="flex justify-end">
+                                    <button type="button" className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer" title="Remove Item" onClick={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, x) => x !== i) : ls))}>
+                                        <HiOutlineTrash className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -435,15 +477,27 @@ const PurchasesTab = () => {
             </div>
 
             {ret && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-3">
-                    <p className="font-bold text-sm text-amber-900">Purchase Return — {ret.name}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input className={inputCls} type="number" min="1" value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} placeholder="Qty" />
-                        <input className={inputCls} type="number" min="0" value={ret.cost} onChange={(e) => setRet({ ...ret, cost: e.target.value })} placeholder="Cost" />
-                        <input className={inputCls} value={ret.reason} onChange={(e) => setRet({ ...ret, reason: e.target.value })} placeholder="Reason for return" />
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 space-y-4">
+                    <div>
+                        <p className="font-black text-sm text-amber-950">Purchase Return — {ret.name}</p>
+                        <p className="text-xs text-amber-800/80 mt-0.5">Return damaged or expired stock to the supplier. This reduces inventory and adjusts supplier balance.</p>
                     </div>
-                    <div className="flex gap-2">
-                        <button className={btnCls} onClick={submitReturn}>Return to Supplier</button>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-amber-950 mb-1">Return Quantity (Pieces/Kg) *</label>
+                            <input className={inputCls} type="number" min="1" value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} placeholder="Return quantity" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-amber-950 mb-1">Cost Price (₹ per unit) *</label>
+                            <input className={inputCls} type="number" min="0" step="0.01" value={ret.cost} onChange={(e) => setRet({ ...ret, cost: e.target.value })} placeholder="Cost price ₹" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-amber-950 mb-1">Reason for Return *</label>
+                            <input className={inputCls} value={ret.reason} onChange={(e) => setRet({ ...ret, reason: e.target.value })} placeholder="e.g. Damaged, Expired, Defective" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                        <button className="px-4 py-2.5 rounded-xl bg-amber-800 text-white text-xs font-bold hover:bg-amber-900 active:scale-95 transition-all cursor-pointer shadow-xs" onClick={submitReturn}>Return to Supplier</button>
                         <button className={ghostBtn} onClick={() => setRet(null)}>Close</button>
                     </div>
                 </div>
@@ -453,11 +507,12 @@ const PurchasesTab = () => {
                 <h4 className="text-sm font-bold text-slate-900">Purchase History ({bills.length})</h4>
                 {bills.map((b) => (
                     <div key={b._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <span className="font-black text-slate-900">#{b.billNo || "NO-NUMBER"}</span>
-                            <span className="text-slate-600 font-medium">· {b.supplier?.name}</span>
-                            <span className="text-slate-400 text-xs">({new Date(b.billDate).toLocaleDateString("en-IN")})</span>
-                            <span className="ml-auto font-black text-slate-900">{inr(b.total)}</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-slate-900">#{b.billNo || "NO-NUMBER"}</span>
+                                <span className="text-slate-600 font-medium">· {b.supplier?.name}</span>
+                                <span className="text-slate-400 text-xs">({new Date(b.billDate).toLocaleDateString("en-IN")})</span>
+                            </div>
                             <span className={cn(
                                 "text-[10px] font-black px-2.5 py-0.5 rounded-full",
                                 b.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" :
@@ -466,7 +521,38 @@ const PurchasesTab = () => {
                                 {b.status}
                             </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-2">{b.items.map((i) => `${i.name} ×${i.quantity}`).join(", ")}</p>
+
+                        {/* Payment & Balance Breakdown */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 my-2 py-2 border-y border-slate-100 text-xs">
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <span className="text-slate-600">Total: <strong className="text-slate-900 text-sm font-black">{inr(b.total)}</strong></span>
+                                <span className="text-slate-300">|</span>
+                                <span className="text-slate-600">Paid: <strong className="text-emerald-700 font-bold">{inr(b.amountPaid || 0)}</strong></span>
+                                <span className="text-slate-300">|</span>
+                                <span className="text-slate-600">
+                                    Due (Udhaar): <strong className={Number(b.total - (b.amountPaid || 0)) > 0 ? "text-rose-600 font-bold" : "text-emerald-600 font-bold"}>
+                                        {inr(Math.max(0, b.total - (b.amountPaid || 0)))}
+                                    </strong>
+                                </span>
+                            </div>
+                            <div>
+                                {Number(b.amountPaid || 0) <= 0 ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                        Unpaid (Credit / Udhaar)
+                                    </span>
+                                ) : Number(b.amountPaid || 0) < Number(b.total) ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Partially Paid
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Fully Paid
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-500 mt-1">{b.items.map((i) => `${i.name} ×${i.quantity}`).join(", ")}</p>
                         {b.status !== "CANCELLED" && (
                             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
                                 {b.status === "DRAFT" && (
@@ -474,6 +560,9 @@ const PurchasesTab = () => {
                                         <HiOutlineCheckCircle className="h-4 w-4" /> Confirm
                                     </button>
                                 )}
+                                <button className={ghostBtn} onClick={() => setInvoiceBill(b)}>
+                                    <HiOutlineDocumentText className="h-3.5 w-3.5 text-primary" /> View Invoice
+                                </button>
                                 <button className={ghostBtn} onClick={() => edit(b)}>
                                     <HiOutlinePencilSquare className="h-3.5 w-3.5" /> Edit
                                 </button>
@@ -495,6 +584,153 @@ const PurchasesTab = () => {
                     </div>
                 )}
             </div>
+
+            {/* Purchase Invoice Modal */}
+            {invoiceBill && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                    <HiOutlineDocumentText className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900">Purchase Invoice #{invoiceBill.billNo}</h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">
+                                        {new Date(invoiceBill.billDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-xs"
+                                >
+                                    <HiOutlinePrinter className="h-4 w-4" /> Print
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setInvoiceBill(null)}
+                                    className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                                >
+                                    <HiOutlineXMark className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Invoice Sheet */}
+                        <div className="p-6 space-y-6 text-xs text-slate-700">
+                            {/* Supplier & Bill Info */}
+                            <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-slate-200">
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supplier / Vendor Details</span>
+                                    <h4 className="text-base font-black text-slate-900 mt-0.5">{invoiceBill.supplier?.name || "Supplier"}</h4>
+                                    {invoiceBill.supplier?.phone && <p className="text-slate-600 mt-0.5 font-medium">Phone: {invoiceBill.supplier.phone}</p>}
+                                    {invoiceBill.supplier?.gstin && <p className="text-slate-600 font-medium">GSTIN: {invoiceBill.supplier.gstin}</p>}
+                                    {invoiceBill.supplier?.address && <p className="text-slate-500 mt-0.5 max-w-xs">{invoiceBill.supplier.address}</p>}
+                                </div>
+                                <div className="text-right space-y-1">
+                                    <span className="inline-block text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                                        Purchase Invoice
+                                    </span>
+                                    <p className="font-mono text-slate-900 font-black text-sm">#{invoiceBill.billNo}</p>
+                                    <p className="text-slate-500">Date: {new Date(invoiceBill.billDate).toLocaleDateString("en-IN")}</p>
+                                    <span className={cn(
+                                        "inline-block text-[10px] font-black px-2.5 py-0.5 rounded-md mt-1",
+                                        invoiceBill.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" :
+                                        invoiceBill.status === "CANCELLED" ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"
+                                    )}>
+                                        Status: {invoiceBill.status}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Items Table */}
+                            <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                                        <tr>
+                                            <th className="text-left py-2.5 px-3">#</th>
+                                            <th className="text-left py-2.5 px-3">Item Description</th>
+                                            <th className="text-center py-2.5 px-3">Qty</th>
+                                            <th className="text-right py-2.5 px-3">Unit Cost (₹)</th>
+                                            <th className="text-center py-2.5 px-3">GST</th>
+                                            <th className="text-right py-2.5 px-3">Line Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {invoiceBill.items?.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-50/50">
+                                                <td className="py-2.5 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                                                <td className="py-2.5 px-3 font-bold text-slate-900">
+                                                    {item.name}
+                                                    {item.variantSku ? <span className="text-[11px] font-normal text-slate-500 block">Variant/SKU: {item.variantSku}</span> : null}
+                                                </td>
+                                                <td className="py-2.5 px-3 text-center font-bold text-slate-800">{item.quantity}</td>
+                                                <td className="py-2.5 px-3 text-right">{inr(item.cost)}</td>
+                                                <td className="py-2.5 px-3 text-center text-slate-500">{item.gstPercent || 0}%</td>
+                                                <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                                                    {inr(item.lineTotal || (item.quantity * item.cost * (1 + (item.gstPercent || 0) / 100)))}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Totals & Payment Summary */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pt-2">
+                                <div className="space-y-1.5 text-xs text-slate-600 max-w-xs">
+                                    <p><strong className="text-slate-800">Payment Method:</strong> {invoiceBill.paymentMethod || "CREDIT (Pending)"}</p>
+                                    {invoiceBill.note && <p><strong className="text-slate-800">Note:</strong> {invoiceBill.note}</p>}
+                                </div>
+                                <div className="w-full sm:w-72 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>Subtotal (Excl. Tax):</span>
+                                        <span className="font-semibold">{inr(invoiceBill.subtotal || invoiceBill.total)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>GST Total:</span>
+                                        <span className="font-semibold">{inr(invoiceBill.gstTotal || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-900 font-black text-sm border-t border-slate-200 pt-2">
+                                        <span>Grand Total:</span>
+                                        <span className="text-primary font-black">{inr(invoiceBill.total)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-emerald-700 font-bold border-t border-dashed border-slate-200 pt-1.5">
+                                        <span>Amount Paid:</span>
+                                        <span>{inr(invoiceBill.amountPaid || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-rose-600 font-bold">
+                                        <span>Balance Due (Udhaar):</span>
+                                        <span>{inr(Math.max(0, invoiceBill.total - (invoiceBill.amountPaid || 0)))}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-slate-100 bg-slate-50/70">
+                            <button
+                                type="button"
+                                onClick={() => setInvoiceBill(null)}
+                                className={ghostBtn}
+                            >
+                                Close
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className={btnCls}
+                            >
+                                <HiOutlinePrinter className="h-4 w-4" /> Print Invoice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

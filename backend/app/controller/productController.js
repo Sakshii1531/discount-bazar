@@ -124,14 +124,23 @@ function parseImageList(input) {
 // Barcode must be unique per seller (product-level and variant-level), and
 // MRP must not be below the selling price.
 async function assertItemMasterValid(productData, sellerId, excludeId = null) {
-  const codes = [];
-  if (productData.barcode && String(productData.barcode).trim()) codes.push(String(productData.barcode).trim());
+  const variantCodes = [];
   if (Array.isArray(productData.variants)) {
-    productData.variants.forEach((v) => v?.barcode && String(v.barcode).trim() && codes.push(String(v.barcode).trim()));
+    productData.variants.forEach((v) => {
+      const b = v?.barcode && String(v.barcode).trim();
+      if (b) variantCodes.push(b);
+    });
   }
-  if (new Set(codes).size !== codes.length) {
-    throw Object.assign(new Error("Duplicate barcode within this product"), { statusCode: 400 });
+  if (new Set(variantCodes).size !== variantCodes.length) {
+    throw Object.assign(new Error("Duplicate barcode within product variants"), { statusCode: 400 });
   }
+
+  const allUniqueCodes = new Set(variantCodes);
+  if (productData.barcode && String(productData.barcode).trim()) {
+    allUniqueCodes.add(String(productData.barcode).trim());
+  }
+  const codes = Array.from(allUniqueCodes);
+
   if (codes.length) {
     const clash = await Product.findOne({
       sellerId,
@@ -205,6 +214,17 @@ function buildSellerPendingModerationUpdate() {
     approvalReviewedAt: null,
     approvalReviewedBy: null,
     approvalNote: "",
+    lastSubmittedByRole: "seller",
+  };
+}
+
+function buildSellerDraftModerationUpdate() {
+  return {
+    approvalStatus: PRODUCT_APPROVAL_STATUS.DRAFT,
+    approvalRequestedAt: null,
+    approvalReviewedAt: null,
+    approvalReviewedBy: null,
+    approvalNote: "Missing product image. Upload photo to submit for admin approval.",
     lastSubmittedByRole: "seller",
   };
 }
@@ -480,7 +500,7 @@ export const getProducts = async (req, res) => {
 export const getSellerProducts = async (req, res) => {
   try {
     const sellerId = req.user.id;
-    const { stockStatus, sort, approvalStatus } = req.query;
+    const { stockStatus, sort, approvalStatus, imageStatus } = req.query;
     const { page, limit, skip } = getPagination(req, {
       defaultLimit: 20,
       maxLimit: 100,
@@ -492,6 +512,12 @@ export const getSellerProducts = async (req, res) => {
       query.stock = { $gt: 0 };
     } else if (stockStatus === "out") {
       query.stock = 0;
+    }
+
+    if (imageStatus === "with_image") {
+      query.mainImage = { $exists: true, $nin: [null, ""] };
+    } else if (imageStatus === "without_image") {
+      query.$or = [{ mainImage: { $exists: false } }, { mainImage: null }, { mainImage: "" }];
     }
 
     if (approvalStatus && String(approvalStatus).trim().toLowerCase() !== "all") {
@@ -533,6 +559,8 @@ export const getSellerProducts = async (req, res) => {
       pendingCount,
       approvedCount,
       rejectedCount,
+      withImageCount,
+      missingImageCount,
     ] = await Promise.all([
       Product.find(query)
         .select(
@@ -614,6 +642,14 @@ export const getSellerProducts = async (req, res) => {
         ...baseSellerQuery,
         approvalStatus: PRODUCT_APPROVAL_STATUS.REJECTED,
       }),
+      Product.countDocuments({
+        ...baseSellerQuery,
+        mainImage: { $exists: true, $nin: [null, ""] },
+      }),
+      Product.countDocuments({
+        ...baseSellerQuery,
+        $or: [{ mainImage: { $exists: false } }, { mainImage: null }, { mainImage: "" }],
+      }),
     ]);
 
     return handleResponse(res, 200, "Seller products fetched", {
@@ -630,6 +666,8 @@ export const getSellerProducts = async (req, res) => {
         pending: pendingCount,
         approved: approvedCount,
         rejected: rejectedCount,
+        withImage: withImageCount,
+        missingImage: missingImageCount,
       },
     });
   } catch (error) {
@@ -755,6 +793,15 @@ export const createProduct = async (req, res) => {
         (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
         0
       );
+
+      // Backfill top-level attributes from first variant for backwards compatibility
+      const firstVar = productData.variants[0];
+      if (firstVar.size && !productData.size) productData.size = firstVar.size;
+      if (firstVar.colour && !productData.colour) productData.colour = firstVar.colour;
+      if (firstVar.barcode && !productData.barcode) productData.barcode = firstVar.barcode;
+      if (firstVar.purchaseCost !== undefined && productData.purchaseCost === undefined) {
+        productData.purchaseCost = firstVar.purchaseCost;
+      }
     }
 
     const { value: parsedReturnPolicy, error: returnPolicyError } =
@@ -764,12 +811,22 @@ export const createProduct = async (req, res) => {
     }
     productData.returnPolicy = parsedReturnPolicy;
 
+    const effectiveMainImage = String(productData.mainImage || "").trim();
+    const effectiveGallery = Array.isArray(productData.galleryImages)
+      ? productData.galleryImages.filter(Boolean)
+      : [];
+    const hasImage = Boolean(effectiveMainImage || effectiveGallery.length > 0);
+
     let moderationUpdate = {};
     let successMessage = "Product created successfully";
 
     let isPendingApproval = false;
     if (role === "admin") {
       moderationUpdate = buildAdminApprovedModerationUpdate(req.user?.id || null);
+    } else if (!hasImage) {
+      // Products without image do not go to admin for approval (kept as draft for POS counter)
+      moderationUpdate = buildSellerDraftModerationUpdate();
+      successMessage = "Product created for POS counter. Upload photo to submit for online approval.";
     } else {
       const approvalConfig = await getProductApprovalConfig();
       if (approvalConfig.sellerCreateRequiresApproval) {
@@ -976,6 +1033,13 @@ export const updateProduct = async (req, res) => {
         (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
         0
       );
+
+      // Backfill top-level attributes from first variant for backwards compatibility
+      const firstVar = productData.variants[0];
+      if (firstVar.size !== undefined) productData.size = firstVar.size;
+      if (firstVar.colour !== undefined) productData.colour = firstVar.colour;
+      if (firstVar.barcode !== undefined) productData.barcode = firstVar.barcode;
+      if (firstVar.purchaseCost !== undefined) productData.purchaseCost = firstVar.purchaseCost;
     } else if (role === "seller") {
       productData.stock = Number(product.stock || 0);
     }
@@ -989,17 +1053,30 @@ export const updateProduct = async (req, res) => {
       productData.returnPolicy = parsedReturnPolicy;
     }
 
+    const effectiveMainImage = String(
+      productData.mainImage !== undefined ? productData.mainImage : product.mainImage || ""
+    ).trim();
+    const effectiveGallery = Array.isArray(productData.galleryImages)
+      ? productData.galleryImages.filter(Boolean)
+      : (Array.isArray(product.galleryImages) ? product.galleryImages.filter(Boolean) : []);
+    const hasImage = Boolean(effectiveMainImage || effectiveGallery.length > 0);
+
     let moderationUpdate = {};
     let successMessage = "Product updated successfully";
 
     let isPendingApproval = false;
     if (role === "admin") {
       moderationUpdate = buildAdminApprovedModerationUpdate(req.user?.id || null);
+    } else if (!hasImage) {
+      // Products without image do not go to admin for approval
+      moderationUpdate = buildSellerDraftModerationUpdate();
+      successMessage = "Product updated. Upload photo to submit for online approval.";
     } else {
       const approvalConfig = await getProductApprovalConfig();
-      if (approvalConfig.sellerEditRequiresApproval) {
+      const wasDraft = product.approvalStatus === PRODUCT_APPROVAL_STATUS.DRAFT;
+      if (approvalConfig.sellerEditRequiresApproval || wasDraft) {
         moderationUpdate = buildSellerPendingModerationUpdate();
-        successMessage = "Product changes submitted for admin approval";
+        successMessage = "Product submitted for admin approval";
         isPendingApproval = true;
       } else {
         moderationUpdate = buildSellerApprovedModerationUpdate();
@@ -1312,6 +1389,8 @@ export const getModerationProducts = async (req, res) => {
     const approvalFilter = buildApprovalStatusFilter(approvalStatus);
     if (Object.keys(approvalFilter).length > 0) {
       moderatedQuery = { $and: [moderatedQuery, approvalFilter] };
+    } else {
+      moderatedQuery = { $and: [moderatedQuery, { approvalStatus: { $ne: PRODUCT_APPROVAL_STATUS.DRAFT } }] };
     }
 
     const sortMap = {
@@ -1325,7 +1404,7 @@ export const getModerationProducts = async (req, res) => {
     const sortQuery = sortMap[String(sort || "newest").toLowerCase()] || sortMap.newest;
 
     // Compute base counts for stats cards, ignoring status/stock filters
-    const baseStatsQuery = { ...baseQuery };
+    const baseStatsQuery = { ...baseQuery, approvalStatus: { $ne: PRODUCT_APPROVAL_STATUS.DRAFT } };
     delete baseStatsQuery.status;
     delete baseStatsQuery.$expr;
 

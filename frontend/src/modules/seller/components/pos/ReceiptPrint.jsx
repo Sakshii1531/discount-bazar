@@ -87,8 +87,9 @@ const ReceiptPrint = ({
     }, 0);
 
     const subtotal = Number(breakdown.productSubtotal || breakdown.subtotal || lineItemsSubtotal);
+    const taxTotal = Number(breakdown.taxTotal || 0);
     const discountTotal = Number(breakdown.discountTotal || breakdown.discount || 0);
-    const grandTotal = Number(breakdown.grandTotal || breakdown.total || Math.max(0, subtotal - discountTotal));
+    const grandTotal = Number(breakdown.grandTotal || breakdown.total || Math.max(0, subtotal + taxTotal - discountTotal));
     const amountPaid = order.posAmountPaid != null ? Number(order.posAmountPaid) : grandTotal;
 
     const isCredit = String(order.posPaymentMethod || "").toUpperCase() === "CREDIT";
@@ -262,6 +263,12 @@ const ReceiptPrint = ({
                                 <span>Subtotal</span>
                                 <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
                             </div>
+                            {taxTotal > 0 && (
+                                <div className="flex justify-between text-slate-800 font-semibold">
+                                    <span>Tax / GST</span>
+                                    <span>+₹{taxTotal.toFixed(2)}</span>
+                                </div>
+                            )}
                             {discountTotal > 0 && (
                                 <div className="flex justify-between text-emerald-700 font-semibold">
                                     <span>Discount{couponCode ? ` (${couponCode})` : ""}</span>
@@ -276,27 +283,38 @@ const ReceiptPrint = ({
                             <span>₹{grandTotal.toFixed(2)}</span>
                         </div>
 
-                        {/* GST Summary (prices inclusive of GST) */}
-                        {gstRows.length > 0 && (
+                        {/* GST Summary */}
+                        {(gstRows.length > 0 || taxTotal > 0) && (
                             <div className="border-b border-dashed border-slate-400 pb-1.5 mb-1.5 text-[9px] text-slate-700">
-                                <p className="font-bold uppercase text-slate-800 mb-0.5">GST Summary (incl. in price)</p>
-                                <div className="flex justify-between font-semibold text-slate-500">
-                                    <span className="w-10">Rate</span>
-                                    <span className="flex-1 text-right">Taxable</span>
-                                    <span className="w-14 text-right">CGST</span>
-                                    <span className="w-14 text-right">SGST</span>
-                                </div>
-                                {gstRows.map(([rate, r]) => (
-                                    <div key={rate} className="flex justify-between">
-                                        <span className="w-10">{rate}%</span>
-                                        <span className="flex-1 text-right">₹{r.taxable.toFixed(2)}</span>
-                                        <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
-                                        <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
+                                <p className="font-bold uppercase text-slate-800 mb-0.5">
+                                    {gstRows.length > 0 ? "GST Summary (incl. in price)" : "Tax / GST Summary"}
+                                </p>
+                                {gstRows.length > 0 ? (
+                                    <>
+                                        <div className="flex justify-between font-semibold text-slate-500">
+                                            <span className="w-10">Rate</span>
+                                            <span className="flex-1 text-right">Taxable</span>
+                                            <span className="w-14 text-right">CGST</span>
+                                            <span className="w-14 text-right">SGST</span>
+                                        </div>
+                                        {gstRows.map(([rate, r]) => (
+                                            <div key={rate} className="flex justify-between">
+                                                <span className="w-10">{rate}%</span>
+                                                <span className="flex-1 text-right">₹{r.taxable.toFixed(2)}</span>
+                                                <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
+                                                <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </>
+                                ) : (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Applied Tax:</span>
+                                        <span className="font-semibold text-slate-900">₹{taxTotal.toFixed(2)}</span>
                                     </div>
-                                ))}
+                                )}
                                 <div className="flex justify-between font-bold text-slate-900 mt-0.5">
-                                    <span>Total GST</span>
-                                    <span>₹{gstTotal.toFixed(2)}</span>
+                                    <span>Total Tax</span>
+                                    <span>₹{(gstTotal || taxTotal).toFixed(2)}</span>
                                 </div>
                             </div>
                         )}

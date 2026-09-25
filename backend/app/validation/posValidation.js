@@ -14,6 +14,7 @@ const posItemSchema = Joi.object({
   // POS explicitly allows the cashier to edit the line price.
   price: Joi.number().min(0).required(),
   variantSku: trimmedString.allow("").optional(),
+  gstPercent: Joi.number().min(0).max(100).optional(),
 });
 
 // SPLIT only: tender lines that must add up to the bill total (checked server-side).
@@ -38,6 +39,8 @@ export const createPosSaleSchema = Joi.object({
   amountPaid: Joi.number().min(0).optional(),
   // Flat manual discount in rupees, on top of any coupon.
   discount: Joi.number().min(0).optional(),
+  taxPercent: Joi.number().min(0).max(100).optional(),
+  taxTotal: Joi.number().min(0).optional(),
   walkInCustomer: Joi.object({
     name: trimmedString.max(100).allow("").optional(),
     phone: trimmedString.max(20).allow("").optional(),
@@ -46,10 +49,12 @@ export const createPosSaleSchema = Joi.object({
   couponCode: trimmedString.max(50).allow("").optional(),
 });
 
-// Totals-only preview (coupon + manual discount) so the till shows the real amount due.
+// Totals-only preview (coupon + manual discount + tax) so the till shows the real amount due.
 export const previewPosSaleSchema = Joi.object({
   items: Joi.array().items(posItemSchema).min(1).required(),
   discount: Joi.number().min(0).optional(),
+  taxPercent: Joi.number().min(0).max(100).optional(),
+  taxTotal: Joi.number().min(0).optional(),
   couponCode: trimmedString.max(50).allow("").optional(),
 });
 
@@ -60,6 +65,8 @@ export const editPosSaleSchema = Joi.object({
   posCustomerId: trimmedString.allow("").optional(),
   amountPaid: Joi.number().min(0).optional(),
   discount: Joi.number().min(0).optional(),
+  taxPercent: Joi.number().min(0).max(100).optional(),
+  taxTotal: Joi.number().min(0).optional(),
   reason: trimmedString.max(200).allow("").optional(),
 });
 
