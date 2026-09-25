@@ -210,14 +210,15 @@ const AddProduct = () => {
   const makeSku = (name, index = 1) => {
     const prefix =
       String(name || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
-        .slice(0, 5) || "item";
+        .trim()
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .slice(0, 5)
+        .toUpperCase() || "ITEM";
     return `${prefix}-${String(index).padStart(3, "0")}`;
   };
 
   const isAutoSku = (sku, name, index = 1) =>
-    String(sku || "").toLowerCase() === makeSku(name, index);
+    String(sku || "").toUpperCase() === makeSku(name, index);
 
   const [formData, setFormData] = useState(getInitialFormData);
 
@@ -263,11 +264,6 @@ const AddProduct = () => {
     setFormData((prev) => {
       if (!prev.name) return prev;
 
-      const nextSku =
-        !prev.sku || isAutoSku(prev.sku, prev.name, 1)
-          ? makeSku(prev.name, 1)
-          : prev.sku;
-
       const nextVariants = prev.variants.map((variant, idx) => {
         const variantIndex = idx + 1;
         const shouldAuto =
@@ -277,9 +273,11 @@ const AddProduct = () => {
           : variant;
       });
 
+      const nextSku = nextVariants[0]?.sku || makeSku(prev.name, 1);
+
       const changed =
         nextSku !== prev.sku ||
-        nextVariants.some((variant, idx) => variant !== prev.variants[idx]);
+        nextVariants.some((variant, idx) => variant.sku !== prev.variants[idx]?.sku);
 
       return changed ? { ...prev, sku: nextSku, variants: nextVariants } : prev;
     });
@@ -347,7 +345,8 @@ const AddProduct = () => {
       // Basic fields
       data.append("name", formData.name);
       data.append("slug", formData.slug);
-      data.append("sku", formData.sku);
+      const topLevelSku = firstVariant.sku || formData.sku || makeSku(formData.name, 1);
+      data.append("sku", topLevelSku);
       data.append("description", formData.description);
       data.append("brand", formData.brand);
       // First variant attributes backfilled to top-level for backwards compatibility
@@ -412,7 +411,11 @@ const AddProduct = () => {
       }
 
       // Variants
-      data.append("variants", JSON.stringify(formData.variants));
+      const sanitizedVariants = (formData.variants || []).map((v, idx) => ({
+        ...v,
+        sku: v.sku && String(v.sku).trim() ? String(v.sku).trim().toUpperCase() : makeSku(formData.name, idx + 1),
+      }));
+      data.append("variants", JSON.stringify(sanitizedVariants));
 
       const response = await sellerApi.createProduct(data);
       const approvalStatus = response?.data?.result?.approvalStatus;
@@ -550,14 +553,8 @@ const AddProduct = () => {
                   value={formData.name}
                   onChange={(e) => {
                     const nextName = e.target.value;
-                    setFormData((prev) => ({
-                      ...prev,
-                      name: nextName,
-                      sku:
-                        !prev.sku || isAutoSku(prev.sku, prev.name, 1)
-                          ? makeSku(nextName, 1)
-                          : prev.sku,
-                      variants: prev.variants.map((variant, idx) => {
+                    setFormData((prev) => {
+                      const nextVariants = prev.variants.map((variant, idx) => {
                         const variantIndex = idx + 1;
                         const shouldAuto =
                           !variant.sku ||
@@ -565,8 +562,14 @@ const AddProduct = () => {
                         return shouldAuto
                           ? { ...variant, sku: makeSku(nextName, variantIndex) }
                           : variant;
-                      }),
-                    }));
+                      });
+                      return {
+                        ...prev,
+                        name: nextName,
+                        sku: nextVariants[0]?.sku || makeSku(nextName, 1),
+                        variants: nextVariants,
+                      };
+                    });
                   }}
                   className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-semibold outline-none ring-primary/5 focus:ring-2 transition-all"
                   placeholder="e.g. Premium Basmati Rice"
@@ -606,33 +609,18 @@ const AddProduct = () => {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5 flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                    Brand Name
-                  </label>
-                  <input
-                    value={formData.brand}
-                    onChange={(e) =>
-                      setFormData({ ...formData, brand: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-semibold outline-none ring-primary/5 focus:ring-2 transition-all"
-                    placeholder="e.g. Amul"
-                  />
-                </div>
-                <div className="space-y-1.5 flex flex-col">
-                  <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                    Product Code
-                  </label>
-                  <input
-                    value={formData.sku}
-                    onChange={(e) =>
-                      setFormData({ ...formData, sku: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-mono font-bold outline-none ring-primary/5 focus:ring-2 transition-all"
-                    placeholder="AUTO-GENERATED"
-                  />
-                </div>
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
+                  Brand Name
+                </label>
+                <input
+                  value={formData.brand}
+                  onChange={(e) =>
+                    setFormData({ ...formData, brand: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-semibold outline-none ring-primary/5 focus:ring-2 transition-all"
+                  placeholder="e.g. Amul"
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5 flex flex-col">
@@ -874,8 +862,24 @@ const AddProduct = () => {
                       </div>
                     </div>
 
-                    {/* Row 2: Stock, Barcode, Purchase Cost */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t border-slate-200/60 items-end">
+                    {/* Row 2: Product Code, Stock, Barcode, Purchase Cost */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-2 border-t border-slate-200/60 items-end">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Product Code
+                        </label>
+                        <input
+                          value={variant.sku || ""}
+                          onChange={(e) => {
+                            const newVariants = [...formData.variants];
+                            newVariants[index].sku = e.target.value.toUpperCase();
+                            setFormData({ ...formData, variants: newVariants });
+                          }}
+                          placeholder="e.g. ITEM-001"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-primary/10 uppercase"
+                        />
+                      </div>
+
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
                           Stock

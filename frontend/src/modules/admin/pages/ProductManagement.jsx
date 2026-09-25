@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
 import { adminApi } from '../services/adminApi';
@@ -20,7 +21,8 @@ import {
     HiOutlineExclamationCircle,
     HiOutlineFolderOpen,
     HiOutlineSwatch,
-    HiOutlineSquaresPlus
+    HiOutlineSquaresPlus,
+    HiOutlineBuildingStorefront
 } from 'react-icons/hi2';
 import Modal from '@shared/components/ui/Modal';
 import Pagination from '@shared/components/ui/Pagination';
@@ -39,6 +41,9 @@ const ProductManagement = () => {
     const [isSaving, setIsSaving] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [filterSeller, setFilterSeller] = useState(() => searchParams.get('sellerId') || 'all');
+    const [sellers, setSellers] = useState([]);
     const [filterCategory, setFilterCategory] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all'); // Added filterStatus
     const [filterApprovalStatus, setFilterApprovalStatus] = useState('all');
@@ -103,12 +108,45 @@ const ProductManagement = () => {
         }
     };
 
+    const fetchSellers = async () => {
+        try {
+            const response = await adminApi.getSellers();
+            if (response.data.success) {
+                setSellers(response.data.results || response.data.result || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch sellers');
+        }
+    };
+
+    const handleSellerChange = (sellerId) => {
+        setFilterSeller(sellerId);
+        setPage(1);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (sellerId && sellerId !== 'all') {
+                next.set('sellerId', sellerId);
+            } else {
+                next.delete('sellerId');
+            }
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        const sellerFromUrl = searchParams.get('sellerId') || 'all';
+        if (sellerFromUrl !== filterSeller) {
+            setFilterSeller(sellerFromUrl);
+        }
+    }, [searchParams]);
+
     const fetchProducts = async (requestedPage = 1) => {
         setIsLoading(true);
         try {
             const params = { page: requestedPage, limit: pageSize };
             if (searchTerm) params.search = searchTerm;
             if (filterCategory !== 'all') params.category = filterCategory;
+            if (filterSeller !== 'all') params.sellerId = filterSeller;
             if (filterStatus !== 'all') params.status = filterStatus;
             if (filterApprovalStatus !== 'all') params.approvalStatus = filterApprovalStatus;
             if (filterStockStatus !== 'all') params.stockStatus = filterStockStatus;
@@ -140,6 +178,7 @@ const ProductManagement = () => {
 
     useEffect(() => {
         fetchCategories();
+        fetchSellers();
     }, []);
 
     useEffect(() => {
@@ -147,7 +186,7 @@ const ProductManagement = () => {
             fetchProducts(1);
         }, 500); // Debounce search
         return () => clearTimeout(timer);
-    }, [searchTerm, filterCategory, filterStatus, filterApprovalStatus, filterStockStatus, sortBy, pageSize]);
+    }, [searchTerm, filterCategory, filterSeller, filterStatus, filterApprovalStatus, filterStockStatus, sortBy, pageSize]);
 
     const handleSave = async () => {
         if (!editingItem) {
@@ -472,7 +511,37 @@ const ProductManagement = () => {
                             className="w-full pl-10 pr-4 py-2.5 bg-slate-100/50 border-none rounded-xl text-xs font-semibold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/5 transition-all outline-none"
                         />
                     </div>
-                    <div className="flex gap-2 shrink-0 w-full lg:w-auto">
+                    <div className="flex flex-wrap lg:flex-nowrap gap-2 shrink-0 w-full lg:w-auto">
+                        {/* Seller Filter */}
+                        <div className="relative flex-1 lg:flex-none min-w-[170px]">
+                            <select
+                                value={filterSeller}
+                                onChange={(e) => handleSellerChange(e.target.value)}
+                                className={cn(
+                                    "w-full px-4 py-2.5 bg-white ring-1 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/5 outline-none appearance-none cursor-pointer pr-8",
+                                    filterSeller !== 'all' ? "ring-primary text-primary bg-primary/5" : "ring-slate-200 text-slate-700"
+                                )}
+                            >
+                                <option value="all">All Sellers</option>
+                                {sellers.map((s) => (
+                                    <option key={s._id} value={s._id}>
+                                        {s.shopName ? `${s.shopName}${s.name ? ` (${s.name})` : ''}` : s.name || 'Unnamed Seller'}
+                                    </option>
+                                ))}
+                            </select>
+                            {filterSeller !== 'all' && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSellerChange('all')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 p-0.5 rounded-full transition-colors"
+                                    title="Clear seller filter"
+                                >
+                                    <HiOutlineXMark className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Category Filter */}
                         <select
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value)}
@@ -593,9 +662,20 @@ const ProductManagement = () => {
                                     <td className="px-6 py-5 align-middle">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand-500 shadow-[0_0_0_4px_rgba(59,130,246,0.12)]" />
-                                            <span className="truncate text-[13px] font-medium text-slate-700" title={p.sellerId?.shopName || 'Admin'}>
-                                                {p.sellerId?.shopName || 'Admin'}
-                                            </span>
+                                            {p.sellerId?._id ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSellerChange(p.sellerId._id)}
+                                                    className="truncate text-[13px] font-medium text-slate-700 hover:text-primary hover:underline text-left cursor-pointer transition-colors"
+                                                    title={`Filter products by ${p.sellerId?.shopName || 'Seller'}`}
+                                                >
+                                                    {p.sellerId?.shopName || 'Admin'}
+                                                </button>
+                                            ) : (
+                                                <span className="truncate text-[13px] font-medium text-slate-700" title={p.sellerId?.shopName || 'Admin'}>
+                                                    {p.sellerId?.shopName || 'Admin'}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
 

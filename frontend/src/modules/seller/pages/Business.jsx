@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { businessApi } from "../services/businessApi";
 import { posApi } from "../services/posApi";
+import { sellerApi } from "../services/sellerApi";
 import {
     HiOutlineSquares2X2,
     HiOutlineShoppingBag,
@@ -30,6 +31,8 @@ import {
     HiOutlineArrowUturnLeft,
     HiOutlineDocumentText,
     HiOutlinePrinter,
+    HiOutlineCube,
+    HiOutlineClock,
 } from "react-icons/hi2";
 
 const REPORTS = [
@@ -37,6 +40,7 @@ const REPORTS = [
     ["sale-returns", "Sale Returns"], ["stock", "Stock"], ["customer-ledger", "Customer Ledger"],
     ["supplier-ledger", "Supplier Ledger"], ["day-book", "Day Book"], ["cash-register", "Cash Register"],
     ["expenses", "Expenses"], ["pnl", "Profit & Loss"], ["low-stock", "Low Stock"],
+    ["expiry", "Expiry Report"],
 ];
 
 // Store timezone (loaded from settings); business days follow it, not the browser.
@@ -109,6 +113,344 @@ const Stat = ({ label, value, tone = "", icon: Icon }) => (
     </div>
 );
 
+/* ---------- Expiry Report & Tracker Card ---------- */
+const ExpiryReportCard = ({ items = [], totals = {}, onNavigateTab }) => {
+    const [filter, setFilter] = useState("all");
+    const [specificDate, setSpecificDate] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const totalCount = Number(totals.count || items.length || 0);
+    const expiredCount = Number(totals.expired || items.filter(i => i.daysLeft < 0).length || 0);
+    const todayCount = Number(totals.today || items.filter(i => i.daysLeft === 0).length || 0);
+    const tomorrowCount = Number(totals.tomorrow || items.filter(i => i.daysLeft === 1).length || 0);
+    const next7DaysCount = Number(totals.next7Days || items.filter(i => i.daysLeft >= 0 && i.daysLeft <= 7).length || 0);
+    const next30DaysCount = Number(totals.next30Days || items.filter(i => i.daysLeft >= 0 && i.daysLeft <= 30).length || 0);
+
+    const hasUrgentAlerts = expiredCount > 0 || todayCount > 0 || next7DaysCount > 0;
+
+    const filteredItems = useMemo(() => {
+        let list = Array.isArray(items) ? [...items] : [];
+
+        if (searchTerm.trim()) {
+            const q = searchTerm.trim().toLowerCase();
+            list = list.filter(i =>
+                (i.name && i.name.toLowerCase().includes(q)) ||
+                (i.sku && i.sku.toLowerCase().includes(q)) ||
+                (i.barcode && i.barcode.toLowerCase().includes(q))
+            );
+        }
+
+        if (specificDate) {
+            list = list.filter(i => {
+                if (!i.expiryDate) return false;
+                const dateStr = new Date(i.expiryDate).toISOString().slice(0, 10);
+                return dateStr === specificDate;
+            });
+            return list;
+        }
+
+        if (filter === "expired") {
+            list = list.filter(i => i.daysLeft < 0);
+        } else if (filter === "7days") {
+            list = list.filter(i => i.daysLeft >= 0 && i.daysLeft <= 7);
+        } else if (filter === "30days") {
+            list = list.filter(i => i.daysLeft >= 0 && i.daysLeft <= 30);
+        }
+
+        return list;
+    }, [items, filter, specificDate, searchTerm]);
+
+    const handleDateChange = (dateVal) => {
+        setSpecificDate(dateVal);
+        if (dateVal) {
+            setFilter("custom_date");
+        } else {
+            setFilter("all");
+        }
+    };
+
+    const clearDate = () => {
+        setSpecificDate("");
+        setFilter("all");
+    };
+
+    return (
+        <div className={cn(
+            "rounded-2xl border p-5 shadow-xs space-y-4 bg-white",
+            hasUrgentAlerts ? "border-amber-200 ring-1 ring-amber-100/60" : "border-slate-200"
+        )}>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-3">
+                    <div className={cn(
+                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                        expiredCount > 0 ? "bg-rose-100 text-rose-700" :
+                        next7DaysCount > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                    )}>
+                        <HiOutlineClock className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-black text-slate-900">Product Expiry Report & Tracker</h3>
+                            {expiredCount > 0 ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                                    {expiredCount} {expiredCount === 1 ? "Expired Product" : "Expired Products"}
+                                </span>
+                            ) : next7DaysCount > 0 ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    {next7DaysCount} Expiring This Week
+                                </span>
+                            ) : totalCount > 0 ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                    All Dates Healthy
+                                </span>
+                            ) : null}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                            Track upcoming product expirations, filter by exact day, and manage stock.
+                        </p>
+                    </div>
+                </div>
+
+                {onNavigateTab && (
+                    <button
+                        type="button"
+                        onClick={() => onNavigateTab("products")}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
+                    >
+                        <HiOutlineCube className="h-4 w-4" />
+                        <span>Manage Products</span>
+                    </button>
+                )}
+            </div>
+
+            {/* Clean Controls Toolbar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                {/* Segmented Filter Pills */}
+                <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 w-fit">
+                    {[
+                        { id: "all", label: "All Items", count: totalCount },
+                        { id: "7days", label: "Expiring Soon", count: next7DaysCount, highlight: true },
+                        { id: "expired", label: "Expired", count: expiredCount, isDanger: true },
+                        { id: "30days", label: "In 30 Days", count: next30DaysCount },
+                    ].map((tab) => {
+                        const isActive = !specificDate && filter === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => {
+                                    setSpecificDate("");
+                                    setFilter(tab.id);
+                                }}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap",
+                                    isActive
+                                        ? "bg-white text-slate-900 shadow-xs"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )}
+                            >
+                                <span>{tab.label}</span>
+                                {tab.count > 0 ? (
+                                    <span className={cn(
+                                        "px-1.5 py-0.2 rounded-full text-[10px] font-black",
+                                        isActive
+                                            ? (tab.isDanger ? "bg-rose-100 text-rose-700" : "bg-slate-900 text-white")
+                                            : (tab.isDanger ? "bg-rose-100 text-rose-700" : tab.highlight ? "bg-amber-100 text-amber-800" : "bg-slate-200/80 text-slate-700")
+                                    )}>
+                                        {tab.count}
+                                    </span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Right: Date Picker & Search */}
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                    {/* Specific Day Picker */}
+                    <div className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all bg-white",
+                        specificDate ? "border-primary ring-2 ring-primary/10 text-primary font-bold shadow-xs" : "border-slate-200 text-slate-600"
+                    )}>
+                        <HiOutlineCalendar className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Filter Day:</span>
+                        <input
+                            type="date"
+                            value={specificDate}
+                            onChange={(e) => handleDateChange(e.target.value)}
+                            className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer"
+                            title="Select a specific date to view products expiring on that day"
+                        />
+                        {specificDate && (
+                            <button
+                                type="button"
+                                onClick={clearDate}
+                                className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 rounded-full"
+                                title="Clear date filter"
+                            >
+                                <HiOutlineXMark className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative min-w-[180px] sm:w-52">
+                        <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search product / SKU..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-8 pr-7 py-1.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-primary transition-all placeholder:text-slate-400"
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                            >
+                                <HiOutlineXMark className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Specific Date Active Pill */}
+            {specificDate && (
+                <div className="flex items-center justify-between px-3.5 py-2 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 font-medium">
+                    <div className="flex items-center gap-2">
+                        <HiOutlineCalendar className="h-4 w-4 text-blue-600 shrink-0" />
+                        <span>
+                            Showing products expiring on: <strong className="font-bold">{new Date(`${specificDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong> ({filteredItems.length} found)
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={clearDate}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                    >
+                        View all dates
+                    </button>
+                </div>
+            )}
+
+            {/* Table */}
+            {filteredItems.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-xs">
+                        <thead className="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold border-b border-slate-200">
+                            <tr>
+                                <th className="text-left px-4 py-3">Product Name</th>
+                                <th className="text-left px-4 py-3">SKU / Barcode</th>
+                                <th className="text-left px-4 py-3">Available Stock</th>
+                                <th className="text-left px-4 py-3">Expiry Date</th>
+                                <th className="text-right px-4 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            {filteredItems.map((item, idx) => {
+                                const stock = Number(item.stock || 0);
+                                const days = item.daysLeft;
+                                const isExpired = days < 0;
+                                const isToday = days === 0;
+                                const isTomorrow = days === 1;
+
+                                return (
+                                    <tr key={item._id || item.sku || idx} className="hover:bg-slate-50/70 transition-colors">
+                                        <td className="px-4 py-3 font-bold text-slate-900 text-sm capitalize">
+                                            {item.name}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="font-mono text-[11px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
+                                                {item.sku || item.barcode || "—"}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-800 font-bold">
+                                            {stock} units
+                                        </td>
+                                        <td className="px-4 py-3 font-medium text-slate-800">
+                                            <div className="inline-flex items-center gap-1.5">
+                                                <HiOutlineCalendar className="h-3.5 w-3.5 text-slate-400" />
+                                                <span>
+                                                    {new Date(item.expiryDate).toLocaleDateString("en-IN", {
+                                                        day: "2-digit",
+                                                        month: "short",
+                                                        year: "numeric"
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            {isExpired ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-100 px-2.5 py-1 rounded-md border border-rose-200">
+                                                    <HiOutlineExclamationTriangle className="h-3.5 w-3.5 text-rose-600" />
+                                                    Expired ({Math.abs(days)}d ago)
+                                                </span>
+                                            ) : isToday ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
+                                                    Expires Today
+                                                </span>
+                                            ) : isTomorrow ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md border border-amber-200">
+                                                    Expires Tomorrow
+                                                </span>
+                                            ) : days <= 7 ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+                                                    In {days} days
+                                                </span>
+                                            ) : days <= 30 ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                                                    In {days} days
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+                                                    In {days} days
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
+                    <p className="text-sm font-bold text-slate-600">
+                        {specificDate
+                            ? "No products found expiring on this selected date."
+                            : searchTerm
+                            ? "No products matching your search term."
+                            : totalCount === 0
+                            ? "No products with expiry dates recorded yet."
+                            : "No products found matching this filter."}
+                    </p>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        {totalCount === 0
+                            ? "Set expiry dates when adding or editing products to track shelf-life and avoid stock loss."
+                            : "Try selecting 'All Items' or clearing the date picker to view all tracked products."}
+                    </p>
+                    {(specificDate || filter !== "all" || searchTerm) && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSpecificDate("");
+                                setFilter("all");
+                                setSearchTerm("");
+                            }}
+                            className="text-xs font-bold text-primary hover:underline cursor-pointer pt-1"
+                        >
+                            Reset all filters
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 /* ---------- Dashboard ---------- */
 const DashboardTab = ({ onNavigateTab }) => {
     const [d, setD] = useState(null);
@@ -122,7 +464,7 @@ const DashboardTab = ({ onNavigateTab }) => {
 
     return (
         <div className="space-y-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 <Stat label={`Sales today (${d.salesCount})`} value={inr(d.salesToday)} icon={HiOutlineShoppingBag} />
                 <Stat label="Purchases today" value={inr(d.purchasesToday)} icon={HiOutlineBuildingStorefront} />
                 <Stat label="Profit today" value={inr(d.profitToday)} tone={d.profitToday < 0 ? "text-rose-600" : "text-emerald-600"} icon={HiOutlineBanknotes} />
@@ -131,7 +473,16 @@ const DashboardTab = ({ onNavigateTab }) => {
                 <Stat label="Stock value (cost)" value={inr(d.stockValue)} icon={HiOutlineBanknotes} />
                 <Stat label="Customer pending" value={inr(d.customerPending)} tone="text-amber-600" icon={HiOutlineUsers} />
                 <Stat label="Supplier pending" value={inr(d.supplierPending)} tone="text-amber-600" icon={HiOutlineBuildingStorefront} />
+                <Stat label="Expiring (30d)" value={d.expiryTotals?.next30Days || 0} tone={(d.expiryTotals?.next7Days || 0) > 0 ? "text-amber-600" : "text-slate-900"} icon={HiOutlineClock} />
+                <Stat label="Expired items" value={d.expiryTotals?.expired || 0} tone={(d.expiryTotals?.expired || 0) > 0 ? "text-rose-600" : "text-slate-400"} icon={HiOutlineExclamationTriangle} />
             </div>
+
+            {/* Product Expiry Report & Tracker Card */}
+            <ExpiryReportCard
+                items={d.expiryAlerts || []}
+                totals={d.expiryTotals || {}}
+                onNavigateTab={onNavigateTab}
+            />
 
             {/* Enhanced Low Stock Alert Card */}
             <div className={cn(
@@ -266,6 +617,29 @@ const PurchasesTab = () => {
     const [busy, setBusy] = useState(false);
     const [ret, setRet] = useState(null);
     const [invoiceBill, setInvoiceBill] = useState(null);
+    const [dbCategories, setDbCategories] = useState([]);
+    const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
+    const [targetLineIndex, setTargetLineIndex] = useState(null);
+    const [quickBusy, setQuickBusy] = useState(false);
+    const [quickProd, setQuickProd] = useState({
+        name: "",
+        header: "",
+        category: "",
+        subcategory: "",
+        price: "",
+        variantName: "Standard",
+        sku: "",
+        barcode: "",
+    });
+
+    const makeSku = (name, index = 1) => {
+        const prefix = String(name || "")
+            .trim()
+            .replace(/[^a-zA-Z0-9]/g, "")
+            .slice(0, 5)
+            .toUpperCase() || "ITEM";
+        return `${prefix}-${String(index).padStart(3, "0")}`;
+    };
 
     const load = useCallback(() => {
         businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
@@ -274,7 +648,97 @@ const PurchasesTab = () => {
     useEffect(() => {
         load();
         posApi.getCatalog({}).then((r) => setProducts(unwrap(r) || []));
+        sellerApi.getCategoryTree().then((r) => {
+            const cats = r.data?.results || r.data?.result || [];
+            setDbCategories(cats);
+        }).catch(() => {});
     }, [load]);
+
+    const openQuickAddProduct = (lineIdx = null) => {
+        setTargetLineIndex(lineIdx);
+        setQuickProd({
+            name: "",
+            header: "",
+            category: "",
+            subcategory: "",
+            price: "",
+            variantName: "Standard",
+            sku: "",
+            barcode: "",
+        });
+        setIsQuickProductOpen(true);
+    };
+
+    const handleCreateQuickProduct = async (e) => {
+        e?.preventDefault();
+        const trimmedName = quickProd.name.trim();
+        if (!trimmedName) {
+            toast.error("Please enter a product name");
+            return;
+        }
+        if (!quickProd.header || !quickProd.category || !quickProd.subcategory) {
+            toast.error("Please select Main Group, Category, and Sub-Category");
+            return;
+        }
+        const priceNum = Number(quickProd.price);
+        if (!quickProd.price || priceNum <= 0) {
+            toast.error("Please enter a valid Selling Price (MRP)");
+            return;
+        }
+
+        setQuickBusy(true);
+        try {
+            const data = new FormData();
+            data.append("name", trimmedName);
+            const sku = quickProd.sku.trim().toUpperCase() || makeSku(trimmedName, 1);
+            data.append("sku", sku);
+            data.append("price", priceNum);
+            data.append("salePrice", priceNum);
+            data.append("stock", 0);
+            data.append("headerId", quickProd.header);
+            data.append("categoryId", quickProd.category);
+            data.append("subcategoryId", quickProd.subcategory);
+            data.append("status", "active");
+
+            if (quickProd.barcode.trim()) {
+                data.append("barcode", quickProd.barcode.trim());
+            }
+
+            const variantItem = {
+                id: Date.now(),
+                name: quickProd.variantName.trim() || "Standard",
+                price: priceNum,
+                salePrice: priceNum,
+                stock: 0,
+                sku: sku,
+                barcode: quickProd.barcode.trim(),
+            };
+            data.append("variants", JSON.stringify([variantItem]));
+
+            const res = await sellerApi.createProduct(data);
+            const created = res.data?.result || res.data?.results;
+
+            // Refresh catalog
+            const catRes = await posApi.getCatalog({});
+            const updated = unwrap(catRes) || [];
+            setProducts(updated);
+
+            const createdId = created?._id || created?.id || updated.find((p) => p.name === trimmedName)?._id;
+
+            if (targetLineIndex != null) {
+                setLine(targetLineIndex, { productId: createdId, variantSku: sku });
+            } else {
+                setLines((prev) => [...prev, { ...emptyLine, productId: createdId, variantSku: sku }]);
+            }
+
+            toast.success(`"${trimmedName}" created and added to bill!`);
+            setIsQuickProductOpen(false);
+        } catch (err) {
+            toast.error(err?.response?.data?.message || err.message || "Failed to create product");
+        } finally {
+            setQuickBusy(false);
+        }
+    };
 
     const total = useMemo(
         () => lines.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.cost) || 0) * (1 + (Number(l.gstPercent) || 0) / 100), 0),
@@ -408,11 +872,31 @@ const PurchasesTab = () => {
                         return (
                             <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
                                 <div className="col-span-2 md:col-span-1">
-                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Product Name *</label>
-                                    <select className={inputCls} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })}>
-                                        <option value="">— Select product —</option>
-                                        {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
-                                    </select>
+                                    <div className="flex items-center justify-between md:hidden mb-1">
+                                        <label className="text-[10px] font-bold text-slate-600">Product Name *</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => openQuickAddProduct(i)}
+                                            className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                                        >
+                                            <HiOutlinePlus className="h-3 w-3" /> New
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <select className={inputCls} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })}>
+                                            <option value="">— Select product —</option>
+                                            {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={() => openQuickAddProduct(i)}
+                                            className="shrink-0 px-2.5 py-2.5 rounded-xl border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                            title="Create new product"
+                                        >
+                                            <HiOutlinePlus className="h-3.5 w-3.5" />
+                                            <span className="hidden xl:inline text-xs">New</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="col-span-2 md:col-span-1">
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Variant / Unit</label>
@@ -452,6 +936,13 @@ const PurchasesTab = () => {
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button type="button" className={ghostBtn} onClick={() => setLines((ls) => [...ls, { ...emptyLine }])}>
                         <HiOutlinePlus className="h-4 w-4" /> Add Line Item
+                    </button>
+                    <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-xl border border-primary/30 text-xs font-bold text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        onClick={() => openQuickAddProduct(null)}
+                    >
+                        <HiOutlinePlus className="h-4 w-4" /> Create New Product
                     </button>
                     <div className="ml-auto text-right">
                         <span className="text-xs text-slate-500 font-medium mr-2">Total (incl. GST):</span>
@@ -728,6 +1219,207 @@ const PurchasesTab = () => {
                                 <HiOutlinePrinter className="h-4 w-4" /> Print Invoice
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick Add Product Modal */}
+            {isQuickProductOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                    <HiOutlineCube className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900">Quick Add New Product</h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">Create item instantly & add to current purchase bill</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !quickBusy && setIsQuickProductOpen(false)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            >
+                                <HiOutlineXMark className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <form onSubmit={handleCreateQuickProduct} className="p-6 space-y-4">
+                            {/* Product Title */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Product Name <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    className={inputCls}
+                                    placeholder="e.g. Fortune Sunflower Oil 1L"
+                                    value={quickProd.name}
+                                    onChange={(e) => {
+                                        const nextName = e.target.value;
+                                        setQuickProd((prev) => ({
+                                            ...prev,
+                                            name: nextName,
+                                            sku: !prev.sku || prev.sku === makeSku(prev.name, 1) ? makeSku(nextName, 1) : prev.sku,
+                                        }));
+                                    }}
+                                    autoFocus
+                                />
+                            </div>
+
+                            {/* Category Hierarchy */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                                        Main Group <span className="text-rose-500">*</span>
+                                    </label>
+                                    <select
+                                        className={inputCls}
+                                        value={quickProd.header}
+                                        onChange={(e) => setQuickProd({ ...quickProd, header: e.target.value, category: "", subcategory: "" })}
+                                        required
+                                    >
+                                        <option value="">— Select —</option>
+                                        {dbCategories.map((h) => (
+                                            <option key={h._id || h.id} value={h._id || h.id}>{h.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                                        Category <span className="text-rose-500">*</span>
+                                    </label>
+                                    <select
+                                        className={inputCls}
+                                        value={quickProd.category}
+                                        onChange={(e) => setQuickProd({ ...quickProd, category: e.target.value, subcategory: "" })}
+                                        disabled={!quickProd.header}
+                                        required
+                                    >
+                                        <option value="">— Select —</option>
+                                        {(dbCategories.find((h) => (h._id || h.id) === quickProd.header)?.children || []).map((c) => (
+                                            <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                                        Sub-Category <span className="text-rose-500">*</span>
+                                    </label>
+                                    <select
+                                        className={inputCls}
+                                        value={quickProd.subcategory}
+                                        onChange={(e) => setQuickProd({ ...quickProd, subcategory: e.target.value })}
+                                        disabled={!quickProd.category}
+                                        required
+                                    >
+                                        <option value="">— Select —</option>
+                                        {(
+                                            dbCategories
+                                                .find((h) => (h._id || h.id) === quickProd.header)
+                                                ?.children?.find((c) => (c._id || c.id) === quickProd.category)?.children || []
+                                        ).map((sc) => (
+                                            <option key={sc._id || sc.id} value={sc._id || sc.id}>{sc.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Pricing & Unit */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Selling Price (MRP ₹) <span className="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        required
+                                        className={inputCls}
+                                        placeholder="e.g. 150"
+                                        value={quickProd.price}
+                                        onChange={(e) => setQuickProd({ ...quickProd, price: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                                        Variant / Unit Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={inputCls}
+                                        placeholder="e.g. Standard, 500g, 1L"
+                                        value={quickProd.variantName}
+                                        onChange={(e) => setQuickProd({ ...quickProd, variantName: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Product Code & Barcode */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Product Code (SKU)</label>
+                                    <input
+                                        type="text"
+                                        className={`${inputCls} font-mono font-bold uppercase`}
+                                        placeholder="e.g. ITEM-001"
+                                        value={quickProd.sku}
+                                        onChange={(e) => setQuickProd({ ...quickProd, sku: e.target.value.toUpperCase() })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Barcode (Optional)</label>
+                                    <input
+                                        type="text"
+                                        className={inputCls}
+                                        placeholder="Scan or type barcode"
+                                        value={quickProd.barcode}
+                                        onChange={(e) => setQuickProd({ ...quickProd, barcode: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Info Banner */}
+                            <div className="p-3 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span>
+                                <p className="text-[11px] text-amber-800 leading-relaxed">
+                                    Initial stock will be created as <strong>0</strong>. When you confirm this purchase bill, the incoming quantity and cost will automatically update stock and inventory.
+                                </p>
+                            </div>
+
+                            {/* Modal Actions */}
+                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    disabled={quickBusy}
+                                    onClick={() => setIsQuickProductOpen(false)}
+                                    className={ghostBtn}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={quickBusy}
+                                    className={btnCls}
+                                >
+                                    {quickBusy ? (
+                                        <>
+                                            <HiOutlineArrowPath className="h-4 w-4 animate-spin" /> Creating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <HiOutlinePlus className="h-4 w-4" /> Create & Add to Bill
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

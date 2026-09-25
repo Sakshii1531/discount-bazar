@@ -134,6 +134,65 @@ async function lowStockReport(sellerId) {
   return { rows, totals: { count: rows.length } };
 }
 
+async function expiryReport(sellerId) {
+  const prods = await Product.find({
+    sellerId: oid(sellerId),
+    expiryDate: { $ne: null, $exists: true },
+  })
+    .select("name barcode sku stock lowStockAlert expiryDate price salePrice unit")
+    .sort({ expiryDate: 1 })
+    .lean();
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const rows = prods.map((p) => {
+    const exp = new Date(p.expiryDate);
+    const expDateOnly = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate());
+    const diffTime = expDateOnly.getTime() - startOfToday.getTime();
+    const daysLeft = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    let status = "SAFE";
+    if (daysLeft < 0) status = "EXPIRED";
+    else if (daysLeft === 0) status = "TODAY";
+    else if (daysLeft === 1) status = "TOMORROW";
+    else if (daysLeft <= 7) status = "NEXT_7_DAYS";
+    else if (daysLeft <= 30) status = "NEXT_30_DAYS";
+
+    return {
+      _id: p._id,
+      name: p.name,
+      sku: p.sku || "",
+      barcode: p.barcode || "",
+      stock: Number(p.stock || 0),
+      unit: p.unit || "",
+      price: p.salePrice > 0 ? p.salePrice : p.price,
+      expiryDate: p.expiryDate,
+      daysLeft,
+      status,
+    };
+  });
+
+  const expiredCount = rows.filter((r) => r.daysLeft < 0).length;
+  const todayCount = rows.filter((r) => r.daysLeft === 0).length;
+  const tomorrowCount = rows.filter((r) => r.daysLeft === 1).length;
+  const next7DaysCount = rows.filter((r) => r.daysLeft >= 0 && r.daysLeft <= 7).length;
+  const next30DaysCount = rows.filter((r) => r.daysLeft >= 0 && r.daysLeft <= 30).length;
+
+  return {
+    rows,
+    totals: {
+      count: rows.length,
+      expired: expiredCount,
+      today: todayCount,
+      tomorrow: tomorrowCount,
+      next7Days: next7DaysCount,
+      next30Days: next30DaysCount,
+      attentionRequired: expiredCount + next7DaysCount,
+    },
+  };
+}
+
 /* ---------------- ledgers ---------------- */
 const ledgerReport = async (sellerId, type) => {
   const rows = await listParties(sellerId, type);
@@ -272,9 +331,10 @@ export async function dashboard(sellerId) {
   const tz = await getSellerTz(sellerId);
   const key = todayKey(tz);
   const range = { from: dayStart(key, tz), to: dayEnd(key, tz), tz };
-  const [sales, purchases, stock, low, pnl, cust, sup] = await Promise.all([
+  const [sales, purchases, stock, low, pnl, cust, sup, expiry] = await Promise.all([
     salesReport(sellerId, range), purchaseReport(sellerId, range), stockReport(sellerId), lowStockReport(sellerId),
     pnlReport(sellerId, range), ledgerReport(sellerId, "CUSTOMER"), ledgerReport(sellerId, "SUPPLIER"),
+    expiryReport(sellerId),
   ]);
   return {
     date: key,
@@ -284,6 +344,8 @@ export async function dashboard(sellerId) {
     profitToday: pnl.totals.netProfit,
     customerPending: cust.totals.pending, supplierPending: sup.totals.pending,
     lowStockCount: low.totals.count, lowStock: low.rows.slice(0, 8),
+    expiryTotals: expiry.totals,
+    expiryAlerts: expiry.rows,
     expensesToday: pnl.totals.expenses,
   };
 }
@@ -301,6 +363,7 @@ const REPORTS = {
   expenses: expenseReport,
   pnl: pnlReport,
   "low-stock": lowStockReport,
+  expiry: expiryReport,
 };
 
 export const REPORT_TYPES = Object.keys(REPORTS);

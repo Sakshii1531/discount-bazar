@@ -83,9 +83,10 @@ function parseSellerIdFilters({ sellerId, sellerIds }) {
 
 function makeProductSku(name, index = 1) {
   const prefix = String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .slice(0, 5) || "item";
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 5)
+    .toUpperCase() || "ITEM";
   return `${prefix}-${String(index).padStart(3, "0")}`;
 }
 
@@ -758,11 +759,6 @@ export const createProduct = async (req, res) => {
         ? productData.description.trim()
         : productData.description || "";
 
-    // Auto-generate product SKU if missing
-    if (!productData.sku || String(productData.sku).trim() === "") {
-      productData.sku = makeProductSku(productData.name, 1);
-    }
-
     applyMediaFields(productData);
 
     // Handle tags if string
@@ -784,9 +780,15 @@ export const createProduct = async (req, res) => {
         ...variant,
         sku:
           variant?.sku && String(variant.sku).trim()
-            ? variant.sku
+            ? String(variant.sku).trim().toUpperCase()
             : makeProductSku(productData.name, idx + 1),
       }));
+
+      if (!productData.sku || String(productData.sku).trim() === "") {
+        productData.sku = productData.variants[0]?.sku || makeProductSku(productData.name, 1);
+      } else {
+        productData.sku = String(productData.sku).trim().toUpperCase();
+      }
 
       // Master stock is always the sum of all variant stocks
       productData.stock = productData.variants.reduce(
@@ -801,6 +803,12 @@ export const createProduct = async (req, res) => {
       if (firstVar.barcode && !productData.barcode) productData.barcode = firstVar.barcode;
       if (firstVar.purchaseCost !== undefined && productData.purchaseCost === undefined) {
         productData.purchaseCost = firstVar.purchaseCost;
+      }
+    } else {
+      if (!productData.sku || String(productData.sku).trim() === "") {
+        productData.sku = makeProductSku(productData.name, 1);
+      } else {
+        productData.sku = String(productData.sku).trim().toUpperCase();
       }
     }
 
@@ -985,9 +993,6 @@ export const updateProduct = async (req, res) => {
     }
 
     const skuBaseName = productData.name || product.name;
-    if (!productData.sku || String(productData.sku).trim() === "") {
-      productData.sku = product.sku || makeProductSku(skuBaseName, 1);
-    }
 
     applyMediaFields(productData);
 
@@ -1008,9 +1013,15 @@ export const updateProduct = async (req, res) => {
         ...variant,
         sku:
           variant?.sku && String(variant.sku).trim()
-            ? variant.sku
+            ? String(variant.sku).trim().toUpperCase()
             : makeProductSku(skuBaseName, idx + 1),
       }));
+
+      if (!productData.sku || String(productData.sku).trim() === "") {
+        productData.sku = productData.variants[0]?.sku || product.sku || makeProductSku(skuBaseName, 1);
+      } else {
+        productData.sku = String(productData.sku).trim().toUpperCase();
+      }
 
       // Sellers cannot change inventory stock via product edit; stock is managed via Stock Management
       if (role === "seller" && Array.isArray(product.variants) && product.variants.length > 0) {

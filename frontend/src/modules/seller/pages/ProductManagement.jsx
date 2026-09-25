@@ -134,14 +134,15 @@ const ProductManagement = () => {
 
   const makeSku = (name, index = 1) => {
     const prefix = String(name || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 5) || "item";
+      .trim()
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 5)
+      .toUpperCase() || "ITEM";
     return `${prefix}-${String(index).padStart(3, "0")}`;
   };
 
   const isAutoSku = (sku, name, index = 1) =>
-    String(sku || "").toLowerCase() === makeSku(name, index);
+    String(sku || "").toUpperCase() === makeSku(name, index);
 
   const displaySku = (product) =>
     product.sku ||
@@ -387,17 +388,21 @@ const ProductManagement = () => {
       const data = new FormData();
       data.append("name", formData.name);
       data.append("slug", formData.slug);
-      data.append("sku", formData.sku);
+      let variantsToSubmit = (formData.variants || []).map((v, idx) => ({
+        ...v,
+        sku: v.sku && String(v.sku).trim() ? String(v.sku).trim().toUpperCase() : makeSku(formData.name, idx + 1),
+      }));
+      const topLevelSku = variantsToSubmit[0]?.sku || formData.sku || makeSku(formData.name, 1);
+      data.append("sku", topLevelSku);
       data.append("description", formData.description);
       data.append("price", Number(formData.price));
       data.append("salePrice", Number(formData.salePrice) || 0);
-      let variantsToSubmit = formData.variants;
-      let computedStock = (Array.isArray(formData.variants) && formData.variants.length > 0)
-        ? formData.variants.reduce((sum, v) => sum + Math.max(0, Number(v.stock) || 0), 0)
+      let computedStock = (Array.isArray(variantsToSubmit) && variantsToSubmit.length > 0)
+        ? variantsToSubmit.reduce((sum, v) => sum + Math.max(0, Number(v.stock) || 0), 0)
         : Number(formData.stock) || 0;
 
       if (editingItem) {
-        variantsToSubmit = (formData.variants || []).map((v) => {
+        variantsToSubmit = variantsToSubmit.map((v) => {
           const original = (editingItem.variants || []).find(
             (ov) => (ov._id && String(ov._id) === String(v._id || v.id)) || (ov.sku && ov.sku === v.sku)
           );
@@ -1382,19 +1387,6 @@ const ProductManagement = () => {
                             placeholder="e.g. Amul"
                           />
                         </div>
-                        <div className="space-y-1.5 flex flex-col">
-                          <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
-                            Product Code
-                          </label>
-                          <input
-                            value={formData.sku}
-                            onChange={(e) =>
-                              setFormData({ ...formData, sku: e.target.value })
-                            }
-                            className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-xl text-sm font-mono font-bold outline-none ring-primary/5 focus:ring-2"
-                            placeholder="AUTO-GENERATED"
-                          />
-                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-1.5 flex flex-col">
@@ -1765,8 +1757,24 @@ const ProductManagement = () => {
                               </div>
                             </div>
 
-                            {/* Section 2: Stock & Inventory Tracking (Barcode, Purchase Cost) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100 items-start">
+                            {/* Section 2: Product Code, Stock, Barcode, Purchase Cost */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-3 border-t border-slate-100 items-start">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Product Code
+                                </label>
+                                <input
+                                  value={v.sku || ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], sku: e.target.value.toUpperCase() };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  placeholder="e.g. ITEM-001"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-mono font-bold text-slate-800 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none uppercase"
+                                />
+                              </div>
+
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
