@@ -493,7 +493,7 @@ const CategoryManagement = () => {
                             ) : filteredCategories.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-24 text-slate-300">
                                     <Folder className="h-16 w-16 mb-3 opacity-20" />
-                                    <p className="text-base font-bold italic">No records found</p>
+                                    <p className="text-base font-bold">No records found</p>
                                     <button onClick={() => { setSearchTerm(''); setFilterStatus('all'); }} className="mt-3 text-sm text-primary font-semibold hover:underline">Clear all filters</button>
                                 </div>
                             ) : (
@@ -605,7 +605,7 @@ const CategoryManagement = () => {
                                         </div>
                                         <div>
                                             <p className="font-bold text-xs mb-0.5">{item.title}</p>
-                                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed italic">{item.desc}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{item.desc}</p>
                                         </div>
                                     </div>
                                 ))}

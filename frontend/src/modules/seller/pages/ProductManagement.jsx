@@ -1115,7 +1115,7 @@ const ProductManagement = () => {
                         </Badge>
                       </div>
                     ) : (
-                      <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded italic">
+                      <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded">
                         None
                       </span>
                     )}

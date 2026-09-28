@@ -309,7 +309,7 @@ const SidebarContent = ({ items, title, onClose, openMenu, handleToggle, hovered
             </div>
           ) : (
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-white shadow-sm transform -rotate-6 hover:rotate-0 transition-all duration-500 ease-out">
-              <span className="text-lg font-black italic">{appName.charAt(0)}</span>
+              <span className="text-lg font-black">{appName.charAt(0)}</span>
             </div>
           )}
           <div>

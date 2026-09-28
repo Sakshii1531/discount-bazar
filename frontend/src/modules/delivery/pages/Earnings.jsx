@@ -341,7 +341,7 @@ const Earnings = () => {
                   </div>
                 </div>
               );}) : (
-                <div className="p-12 text-center text-gray-400 text-sm italic">
+                <div className="p-12 text-center text-gray-400 text-sm">
                   No recent earnings or withdrawals.
                 </div>
               )}

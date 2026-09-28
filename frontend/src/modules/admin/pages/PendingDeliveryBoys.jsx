@@ -304,7 +304,7 @@ const PendingDeliveryBoys = () => {
                                                         </div>
                                                     ))}
                                                     {rider.documents.length === 0 && (
-                                                        <span className="text-[9px] text-slate-400 italic">No Docs</span>
+                                                        <span className="text-[9px] text-slate-400">No Docs</span>
                                                     )}
                                                 </div>
                                             </div>

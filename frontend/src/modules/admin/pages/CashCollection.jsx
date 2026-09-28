@@ -583,7 +583,7 @@ const CashCollection = () => {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-6 border-none bg-slate-900 text-white rounded-xl relative overflow-hidden shadow-lg">
                                 <p className="text-[10px] opacity-60 font-black uppercase tracking-widest mb-2">Primary Wallet</p>
-                                <h4 className="text-3xl font-black italic">₹{selectedRider.currentCash.toLocaleString()}</h4>
+                                <h4 className="text-3xl font-black">₹{selectedRider.currentCash.toLocaleString()}</h4>
                                 <div className="mt-4 flex items-center gap-2">
                                     <div className="h-1.5 flex-1 bg-white/10 rounded-full overflow-hidden">
                                         <div className="h-full bg-brand-400" style={{ width: `${Math.min((selectedRider.currentCash / selectedRider.limit) * 100, 100)}%` }} />
@@ -673,7 +673,7 @@ const CashCollection = () => {
                         <div className="bg-slate-50 p-6 rounded-xl ring-1 ring-slate-100 mt-6">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-2">Total Amount to Settle</p>
                             <div className="flex items-center justify-center gap-2">
-                                <span className="text-xl font-black italic text-slate-900">₹</span>
+                                <span className="text-xl font-black text-slate-900">₹</span>
                                 <input
                                     type="number"
                                     min="0"
@@ -685,7 +685,7 @@ const CashCollection = () => {
                                         if (val > settlementData.rider.currentCash) val = settlementData.rider.currentCash;
                                         setSettlementData({ ...settlementData, amount: val });
                                     }}
-                                    className="bg-transparent text-2xl font-black italic text-slate-900 w-40 outline-none text-center"
+                                    className="bg-transparent text-2xl font-black text-slate-900 w-40 outline-none text-center"
                                 />
                             </div>
                         </div>

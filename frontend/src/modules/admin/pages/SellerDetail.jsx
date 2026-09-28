@@ -477,7 +477,7 @@ const SellerDetail = () => {
                     <Card className="p-4 border-none shadow-xl ring-1 ring-slate-900 bg-slate-900 rounded-xl text-white">
                         <h4 className="text-[10px] font-bold opacity-40 uppercase tracking-[0.2em] mb-6">Strategic Comms</h4>
                         <div className="space-y-4">
-                            <p className="text-xs font-medium text-slate-400 italic leading-relaxed">Send a high-priority push to the shop manager app.</p>
+                            <p className="text-xs font-medium text-slate-400 leading-relaxed">Send a high-priority push to the shop manager app.</p>
                             <textarea
                                 placeholder="Message to store..."
                                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all min-h-[100px]"

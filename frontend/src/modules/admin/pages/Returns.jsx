@@ -458,7 +458,7 @@ const Returns = () => {
                           {(ret.returnStatus === "qc_passed" || ret.returnStatus === "qc_failed") && ret.returnQcNote && (
                             <div className="mt-2 flex items-start gap-1.5 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100 w-fit max-w-[200px]">
                               <HiOutlineInboxStack className="h-3 w-3 text-slate-500 mt-0.5" />
-                              <span className="text-[10px] font-medium text-slate-600 italic line-clamp-2">QC: {ret.returnQcNote}</span>
+                              <span className="text-[10px] font-medium text-slate-600 line-clamp-2">QC: {ret.returnQcNote}</span>
                             </div>
                           )}
                         </div>
@@ -550,7 +550,7 @@ const Returns = () => {
                       Reason: <span className="font-medium text-slate-600">{selectedReturn.returnReason || "N/A"}</span>
                     </p>
                     {selectedReturn.returnReasonDetail && (
-                      <p className="text-sm text-slate-700 italic border-l-2 border-slate-300 pl-2">
+                      <p className="text-sm text-slate-700 border-l-2 border-slate-300 pl-2">
                         {selectedReturn.returnReasonDetail}
                       </p>
                     )}
@@ -613,7 +613,7 @@ const Returns = () => {
                         </a>
                       )}
                       {selectedReturn.returnStatus === "return_drop_pending" && (
-                        <p className="text-[10px] font-bold text-brand-800 italic mt-1 bg-white/50 p-2 rounded-lg">
+                        <p className="text-[10px] font-bold text-brand-800 mt-1 bg-white/50 p-2 rounded-lg">
                           Rider is at the seller location. Sharing the OTP will confirm the drop.
                         </p>
                       )}
@@ -640,7 +640,7 @@ const Returns = () => {
                     {selectedReturn.returnQcNote && (
                       <div className="bg-white/60 p-3 rounded-xl border border-black/5">
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">QC Decision Note:</p>
-                        <p className="text-sm text-slate-800 italic leading-relaxed">
+                        <p className="text-sm text-slate-800 leading-relaxed">
                           "{selectedReturn.returnQcNote}"
                         </p>
                       </div>
@@ -717,7 +717,7 @@ const Returns = () => {
                       const itemsToShow = returnItems.length > 0 ? returnItems : toSafeArray(selectedReturn.items);
                       if (itemsToShow.length === 0) {
                         return (
-                          <p className="text-xs text-slate-400 italic p-3 bg-slate-50 rounded-2xl">
+                          <p className="text-xs text-slate-400 p-3 bg-slate-50 rounded-2xl">
                             No item details available
                           </p>
                         );

@@ -1943,7 +1943,7 @@ const PartiesTab = () => {
                                                         {p.phone}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-slate-400 italic">None</span>
+                                                    <span className="text-slate-400">None</span>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3">

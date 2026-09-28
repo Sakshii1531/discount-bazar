@@ -86,6 +86,17 @@ html.modal-open body {
 }
 
 
+/* Same typeface everywhere: third-party UI that ships its own font stack
+   (sonner toasts, Google Maps info windows / controls) uses the app font too.
+   Map tile labels are rendered by Google into the map image and are unaffected. */
+[data-sonner-toaster],
+[data-sonner-toast],
+.gm-style,
+.gm-style-iw,
+.gm-style-iw-c {
+  font-family: var(--font-sans) !important;
+}
+
 /* Fix Google Places Autocomplete suggestions dropdown floating above Radix/Shadcn modals */
 .pac-container {
   z-index: 999999 !important;

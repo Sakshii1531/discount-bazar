@@ -185,7 +185,7 @@ const RatingAnalyticsCard = () => {
                 )}
 
                 {item.comment && (
-                  <p className="text-xs text-slate-600 italic font-medium leading-relaxed pt-1">
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed pt-1">
                     "{item.comment}"
                   </p>
                 )}

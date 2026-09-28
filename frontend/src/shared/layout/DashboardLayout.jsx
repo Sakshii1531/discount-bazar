@@ -1246,7 +1246,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                         {newReturnAlert.returnReason || "Product issue"}
                                     </div>
                                     {newReturnAlert.returnReasonDetail && (
-                                        <div className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100 italic mb-2">
+                                        <div className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100 mb-2">
                                             &ldquo;{newReturnAlert.returnReasonDetail}&rdquo;
                                         </div>
                                     )}
@@ -1392,7 +1392,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     ))}
                                 </div>
 
-                                <p className="text-xs font-bold text-slate-500 italic mb-8">
+                                <p className="text-xs font-bold text-slate-500 mb-8">
                                     Confirm receipt of the product by sharing this code.
                                 </p>
 

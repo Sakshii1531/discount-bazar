@@ -383,7 +383,7 @@ const OrderDetail = () => {
                                                 <span className="text-[10px] font-bold text-slate-600 uppercase">{new Date(order.updatedAt).toLocaleTimeString()}</span>
                                             )}
                                         </div>
-                                        <p className="text-[11px] font-bold text-slate-700 leading-normal italic">"Order current status is {order.status}."</p>
+                                        <p className="text-[11px] font-bold text-slate-700 leading-normal">"Order current status is {order.status}."</p>
                                     </div>
                                 </div>
                             </div>
@@ -451,7 +451,7 @@ const OrderDetail = () => {
                                             </button>
                                         )}
                                 </div>
-                                <p className="text-[11px] font-bold text-slate-600 leading-snug italic">
+                                <p className="text-[11px] font-bold text-slate-600 leading-snug">
                                     "{order.address?.address}, {order.address?.landmark}, {order.address?.city}"
                                 </p>
                             </div>
@@ -586,7 +586,7 @@ const OrderDetail = () => {
                             <Info className="h-4 w-4" />
                             Order Notes & Instructions
                         </h4>
-                        <p className="text-xs font-bold text-amber-800 leading-relaxed italic">
+                        <p className="text-xs font-bold text-amber-800 leading-relaxed">
                             "{order.cancelReason ? `Cancellation Reason: ${order.cancelReason}` : `Delivery Slot: ${order.timeSlot || 'Standard Delivery'}.`}"
                         </p>
                     </Card>

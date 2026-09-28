@@ -476,7 +476,7 @@ const Dashboard = () => {
             >
               <div className="flex justify-between items-center mb-1">
                 <h3 className="text-sm font-bold text-gray-800 tracking-tight">Available Return Pickups</h3>
-                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase italic">Open for Acceptance</span>
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">Open for Acceptance</span>
               </div>
               {availableOrders.length > 0 ? (
                 availableOrders.map((order) => (

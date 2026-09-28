@@ -8,6 +8,7 @@ import {
     verifySellerVerificationToken,
     issueSellerResetOtp,
     verifySellerResetOtpCode,
+    consumeSellerResetVerification,
 } from "../services/sellerVerificationService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
 import Admin from "../models/admin.js";
@@ -403,15 +404,21 @@ export const resetSellerPassword = async (req, res) => {
             return handleResponse(res, 400, "Password must be at least 8 characters long");
         }
 
-        // Verify the token
-        verifySellerVerificationToken({ channel, rawValue, token, purpose: "seller_reset" });
+        // Verify the token (returns the normalized channel/target the OTP was sent to)
+        const verified = verifySellerVerificationToken({ channel, rawValue, token, purpose: "seller_reset" });
 
-        // Find the seller
-        const query = channel === "email" ? { email: rawValue.toLowerCase() } : { phone: rawValue };
+        // Find the seller by the same normalized value that was verified
+        const query = verified.channel === "email" ? { email: verified.target } : { phone: verified.target };
         const seller = await Seller.findOne(query);
 
         if (!seller) {
             return handleResponse(res, 404, "Seller not found");
+        }
+
+        // One-time use: a verified reset can change the password only once
+        const consumed = await consumeSellerResetVerification(verified);
+        if (!consumed) {
+            return handleResponse(res, 400, "This reset request has already been used or has expired. Please request a new OTP.");
         }
 
         // Update password (pre-save hook will hash it)

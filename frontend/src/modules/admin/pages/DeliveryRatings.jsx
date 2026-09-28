@@ -335,7 +335,7 @@ const DeliveryRatings = () => {
                           </div>
                         )}
                         {item.comment ? (
-                          <p className="text-slate-600 truncate italic">"{item.comment}"</p>
+                          <p className="text-slate-600 truncate">"{item.comment}"</p>
                         ) : (
                           <span className="text-slate-300 text-[10px]">— No comment —</span>
                         )}
@@ -487,7 +487,7 @@ const DeliveryRatings = () => {
                 {selectedRating.comment && (
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Comment:</span>
-                    <p className="text-xs text-slate-700 italic font-medium mt-0.5">"{selectedRating.comment}"</p>
+                    <p className="text-xs text-slate-700 font-medium mt-0.5">"{selectedRating.comment}"</p>
                   </div>
                 )}
               </div>

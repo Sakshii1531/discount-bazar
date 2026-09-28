@@ -602,7 +602,7 @@ const AdminWallet = () => {
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-[10px] font-bold text-slate-400 italic">No Actions</span>
+                                                            <span className="text-[10px] font-bold text-slate-400">No Actions</span>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -756,7 +756,7 @@ const AdminWallet = () => {
                             </div>
                             <div className="col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Notes / Breakdown</p>
-                                <p className="text-xs font-medium text-slate-600 italic">"{selectedTransaction.notes}"</p>
+                                <p className="text-xs font-medium text-slate-600">"{selectedTransaction.notes}"</p>
                             </div>
                         </div>
 

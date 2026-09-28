@@ -1209,7 +1209,7 @@ const Orders = () => {
                                                     {selectedOrder.returnReasonDetail && (
                                                         <p className="text-slate-700">
                                                             <span className="font-bold text-slate-600">Customer Note: </span>
-                                                            <span className="italic">{selectedOrder.returnReasonDetail}</span>
+                                                            <span className="">{selectedOrder.returnReasonDetail}</span>
                                                         </p>
                                                     )}
                                                     {selectedOrder.returnRequestedAt && (

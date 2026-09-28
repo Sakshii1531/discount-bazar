@@ -797,7 +797,7 @@ const AdminSettings = () => {
                                         onChange={(e) => handleInputChange('metaDescription', e.target.value)}
                                         className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all resize-none"
                                     />
-                                    <p className="text-[10px] font-bold text-slate-400 italic text-right">Recommended length: 150-160 characters</p>
+                                    <p className="text-[10px] font-bold text-slate-400 text-right">Recommended length: 150-160 characters</p>
                                 </div>
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta Keywords</label>
@@ -808,7 +808,7 @@ const AdminSettings = () => {
                                         className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all"
                                         placeholder="keyword1, keyword2, keyword3"
                                     />
-                                    <p className="text-[10px] font-bold text-slate-400 italic text-right">Separate keywords with commas</p>
+                                    <p className="text-[10px] font-bold text-slate-400 text-right">Separate keywords with commas</p>
                                 </div>
                             </div>
                         </Card>

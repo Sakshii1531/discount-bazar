@@ -1378,7 +1378,7 @@ const DeliveryAuth = () => {
 
                               </div>
                             ))}
-                            <p className="text-[10px] text-gray-400 italic px-1 flex items-center gap-1.5">
+                            <p className="text-[10px] text-gray-400 px-1 flex items-center gap-1.5">
                               <ShieldCheck className="w-3 h-3 text-brand-300" />
                               Documents will be verified by our team after submission.
                             </p>

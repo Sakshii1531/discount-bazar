@@ -1178,7 +1178,7 @@ const ProductManagement = () => {
                                                 </div>
                                             </div>
 
-                                            <p className="text-[10px] text-slate-400 font-medium italic text-center pt-4 border-t border-slate-50 outline-none">
+                                            <p className="text-[10px] text-slate-400 font-medium text-center pt-4 border-t border-slate-50 outline-none">
                                                 Quick Tip: Multiple photos help users trust your products more!
                                             </p>
                                         </div>

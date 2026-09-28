@@ -238,7 +238,7 @@ const Withdrawals = () => {
                                                 {item.status === 'Settled' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : (item.status === 'Pending' || item.status === 'Processing') ? <Clock className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                                                 {item.status}
                                             </Badge>
-                                            {item.reason && <p className="text-[9px] text-rose-500 font-bold mt-1 uppercase italic">{item.reason}</p>}
+                                            {item.reason && <p className="text-[9px] text-rose-500 font-bold mt-1 uppercase">{item.reason}</p>}
                                         </td>
                                         <td className="px-8 py-5 text-right">
                                             <p className="text-xs font-bold text-slate-600">{item.customer}</p>

@@ -221,7 +221,7 @@ const ReviewModeration = () => {
                                             "{r.comment}"
                                         </blockquote>
                                     ) : (
-                                        <p className="text-xs text-slate-400 italic">No written comment provided.</p>
+                                        <p className="text-xs text-slate-400">No written comment provided.</p>
                                     )}
 
                                     {r.moderationReason && (

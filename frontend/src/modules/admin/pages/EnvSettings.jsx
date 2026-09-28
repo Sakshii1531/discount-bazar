@@ -280,7 +280,7 @@ const EnvSettings = () => {
                                         placeholder='{"type": "service_account", ...}'
                                         className="w-full px-5 py-4 bg-slate-900 border-none rounded-2xl text-xs font-mono text-brand-400 outline-none focus:ring-2 focus:ring-brand-500/30 transition-all resize-none"
                                     />
-                                    <p className="text-[10px] font-bold text-slate-400 italic">Paste the entire JSON content of your service account key file here.</p>
+                                    <p className="text-[10px] font-bold text-slate-400">Paste the entire JSON content of your service account key file here.</p>
                                 </div>
                             </div>
                         </Card>

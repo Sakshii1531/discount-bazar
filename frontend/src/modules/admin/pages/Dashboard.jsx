@@ -347,7 +347,7 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                             )) : (
-                                <div className="py-12 text-center text-slate-300 italic text-xs">No sales data yet</div>
+                                <div className="py-12 text-center text-slate-300 text-xs">No sales data yet</div>
                             )}
                         </div>
                         <button 

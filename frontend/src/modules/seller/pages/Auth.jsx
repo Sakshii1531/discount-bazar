@@ -125,10 +125,19 @@ const Auth = () => {
     newPassword: "",
     confirmPassword: "",
     token: "",
+    maskedTarget: "",
     isSending: false,
     isVerifying: false,
     isResetting: false,
   });
+  // Seconds until the reset OTP can be resent (server enforces a 60s cooldown)
+  const RESET_RESEND_SECONDS = 60;
+  const [resetResendIn, setResetResendIn] = useState(0);
+  useEffect(() => {
+    if (resetResendIn <= 0) return undefined;
+    const t = setTimeout(() => setResetResendIn((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [resetResendIn]);
 
   const [formData, setFormData] = useState(() => {
     const defaultData = {
@@ -502,18 +511,23 @@ const Auth = () => {
 
 
   // --- Forgot Password Handlers ---
-  const handleSendResetOtp = async (e) => {
-    e.preventDefault();
+  const handleSendResetOtp = async (e, { isResend = false } = {}) => {
+    e?.preventDefault?.();
     if (!resetData.rawValue) return;
     setResetData(prev => ({ ...prev, isSending: true }));
     try {
-      await sellerApi.sendResetOtp({ channel: resetData.channel, rawValue: resetData.rawValue });
-      toast.success(`OTP sent to ${resetData.rawValue}`);
-      window.history.pushState(
-        { sellerAuth: true, isLogin: true, signupStep: 1, isMapOpen: false, forgotStep: 2 },
-        ""
-      );
-      setForgotPasswordStep(2);
+      const res = await sellerApi.sendResetOtp({ channel: resetData.channel, rawValue: resetData.rawValue });
+      const maskedTarget = res?.data?.result?.maskedTarget || resetData.rawValue;
+      setResetData(prev => ({ ...prev, maskedTarget, otp: isResend ? "" : prev.otp }));
+      setResetResendIn(RESET_RESEND_SECONDS);
+      toast.success(`${isResend ? "New OTP" : "OTP"} sent to ${maskedTarget}`);
+      if (!isResend) {
+        window.history.pushState(
+          { sellerAuth: true, isLogin: true, signupStep: 1, isMapOpen: false, forgotStep: 2 },
+          ""
+        );
+        setForgotPasswordStep(2);
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to send OTP");
     } finally {
@@ -548,6 +562,10 @@ const Auth = () => {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    if (resetData.newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters long");
+      return;
+    }
     if (resetData.newPassword !== resetData.confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -566,9 +584,20 @@ const Auth = () => {
         ""
       );
       setForgotPasswordStep(0);
-      setResetData({ channel: "email", rawValue: "", otp: "", newPassword: "", confirmPassword: "", token: "", isSending: false, isVerifying: false, isResetting: false });
+      setResetData({ channel: "email", rawValue: "", otp: "", newPassword: "", confirmPassword: "", token: "", maskedTarget: "", isSending: false, isVerifying: false, isResetting: false });
+      setResetResendIn(0);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to reset password");
+      const msg = error.response?.data?.message || "Failed to reset password";
+      toast.error(msg);
+      // Verification expired or already used → start the reset again from step 1
+      if (/expired|already been used|verify again/i.test(msg)) {
+        window.history.replaceState(
+          { sellerAuth: true, isLogin: true, signupStep: 1, isMapOpen: false, forgotStep: 1 },
+          ""
+        );
+        setForgotPasswordStep(1);
+        setResetData(prev => ({ ...prev, otp: "", token: "", newPassword: "", confirmPassword: "" }));
+      }
     } finally {
       setResetData(prev => ({ ...prev, isResetting: false }));
     }
@@ -933,9 +962,15 @@ const Auth = () => {
                   )}
                   {forgotPasswordStep === 2 && (
                     <form onSubmit={handleVerifyResetOtp} className="space-y-4">
+                      <p className="text-center text-sm font-semibold text-slate-500">
+                        Enter the 4-digit code sent to{" "}
+                        <span className="font-black text-slate-800">{resetData.maskedTarget || resetData.rawValue}</span>
+                      </p>
                       <div className="relative group">
                         <input
                           type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
                           required
                           maxLength={4}
                           placeholder="Enter 4-digit OTP"
@@ -952,6 +987,21 @@ const Auth = () => {
                         {resetData.isVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify OTP"}
                         <ArrowRight size={18} />
                       </button>
+                      <p className="text-center text-sm font-semibold text-slate-500">
+                        Didn&apos;t get the code?{" "}
+                        {resetResendIn > 0 ? (
+                          <span className="font-bold text-slate-400">Resend in {resetResendIn}s</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={resetData.isSending}
+                            onClick={() => handleSendResetOtp(null, { isResend: true })}
+                            className="font-black text-slate-900 underline underline-offset-2 hover:text-black disabled:opacity-50"
+                          >
+                            {resetData.isSending ? "Sending…" : "Resend OTP"}
+                          </button>
+                        )}
+                      </p>
                       <button
                         type="button"
                         onClick={() => {
@@ -976,7 +1026,8 @@ const Auth = () => {
                         <input
                           type={showPassword ? "text" : "password"}
                           required
-                          placeholder="New Password"
+                          placeholder="New Password (min. 8 characters)"
+                          minLength={8}
                           className="w-full pl-12 pr-14 py-4 bg-slate-50 border-2 border-transparent rounded-lg text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-slate-200 transition-all placeholder:text-slate-300"
                           value={resetData.newPassword}
                           onChange={(e) => setResetData({ ...resetData, newPassword: e.target.value })}

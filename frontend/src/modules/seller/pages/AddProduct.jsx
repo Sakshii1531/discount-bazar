@@ -1139,7 +1139,7 @@ const AddProduct = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-slate-600 font-medium italic text-center pt-4 border-t border-slate-50">
+              <p className="text-xs text-slate-600 font-medium text-center pt-4 border-t border-slate-50">
                 Quick Tip: Using WebP format at 800x800px makes your store load
                 3x faster.
               </p>

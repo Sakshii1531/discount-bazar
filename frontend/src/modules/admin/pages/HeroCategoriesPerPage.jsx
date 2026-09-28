@@ -255,7 +255,7 @@ export default function HeroCategoriesPerPage() {
                           {row.bannerCount} banner(s)
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400 italic">Not set</span>
+                        <span className="text-xs text-slate-400">Not set</span>
                       )}
                     </td>
                     <td className="py-4 pr-4">
@@ -265,7 +265,7 @@ export default function HeroCategoriesPerPage() {
                           {row.categoryCount === 1 ? "y" : "ies"}
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400 italic">Not set</span>
+                        <span className="text-xs text-slate-400">Not set</span>
                       )}
                     </td>
                     <td className="py-4">

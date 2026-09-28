@@ -1156,7 +1156,7 @@ const OrderDetailPage = () => {
                       </div>
                     )}
                     {existingRating.comment && (
-                      <p className="text-xs text-white/90 italic mt-1.5 font-medium">"{existingRating.comment}"</p>
+                      <p className="text-xs text-white/90 mt-1.5 font-medium">"{existingRating.comment}"</p>
                     )}
                   </div>
                 ) : ratingEligibility?.eligible !== false ? (
@@ -1375,11 +1375,11 @@ const OrderDetailPage = () => {
                           </button>
                         </div>
                       ) : !returnPolicy.isReturnable ? (
-                        <span className="text-slate-400 font-semibold italic text-[11px]">
+                        <span className="text-slate-400 font-semibold text-[11px]">
                           ❌ Non Returnable
                         </span>
                       ) : (
-                        <span className="text-rose-500 font-semibold italic text-[11px]">
+                        <span className="text-rose-500 font-semibold text-[11px]">
                           Return Window Closed
                         </span>
                       )}
@@ -1581,7 +1581,7 @@ const OrderDetailPage = () => {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs font-bold text-slate-400 italic">Waiting for rider to request OTP...</p>
+                      <p className="text-xs font-bold text-slate-400">Waiting for rider to request OTP...</p>
                     )}
                   </div>
                 </div>

@@ -192,12 +192,13 @@ async function ensureTargetAvailable(channel, target) {
   }
 }
 
-async function dispatchEmailOtp({ email, otp }) {
+async function dispatchEmailOtp({ email, otp, purpose = "signup" }) {
   try {
     await sendSellerVerificationOtpEmail({
       email,
       otp,
       expiresInMinutes: OTP_EXPIRY_MINUTES(),
+      purpose,
     });
   } catch (error) {
     if (!error.statusCode) {
@@ -495,8 +496,7 @@ export async function issueSellerResetOtp({
     }
   }
 
-  let otp = generateSellerOtp(normalizedChannel);
-  otp = "1234";
+  const otp = generateSellerOtp(normalizedChannel);
   const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES() * 60 * 1000);
 
   if (!session) {
@@ -521,7 +521,7 @@ export async function issueSellerResetOtp({
   await session.save();
 
   if (normalizedChannel === "email") {
-    await dispatchEmailOtp({ email: target, otp });
+    await dispatchEmailOtp({ email: target, otp, purpose: "reset" });
   } else {
     await dispatchPhoneOtp({ phone: target, otp });
   }
@@ -636,3 +636,17 @@ export async function verifySellerResetOtpCode({
   };
 }
 
+/**
+ * One-time use: atomically consume the verified password-reset session for this
+ * target. Returns false if it was already used (or never verified), so a reset
+ * token can't be replayed to change the password again.
+ */
+export async function consumeSellerResetVerification({ channel, target }) {
+  const consumed = await OtpVerification.findOneAndDelete({
+    purpose: SELLER_RESET_PURPOSE,
+    channel,
+    target,
+    verifiedAt: { $ne: null },
+  });
+  return Boolean(consumed);
+}
