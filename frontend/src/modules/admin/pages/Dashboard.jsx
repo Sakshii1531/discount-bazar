@@ -29,6 +29,7 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { formatAmount } from "@shared/utils/currency";
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -117,7 +118,7 @@ const AdminDashboard = () => {
         },
         {
             label: 'Revenue',
-            value: `₹${overview.totalRevenue?.toLocaleString() || '0'}`,
+            value: `₹${formatAmount(overview.totalRevenue || 0)}`,
             icon: BarChart3,
             color: 'text-brand-600',
             bg: 'bg-brand-50',
@@ -196,7 +197,7 @@ const AdminDashboard = () => {
                                         tickFormatter={(value) => `₹${value}`}
                                     />
                                     <Tooltip
-                                        formatter={(value) => [`₹${value}`, "Revenue"]}
+                                        formatter={(value) => [`₹${formatAmount(value)}`, "Revenue"]}
                                         contentStyle={{
                                             borderRadius: '12px',
                                             border: 'none',

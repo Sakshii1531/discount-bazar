@@ -161,7 +161,7 @@ const OrdersPage = () => {
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="font-semibold text-slate-900 text-sm tracking-tight leading-snug truncate">
-                                            Order #{order.orderId.slice(-6)}
+                                            Order #{order.orderId}
                                         </h3>
                                         <p className="mt-0.5 text-[11px] text-slate-500 font-medium leading-tight truncate">
                                             {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}{' '}

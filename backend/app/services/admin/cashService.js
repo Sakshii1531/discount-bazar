@@ -1,9 +1,35 @@
 import Delivery from "../../models/delivery.js";
 import Transaction from "../../models/transaction.js";
 import Notification from "../../models/notification.js";
+import { escapeRegex } from "../../utils/regex.js";
 
-export async function getDeliveryCashBalancesData({ page, limit, skip }) {
+export async function getDeliveryCashBalancesData({ page, limit, skip, search }) {
+  const term = String(search || "").trim();
+  const searchStage = [];
+  if (term) {
+    const escaped = escapeRegex(term);
+    const regex = new RegExp(escaped, "i");
+    searchStage.push({
+      $match: {
+        $or: [
+          { name: regex },
+          { phone: regex },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$_id" },
+                regex: escaped,
+                options: "i",
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
   const ridersPipeline = [
+    ...searchStage,
     {
       $lookup: {
         from: "transactions",
@@ -229,8 +255,18 @@ export async function getRiderCashDetailsData(riderId) {
   }));
 }
 
-export async function getCashSettlementHistoryData({ page, limit, skip }) {
+export async function getCashSettlementHistoryData({ page, limit, skip, search }) {
   const query = { userModel: "Delivery", type: "Cash Settlement" };
+  const term = String(search || "").trim();
+  if (term) {
+    const regex = new RegExp(escapeRegex(term), "i");
+    const riders = await Delivery.find({ $or: [{ name: regex }, { phone: regex }] })
+      .select("_id")
+      .limit(500)
+      .lean();
+    query.$or = [{ reference: regex }];
+    if (riders.length) query.$or.push({ user: { $in: riders.map((r) => r._id) } });
+  }
 
   const [history, total] = await Promise.all([
     Transaction.find(query)

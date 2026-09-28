@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "@shared/components/ui/Card";
 import PageHeader from "@shared/components/ui/PageHeader";
 import Badge from "@shared/components/ui/Badge";
-import { formatCurrencyInteger } from "@shared/utils/currency";
+import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import {
   DollarSign,
   Truck,
@@ -388,7 +388,7 @@ const Dashboard = () => {
                     boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                     color: "#334155",
                   }}
-                  formatter={(value) => [`₹${Number(value).toLocaleString()}`, "Revenue"]}
+                  formatter={(value) => [`₹${formatAmount(value)}`, "Revenue"]}
                   labelFormatter={(label) => `Day: ${label}`}
                 />
                 <Area
@@ -492,10 +492,7 @@ const Dashboard = () => {
                   </td>
                   <td className="py-4 px-4 align-middle">
                     <span className="text-sm font-semibold text-slate-900">
-                      ₹{(() => {
-                        const val = Number(order.pricing?.total ?? order.total ?? 0);
-                        return val % 1 === 0 ? val.toLocaleString('en-IN') : val.toFixed(2);
-                      })()}
+                      ₹{formatAmount(order.pricing?.total ?? order.total ?? 0)}
                     </span>
                   </td>
                   <td className="py-4 px-4 align-middle">

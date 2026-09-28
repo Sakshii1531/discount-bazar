@@ -36,6 +36,7 @@ import {
   resolveProductApprovalStatus,
 } from "../services/productModerationService.js";
 import { buildSearchRegex } from "../utils/regex.js";
+import { computePurchaseGst } from "../utils/money.js";
 import { parseAndValidateReturnPolicy } from "../validation/returnPolicyValidation.js";
 
 // Phase 3 P3-5: when search term is reasonably specific and the env flag
@@ -156,6 +157,63 @@ async function assertItemMasterValid(productData, sellerId, excludeId = null) {
   const sell = Number(productData.salePrice) > 0 ? Number(productData.salePrice) : Number(productData.price);
   if (mrp > 0 && sell > 0 && mrp < sell) {
     throw Object.assign(new Error("MRP cannot be lower than the selling price"), { statusCode: 400 });
+  }
+}
+
+// Purchase-price GST: validate inputs and recompute the breakdown server-side
+// (client-sent computed values are ignored). `existing` = current product on update.
+const PURCHASE_GST_COMPUTED = ["purchaseBasePrice", "purchaseGstAmount", "purchaseFinalPrice"];
+function applyPurchaseGst(productData, existing = null) {
+  PURCHASE_GST_COMPUTED.forEach((k) => delete productData[k]);
+  if (Array.isArray(productData.variants)) {
+    productData.variants.forEach((v) => v && PURCHASE_GST_COMPUTED.forEach((k) => delete v[k]));
+  }
+
+  const touched =
+    productData.purchaseCost !== undefined ||
+    productData.gstPercent !== undefined ||
+    productData.purchaseGstType !== undefined ||
+    Array.isArray(productData.variants);
+  if (existing && !touched) return;
+
+  if (productData.purchaseGstType !== undefined) {
+    const t = String(productData.purchaseGstType || "").trim().toUpperCase();
+    if (t && !["INCLUSIVE", "EXCLUSIVE"].includes(t)) {
+      throw Object.assign(new Error("GST type must be Inclusive or Exclusive"), { statusCode: 400 });
+    }
+    productData.purchaseGstType = t || "EXCLUSIVE";
+  }
+  if (productData.gstPercent === "") productData.gstPercent = 0;
+
+  const type = productData.purchaseGstType ?? existing?.purchaseGstType ?? "EXCLUSIVE";
+  const rate = productData.gstPercent ?? existing?.gstPercent ?? 0;
+
+  // Validates rate (and throws 400 on negative / non-numeric) even when price is empty
+  const top = computePurchaseGst(productData.purchaseCost ?? existing?.purchaseCost ?? 0, rate, type);
+  if (productData.purchaseCost !== undefined && productData.purchaseCost !== "") {
+    productData.purchaseCost = Number(productData.purchaseCost);
+  }
+  if (productData.gstPercent !== undefined) productData.gstPercent = Number(productData.gstPercent);
+  productData.purchaseBasePrice = top.basePrice;
+  productData.purchaseGstAmount = top.gstAmount;
+  productData.purchaseFinalPrice = top.finalPrice;
+
+  // Variants: recompute each one; on an update that only changed GST type/rate,
+  // refresh the stored variants so their breakdown stays in sync.
+  let variants = productData.variants;
+  if (!Array.isArray(variants) && existing && Array.isArray(existing.variants) && existing.variants.length) {
+    variants = existing.variants.map((v) => (typeof v.toObject === "function" ? v.toObject() : { ...v }));
+    productData.variants = variants;
+  }
+  if (Array.isArray(variants)) {
+    variants.forEach((v) => {
+      if (!v || v.purchaseCost === undefined || v.purchaseCost === null || v.purchaseCost === "") return;
+      const b = computePurchaseGst(v.purchaseCost, rate, type);
+      v.purchaseCost = Number(v.purchaseCost);
+      v.purchaseBasePrice = b.basePrice;
+      v.purchaseGstAmount = b.gstAmount;
+      v.purchaseFinalPrice = b.finalPrice;
+    });
   }
 }
 
@@ -528,6 +586,24 @@ export const getSellerProducts = async (req, res) => {
       }
     }
 
+    const searchTerm = String(req.query.search || "").trim();
+    if (searchTerm) {
+      const safe = buildSearchRegex(searchTerm, { anchored: false });
+      query.$and = [
+        ...(query.$and || []),
+        {
+          $or: [
+            { name: safe },
+            { sku: safe },
+            { slug: safe },
+            { barcode: safe },
+            { "variants.sku": safe },
+            { "variants.barcode": safe },
+          ],
+        },
+      ];
+    }
+
     if (req.query.isReturnable !== undefined) {
       query["returnPolicy.isReturnable"] = String(req.query.isReturnable) === "true";
     } else if (req.query.returnPolicy !== undefined) {
@@ -565,7 +641,7 @@ export const getSellerProducts = async (req, res) => {
     ] = await Promise.all([
       Product.find(query)
         .select(
-          "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt",
+          "name slug description sku barcode price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType",
         )
         .populate("headerId", "name")
         .populate("categoryId", "name")
@@ -848,6 +924,7 @@ export const createProduct = async (req, res) => {
     Object.assign(productData, moderationUpdate);
 
     try {
+      applyPurchaseGst(productData);
       await assertItemMasterValid(productData, req.user.id);
     } catch (e) {
       return handleResponse(res, e.statusCode || 400, e.message);
@@ -1096,6 +1173,7 @@ export const updateProduct = async (req, res) => {
     Object.assign(productData, moderationUpdate);
 
     try {
+      applyPurchaseGst(productData, product);
       await assertItemMasterValid(
         {
           ...productData,
@@ -1353,6 +1431,7 @@ export const getModerationProducts = async (req, res) => {
           { name: safe },
           { slug: safe },
           { sku: safe },
+          { "variants.sku": safe },
         ];
       }
     }

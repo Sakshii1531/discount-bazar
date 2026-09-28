@@ -1318,7 +1318,7 @@ export const updateReturnStatus = async (req, res) => {
 export const getSellerOrders = async (req, res) => {
   try {
     const { id: userId, role } = req.user;
-    const { startDate, endDate, status: statusParam, orderSource } = req.query;
+    const { startDate, endDate, status: statusParam, orderSource, search } = req.query;
 
     const { page, limit, skip } = getPagination(req, {
       defaultLimit: 25,
@@ -1334,6 +1334,7 @@ export const getSellerOrders = async (req, res) => {
       skip,
       limit,
       orderSource,
+      search,
     });
 
 

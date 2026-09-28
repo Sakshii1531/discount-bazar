@@ -6,7 +6,7 @@ import { useSettings } from '@core/context/SettingsContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
-import { formatCurrencyInteger } from "@shared/utils/currency";
+import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import { adminApi } from '../services/adminApi';
 import {
     ChevronLeft,
@@ -194,7 +194,7 @@ const OrderDetail = () => {
                     <div>
                         <div className="flex items-center gap-3">
                             <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
-                                Order #{order.orderId?.length > 12 ? `ORD-${order.orderId.slice(-8)}` : order.orderId}
+                                Order #{order.orderId}
                             </h1>
                             {['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()) ? (
                                 <span className={cn(
@@ -286,7 +286,7 @@ const OrderDetail = () => {
                                             <td className="px-4 py-2.5 text-center">
                                                 <span className="bg-slate-100 px-2.5 py-0.5 rounded-md text-[11px] font-black text-slate-700">x{item.quantity}</span>
                                             </td>
-                                            <td className="px-4 py-2.5 text-right text-xs font-black text-slate-900">₹{item.price * item.quantity}</td>
+                                            <td className="px-4 py-2.5 text-right text-xs font-black text-slate-900">₹{formatAmount(item.price * item.quantity)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -296,7 +296,7 @@ const OrderDetail = () => {
                             <div className="w-full sm:w-64 space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtotal</span>
-                                    <span className="text-xs font-black text-slate-700">₹{order.pricing?.subtotal || 0}</span>
+                                    <span className="text-xs font-black text-slate-700">₹{formatAmount(order.pricing?.subtotal || 0)}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Delivery Fee</span>
@@ -622,7 +622,7 @@ const OrderDetail = () => {
                             </div>
                             <div style={{ textAlign: "right" }}>
                                 <div style={{ fontSize: "32px", fontWeight: "900", color: "#0f172a", letterSpacing: "1px" }}>TAX INVOICE</div>
-                                <div style={{ fontSize: "14px", fontWeight: "800", color: "#2563eb", marginTop: "4px" }}>Order #{order.orderId?.length > 12 ? `ORD-${order.orderId.slice(-8)}` : order.orderId}</div>
+                                <div style={{ fontSize: "14px", fontWeight: "800", color: "#2563eb", marginTop: "4px" }}>Order #{order.orderId}</div>
                                 <div style={{ fontSize: "12px", color: "#475569", fontWeight: "700", marginTop: "2px" }}>Date: {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                             </div>
                         </div>
@@ -702,7 +702,7 @@ const OrderDetail = () => {
                                                 </td>
                                                 <td align="center" style={{ padding: "16px 18px", fontSize: "14px", color: "#0f172a", fontWeight: "700" }}>₹{item.price}</td>
                                                 <td align="center" style={{ padding: "16px 18px", fontSize: "14px", color: "#0f172a", fontWeight: "900" }}>{item.quantity}</td>
-                                                <td align="right" style={{ padding: "16px 18px", fontSize: "15px", fontWeight: "900", color: "#0f172a" }}>₹{item.price * item.quantity}</td>
+                                                <td align="right" style={{ padding: "16px 18px", fontSize: "15px", fontWeight: "900", color: "#0f172a" }}>₹{formatAmount(item.price * item.quantity)}</td>
                                             </tr>
                                         );
                                     })}
@@ -723,11 +723,11 @@ const OrderDetail = () => {
                                 <table width="100%" cellPadding="6" cellSpacing="0">
                                     <tr>
                                         <td align="left" style={{ fontSize: "13px", color: "#475569", fontWeight: "700" }}>Product Subtotal</td>
-                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>₹{order.pricing?.subtotal || order.items.reduce((s, i) => s + (i.price * i.quantity), 0)}</td>
+                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>₹{formatAmount(order.pricing?.subtotal || order.items.reduce((s, i) => s + (i.price * i.quantity), 0))}</td>
                                     </tr>
                                     <tr>
                                         <td align="left" style={{ fontSize: "13px", color: "#475569", fontWeight: "700" }}>Delivery Charges</td>
-                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#2563eb" }}>+ ₹{order.pricing?.deliveryFee || 0}</td>
+                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#2563eb" }}>+ ₹{formatAmount(order.pricing?.deliveryFee || 0)}</td>
                                     </tr>
                                     {(order.paymentBreakdown?.taxTotal > 0 || order.pricing?.gst > 0 || order.pricing?.tax > 0) && (
                                         <tr>

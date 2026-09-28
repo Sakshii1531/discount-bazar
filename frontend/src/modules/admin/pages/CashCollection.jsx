@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatAmount } from "@shared/utils/currency";
 
 const CashCollection = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -133,7 +134,8 @@ const CashCollection = () => {
 
     const filteredRiders = (ridersCashData || []).filter(r =>
         (r.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (r.id || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (r.phone || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.id || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const filteredHistory = (historyData || []).filter(h =>
@@ -337,10 +339,10 @@ const CashCollection = () => {
             {/* Insight Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Total Cash in Hand', value: `₹${stats.totalInHand.toLocaleString()}`, icon: Wallet, color: 'blue', bg: 'bg-brand-50', iconColor: 'text-brand-600' },
+                    { label: 'Total Cash in Hand', value: `₹${formatAmount(stats.totalInHand)}`, icon: Wallet, color: 'blue', bg: 'bg-brand-50', iconColor: 'text-brand-600' },
                     { label: 'Critical Over-Limit', value: stats.overLimitCount, icon: AlertTriangle, color: 'rose', bg: 'bg-rose-50', iconColor: 'text-rose-600', sub: 'Action required' },
-                    { label: 'Collected Today', value: `₹${stats.todaySettled.toLocaleString()}`, icon: ArrowDownLeft, color: 'emerald', bg: 'bg-brand-50', iconColor: 'text-brand-600' },
-                    { label: 'Avg. Rider Load', value: `₹${stats.avgBalance.toFixed(0)}`, icon: Percent, color: 'amber', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
+                    { label: 'Collected Today', value: `₹${formatAmount(stats.todaySettled)}`, icon: ArrowDownLeft, color: 'emerald', bg: 'bg-brand-50', iconColor: 'text-brand-600' },
+                    { label: 'Avg. Rider Load', value: `₹${formatAmount(stats.avgBalance)}`, icon: Percent, color: 'amber', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
                 ].map((stat, i) => (
                     <Card key={i} className="p-6 border-none shadow-sm ring-1 ring-slate-100 bg-white group hover:ring-brand-200 transition-all">
                         <div className="flex items-center justify-between mb-4">
@@ -520,7 +522,7 @@ const CashCollection = () => {
                                     <tr key={log.id} className="group hover:bg-slate-50/40 transition-all">
                                         <td className="px-6 py-5 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-tighter">{log.id}</td>
                                         <td className="px-6 py-5 text-sm font-bold text-slate-900">{log.rider}</td>
-                                        <td className="px-6 py-5 text-center text-sm font-black text-brand-600">₹{log.amount.toLocaleString()}</td>
+                                        <td className="px-6 py-5 text-center text-sm font-black text-brand-600">₹{formatAmount(log.amount)}</td>
                                         <td className="px-6 py-5">
                                             <Badge variant="secondary" className="text-[9px] font-black px-2 py-0.5 uppercase">
                                                 {log.method}
@@ -620,7 +622,7 @@ const CashCollection = () => {
                                                     </p>
                                                 </div>
                                             </div>
-                                            <span className="text-sm font-black text-slate-700">₹{item.amount.toLocaleString()}</span>
+                                            <span className="text-sm font-black text-slate-700">₹{formatAmount(item.amount)}</span>
                                         </div>
                                     ))
                                 ) : (

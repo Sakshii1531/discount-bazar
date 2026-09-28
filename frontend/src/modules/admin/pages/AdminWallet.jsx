@@ -32,6 +32,7 @@ import Pagination from '@shared/components/ui/Pagination';
 import { adminApi } from "../services/adminApi";
 import { toast } from "sonner";
 import { exportToCSV } from "@/lib/exportUtils";
+import { formatAmount } from "@shared/utils/currency";
 
 const AdminWallet = () => {
     const navigate = useNavigate();
@@ -167,7 +168,7 @@ const AdminWallet = () => {
     const stats = [
         {
             label: 'Total Platform Earning',
-            value: `₹${(walletData.stats?.totalPlatformEarning || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.totalPlatformEarning || 0)}`,
             description: 'Total money collected',
             icon: TrendingUp,
             color: 'blue',
@@ -176,7 +177,7 @@ const AdminWallet = () => {
         },
         {
             label: 'Total Admin Earning',
-            value: `₹${(walletData.stats?.totalAdminEarning || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.totalAdminEarning || 0)}`,
             description: 'Net profit for platform',
             icon: DollarSign,
             color: 'purple',
@@ -185,7 +186,7 @@ const AdminWallet = () => {
         },
         {
             label: 'Available Balance',
-            value: `₹${(walletData.stats?.availableBalance || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.availableBalance || 0)}`,
             description: 'Available in business wallet',
             icon: Building2,
             color: 'emerald',
@@ -194,7 +195,7 @@ const AdminWallet = () => {
         },
         {
             label: 'System Float (COD)',
-            value: `₹${(walletData.stats?.systemFloat || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.systemFloat || 0)}`,
             description: 'Cash with delivery partners',
             icon: Clock,
             color: 'amber',
@@ -203,7 +204,7 @@ const AdminWallet = () => {
         },
         {
             label: 'Seller Pending Payouts',
-            value: `₹${(walletData.stats?.sellerPendingPayouts || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.sellerPendingPayouts || 0)}`,
             description: 'Owed to sellers',
             icon: CreditCard,
             color: 'blue',
@@ -212,7 +213,7 @@ const AdminWallet = () => {
         },
         {
             label: 'Delivery Pending Payouts',
-            value: `₹${(walletData.stats?.deliveryPendingPayouts || 0).toLocaleString()}`,
+            value: `₹${formatAmount(walletData.stats?.deliveryPendingPayouts || 0)}`,
             description: 'Owed to delivery partners',
             icon: CreditCard,
             color: 'purple',
@@ -234,6 +235,9 @@ const AdminWallet = () => {
         return transactionsList.filter(txn => {
             const matchesSearch =
                 (txn.id || '').toLowerCase().includes(query) ||
+                String(txn.rawEntry?.reference || '').toLowerCase().includes(query) ||
+                String(txn.rawEntry?.transactionId || '').toLowerCase().includes(query) ||
+                (txn.rawType || '').toLowerCase().includes(query) ||
                 (txn.type || '').toLowerCase().includes(query) ||
                 (txn.sender || '').toLowerCase().includes(query) ||
                 (txn.recipient || '').toLowerCase().includes(query) ||
@@ -432,7 +436,7 @@ const AdminWallet = () => {
 
                             <div className="flex items-baseline justify-between py-0.5">
                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Ready for Settlement</span>
-                                <h3 className="text-lg font-black text-white leading-none">₹{((walletData.stats?.sellerPendingPayouts || 0) + (walletData.stats?.deliveryPendingPayouts || 0)).toLocaleString()}</h3>
+                                <h3 className="text-lg font-black text-white leading-none">₹{formatAmount((walletData.stats?.sellerPendingPayouts || 0) + (walletData.stats?.deliveryPendingPayouts || 0))}</h3>
                             </div>
 
                             <div className="grid grid-cols-2 gap-1.5">
@@ -441,14 +445,14 @@ const AdminWallet = () => {
                                         <div className="h-1.5 w-1.5 rounded-full bg-brand-400" />
                                         <span className="font-bold text-slate-300 text-[9px]">Sellers</span>
                                     </div>
-                                    <span className="font-black text-white text-[10px]">₹{(walletData.stats?.sellerPendingPayouts || 0).toLocaleString()}</span>
+                                    <span className="font-black text-white text-[10px]">₹{formatAmount(walletData.stats?.sellerPendingPayouts || 0)}</span>
                                 </div>
                                 <div className="flex justify-between items-center bg-slate-800/60 p-1 px-2 rounded-md border border-white/5 text-xs">
                                     <div className="flex items-center gap-1">
                                         <div className="h-1.5 w-1.5 rounded-full bg-purple-400" />
                                         <span className="font-bold text-slate-300 text-[9px]">Riders</span>
                                     </div>
-                                    <span className="font-black text-white text-[10px]">₹{(walletData.stats?.deliveryPendingPayouts || 0).toLocaleString()}</span>
+                                    <span className="font-black text-white text-[10px]">₹{formatAmount(walletData.stats?.deliveryPendingPayouts || 0)}</span>
                                 </div>
                             </div>
 
@@ -654,7 +658,7 @@ const AdminWallet = () => {
                                                             "text-sm font-black",
                                                             txn.amount > 0 ? "text-brand-600" : "text-rose-600"
                                                         )}>
-                                                            {txn.amount > 0 ? '+' : ''}₹{Math.abs(txn.amount).toLocaleString()}
+                                                            {txn.amount > 0 ? '+' : ''}₹{formatAmount(Math.abs(txn.amount))}
                                                         </p>
                                                     </td>
                                                     <td className="px-6 py-5 text-center">
@@ -721,7 +725,7 @@ const AdminWallet = () => {
                             )}>
                                 {selectedTransaction.amount > 0 ? <ArrowDownCircle className="h-8 w-8" /> : <ArrowUpCircle className="h-8 w-8" />}
                             </div>
-                            <h4 className="text-3xl font-black text-slate-900">₹{Math.abs(selectedTransaction.amount)}</h4>
+                            <h4 className="text-3xl font-black text-slate-900">₹{formatAmount(Math.abs(selectedTransaction.amount))}</h4>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{selectedTransaction.status}</p>
                         </div>
 

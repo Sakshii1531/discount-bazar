@@ -30,8 +30,16 @@ export function buildSortableToken(timestampMs = Date.now()) {
   return `${encodeTimePart(timestampMs)}${randomBase32(RANDOM_PART_LENGTH)}`;
 }
 
+const PUBLIC_ORDER_ID_LENGTH = 8;
+
+/**
+ * Short public order ID, e.g. "ORD-7K2M9QXA": 8 random Crockford base32 chars
+ * (32^8 ≈ 1.1 trillion combinations, no ambiguous I/L/O/U). Uniqueness is
+ * guaranteed by the existence check in generateUniquePublicOrderId plus the
+ * unique index on Order.orderId.
+ */
 export function buildPublicOrderId() {
-  return `ORD-${buildSortableToken()}`;
+  return `ORD-${randomBase32(PUBLIC_ORDER_ID_LENGTH)}`;
 }
 
 export function buildCheckoutGroupId() {

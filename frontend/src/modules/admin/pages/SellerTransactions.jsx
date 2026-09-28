@@ -37,6 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { formatAmount } from "@shared/utils/currency";
 
 const SellerTransactions = () => {
     const navigate = useNavigate();
@@ -84,6 +85,9 @@ const SellerTransactions = () => {
                         minute: '2-digit'
                     }),
                     seller: t.user?.shopName || t.user?.name || 'Unknown',
+                    reference: (t.reference || t._id || '').toString(),
+                    sellerOwner: t.user?.name || '',
+                    sellerPhone: t.user?.phone || '',
                     type: t.type === 'Seller Earning' ? 'sale' :
                         (t.type === 'Withdrawal' || t.type === 'Payout') ? 'payout' :
                             t.type.toLowerCase(),
@@ -129,9 +133,13 @@ const SellerTransactions = () => {
 
     const filteredTransactions = useMemo(() => {
         return transactions.filter(t => {
-            const matchesSearch = t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (t.orderId && t.orderId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                t.seller.toLowerCase().includes(searchTerm.toLowerCase());
+            const query = searchTerm.toLowerCase().trim();
+            const matchesSearch = t.id.toLowerCase().includes(query) ||
+                (t.reference || '').toLowerCase().includes(query) ||
+                (t.orderId && t.orderId.toLowerCase().includes(query)) ||
+                t.seller.toLowerCase().includes(query) ||
+                (t.sellerOwner || '').toLowerCase().includes(query) ||
+                (t.sellerPhone || '').toLowerCase().includes(query);
             const matchesStatus = filterStatus === 'all' || t.status === filterStatus;
             const matchesType = filterType === 'all' || t.type === filterType;
             const matchesSeller = selectedSeller === 'all' || t.seller === selectedSeller;
@@ -248,10 +256,10 @@ const SellerTransactions = () => {
             {/* Live Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Total Sales', value: `₹${stats.totalGross.toLocaleString()}`, icon: ShoppingBag, bg: 'bg-brand-50', color: 'text-brand-600' },
-                    { label: 'Our Share', value: `₹${stats.totalCommission.toLocaleString()}`, icon: Percent, bg: 'bg-orange-50', color: 'text-orange-600' },
-                    { label: 'Total Paid Out', value: `₹${stats.totalPayouts.toLocaleString()}`, icon: Banknote, bg: 'bg-brand-50', color: 'text-brand-600' },
-                    { label: 'Pending Total', value: `₹${stats.pendingSettlements.toLocaleString()}`, icon: Clock, bg: 'bg-amber-50', color: 'text-amber-600' },
+                    { label: 'Total Sales', value: `₹${formatAmount(stats.totalGross)}`, icon: ShoppingBag, bg: 'bg-brand-50', color: 'text-brand-600' },
+                    { label: 'Our Share', value: `₹${formatAmount(stats.totalCommission)}`, icon: Percent, bg: 'bg-orange-50', color: 'text-orange-600' },
+                    { label: 'Total Paid Out', value: `₹${formatAmount(stats.totalPayouts)}`, icon: Banknote, bg: 'bg-brand-50', color: 'text-brand-600' },
+                    { label: 'Pending Total', value: `₹${formatAmount(stats.pendingSettlements)}`, icon: Clock, bg: 'bg-amber-50', color: 'text-amber-600' },
                 ].map((stat, i) => (
                     <Card key={i} className="px-5 py-4 border-none shadow-sm ring-1 ring-slate-100 hover:ring-orange-200 transition-all bg-white group overflow-hidden relative">
                         <div className="relative z-10">
@@ -376,14 +384,14 @@ const SellerTransactions = () => {
                                             "text-sm font-black",
                                             txn.amount > 0 ? "text-slate-900" : "text-rose-600"
                                         )}>
-                                            ₹{Math.abs(txn.amount).toLocaleString()}
+                                            ₹{formatAmount(Math.abs(txn.amount))}
                                         </p>
                                     </td>
                                     <td className="px-6 py-5 text-center">
                                         {txn.type === 'sale' ? (
                                             <div className="flex flex-col items-center">
-                                                <span className="text-[9px] font-bold text-rose-500">(-₹{txn.commissionAmount})</span>
-                                                <span className="text-xs font-black text-brand-600 pt-0.5">₹{txn.netPayable.toLocaleString()}</span>
+                                                <span className="text-[9px] font-bold text-rose-500">(-₹{formatAmount(txn.commissionAmount)})</span>
+                                                <span className="text-xs font-black text-brand-600 pt-0.5">₹{formatAmount(txn.netPayable)}</span>
                                             </div>
                                         ) : (
                                             <span className="text-slate-300 font-bold text-[10px]">---</span>
@@ -451,7 +459,7 @@ const SellerTransactions = () => {
                                 {selectedTxn.type === 'sale' ? <ShoppingCart className="h-8 w-8" /> : selectedTxn.type === 'payout' ? <ArrowUpRight className="h-8 w-8" /> : <Undo2 className="h-8 w-8" />}
                             </div>
                             <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                                {selectedTxn.amount > 0 ? '' : '-'}₹{Math.abs(selectedTxn.amount).toLocaleString()}
+                                {selectedTxn.amount > 0 ? '' : '-'}₹{formatAmount(Math.abs(selectedTxn.amount))}
                             </h2>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">{(selectedTxn.id || '').substring(0, 10)}</p>
                         </div>
@@ -493,19 +501,19 @@ const SellerTransactions = () => {
                                     <div className="bg-slate-900 rounded-xl p-6 text-white space-y-4">
                                         <div className="flex justify-between items-center text-sm font-medium">
                                             <span className="opacity-60">Base Subtotal</span>
-                                            <span>₹{selectedTxn.amount}</span>
+                                            <span>₹{formatAmount(selectedTxn.amount)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-sm font-medium">
                                             <span className="opacity-60">Admin Fee ({selectedTxn.commissionRate}%)</span>
-                                            <span className="text-orange-400">-₹{selectedTxn.commissionAmount}</span>
+                                            <span className="text-orange-400">-₹{formatAmount(selectedTxn.commissionAmount)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-sm font-medium">
                                             <span className="opacity-60">Tax & Surcharge</span>
-                                            <span className="text-orange-400">-₹{selectedTxn.taxAmount}</span>
+                                            <span className="text-orange-400">-₹{formatAmount(selectedTxn.taxAmount)}</span>
                                         </div>
                                         <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                                             <span className="text-xs font-black uppercase tracking-widest">Merchant Net Payable</span>
-                                            <span className="text-lg font-black text-brand-400">₹{selectedTxn.netPayable}</span>
+                                            <span className="text-lg font-black text-brand-400">₹{formatAmount(selectedTxn.netPayable)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -621,7 +629,7 @@ const SellerTransactions = () => {
                                     onClick={async () => {
                                         const shareData = {
                                             title: 'Transaction Details',
-                                            text: `Transaction ID: ${selectedTxn.id}\nAmount: ₹${Math.abs(selectedTxn.amount)}\nType: ${selectedTxn.type.toUpperCase()}\nStatus: ${selectedTxn.status.toUpperCase()}`
+                                            text: `Transaction ID: ${selectedTxn.id}\nAmount: ₹${formatAmount(Math.abs(selectedTxn.amount))}\nType: ${selectedTxn.type.toUpperCase()}\nStatus: ${selectedTxn.status.toUpperCase()}`
                                         };
                                         if (navigator.share) {
                                             try {

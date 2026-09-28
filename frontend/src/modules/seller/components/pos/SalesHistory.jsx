@@ -11,9 +11,10 @@ import Button from "@shared/components/ui/Button";
 import Input from "@shared/components/ui/Input";
 import { posApi } from "../../services/posApi";
 import ReceiptPrint from "./ReceiptPrint";
+import { formatAmount } from "@shared/utils/currency";
 
 const METHOD_LABELS = { CASH: "Cash", CARD: "Card", QR: "QR / UPI", CREDIT: "Credit", OTHER: "Other", SPLIT: "Split" };
-const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const inr = (n) => `${Number(n || 0) < 0 ? "-" : ""}₹${formatAmount(Math.abs(Number(n || 0)))}`;
 
 /**
  * Past POS bills: search by bill number / customer name / phone, filter by

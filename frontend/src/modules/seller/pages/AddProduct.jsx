@@ -16,12 +16,13 @@ import {
   HiOutlinePlus,
   HiOutlineSquaresPlus,
 } from "react-icons/hi2";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { sellerApi } from "../services/sellerApi";
 
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
+import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
 
 const TABS = [
   { id: "general", label: "General Info", icon: HiOutlineTag },
@@ -56,6 +57,7 @@ const initialFormData = {
   mrp: "",
   purchaseCost: "",
   gstPercent: "",
+  purchaseGstType: "EXCLUSIVE",
   expiryDate: "",
   shelfLife: "",
   countryOfOrigin: "",
@@ -136,6 +138,11 @@ const dataURLtoFile = (dataurl, filename) => {
 
 const AddProduct = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo =
+    location.state?.returnTo ||
+    new URLSearchParams(location.search).get("returnTo");
+  const targetLineIndex = location.state?.targetLineIndex;
   const [modalTab, setModalTab] = useState(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem(TAB_STORAGE_KEY) || "general";
@@ -331,6 +338,13 @@ const AddProduct = () => {
       return;
     }
 
+    const purchaseGstError = findPurchaseGstError(formData.variants, formData.gstPercent, formData.purchaseGstType);
+    if (purchaseGstError) {
+      toast.error(purchaseGstError);
+      setModalTab("variants");
+      return;
+    }
+
     if (formData.returnPolicy?.isReturnable) {
       if (!formData.returnPolicy.returnWindowDays || Number(formData.returnPolicy.returnWindowDays) <= 0 || Number(formData.returnPolicy.returnWindowDays) > 30) {
         toast.error("Please enter a valid Return Window (1 to 30 days).");
@@ -359,6 +373,7 @@ const AddProduct = () => {
       ["gstPercent", "expiryDate"].forEach((k) => {
         if (formData[k] !== "" && formData[k] != null) data.append(k, formData[k]);
       });
+      data.append("purchaseGstType", formData.purchaseGstType || "EXCLUSIVE");
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -433,7 +448,17 @@ const AddProduct = () => {
         sessionStorage.removeItem(TAB_STORAGE_KEY);
       } catch (e) {}
 
-      navigate("/seller/products");
+      const createdProd = response?.data?.result;
+      if (returnTo) {
+        navigate(returnTo, {
+          state: {
+            createdProductId: createdProd?._id,
+            targetLineIndex,
+          },
+        });
+      } else {
+        navigate("/seller/products");
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to save product");
     } finally {
@@ -471,12 +496,20 @@ const AddProduct = () => {
         <Button
           variant="ghost"
           className="pl-0 hover:bg-transparent hover:text-primary-600"
-          onClick={() => navigate(-1)}>
+          onClick={() => {
+            if (returnTo) navigate(returnTo);
+            else navigate(-1);
+          }}>
           <HiOutlineArrowLeft className="mr-2 h-5 w-5" />
-          Back to Products
+          {returnTo ? "Back to Purchases" : "Back to Products"}
         </Button>
         <div className="flex gap-2 sm:gap-3 items-center">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (returnTo) navigate(returnTo);
+              else navigate(-1);
+            }}>
             Cancel
           </Button>
           {hasNextTab && (
@@ -592,7 +625,6 @@ const AddProduct = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  ["gstPercent", "GST %", "number"],
                   ["expiryDate", "Expiry Date", "date"],
                 ].map(([key, label, type]) => (
                   <div key={key} className="space-y-1.5 flex flex-col">
@@ -712,6 +744,13 @@ const AddProduct = () => {
                   <span>ADD VARIANT</span>
                 </button>
               </div>
+
+              <PurchaseGstSettings
+                gstType={formData.purchaseGstType}
+                gstRate={formData.gstPercent}
+                onTypeChange={(t) => setFormData((prev) => ({ ...prev, purchaseGstType: t }))}
+                onRateChange={(r) => setFormData((prev) => ({ ...prev, gstPercent: r }))}
+              />
 
               <div className="space-y-4">
                 {(formData.variants || []).map((variant, index) => (
@@ -941,6 +980,13 @@ const AddProduct = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Purchase GST breakdown (live) */}
+                    <PurchaseGstBreakdown
+                      purchaseCost={variant.purchaseCost}
+                      gstRate={formData.gstPercent}
+                      gstType={formData.purchaseGstType}
+                    />
                   </div>
                 ))}
               </div>

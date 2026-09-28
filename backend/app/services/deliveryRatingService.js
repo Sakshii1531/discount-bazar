@@ -3,6 +3,8 @@ import Order from "../models/order.js";
 import Delivery from "../models/delivery.js";
 import DeliveryRating from "../models/deliveryRating.js";
 import Notification from "../models/notification.js";
+import User from "../models/customer.js";
+import { escapeRegex } from "../utils/regex.js";
 import {
   RATING_STATUSES,
   RATING_WINDOW_DAYS,
@@ -312,9 +314,25 @@ export const getAdminRatings = async ({
   // Search by orderId string or customer name/partner name if needed
   if (search && String(search).trim()) {
     const trimmed = String(search).trim();
-    if (mongoose.Types.ObjectId.isValid(trimmed)) {
-      query.$or = [{ _id: trimmed }, { orderId: trimmed }, { deliveryPartnerId: trimmed }];
-    }
+    const escaped = escapeRegex(trimmed);
+    const regex = new RegExp(escaped, "i");
+    const [orders, partners, customers] = await Promise.all([
+      Order.find({ orderId: regex }).select("_id").limit(500).lean(),
+      Delivery.find({ $or: [{ name: regex }, { phone: regex }] }).select("_id").limit(500).lean(),
+      User.find({ $or: [{ name: regex }, { phone: regex }] }).select("_id").limit(500).lean(),
+    ]);
+    const idMatch = (field) => ({
+      $expr: { $regexMatch: { input: { $toString: `$${field}` }, regex: escaped, options: "i" } },
+    });
+    query.$or = [
+      idMatch("_id"),
+      idMatch("orderId"),
+      idMatch("deliveryPartnerId"),
+      { comment: regex },
+    ];
+    if (orders.length) query.$or.push({ orderId: { $in: orders.map((o) => o._id) } });
+    if (partners.length) query.$or.push({ deliveryPartnerId: { $in: partners.map((d) => d._id) } });
+    if (customers.length) query.$or.push({ customerId: { $in: customers.map((c) => c._id) } });
   }
 
   const [items, total, statsAggregation] = await Promise.all([

@@ -3,6 +3,7 @@ import { ChevronRight, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const ActiveOrderPill = ({ order }) => {
     if (!order) return null;
@@ -60,7 +61,7 @@ const ActiveOrderPill = ({ order }) => {
                                 {order.status === 'delivered' ? 'Delivered' : 'Order Tracking'}
                             </h4>
                             <p className="text-[9px] text-slate-400 font-bold leading-tight">
-                                {cartCount} {cartCount === 1 ? 'item' : 'items'} • ₹{order.pricing.total}
+                                {cartCount} {cartCount === 1 ? 'item' : 'items'} • ₹{formatAmount(order.pricing.total)}
                             </p>
                         </div>
 

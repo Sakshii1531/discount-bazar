@@ -1,8 +1,40 @@
+import mongoose from "mongoose";
 import Transaction from "../../models/transaction.js";
 import Notification from "../../models/notification.js";
+import Seller from "../../models/seller.js";
+import Delivery from "../../models/delivery.js";
+import Order from "../../models/order.js";
+import { escapeRegex } from "../../utils/regex.js";
 import { getAdminFinanceSummary } from "../finance/walletService.js";
 import { getLedgerEntries } from "../finance/ledgerService.js";
 import { emitToDelivery, emitToSeller } from "../orderSocketEmitter.js";
+
+async function applyTransactionSearch(query, search, userModel) {
+  const term = String(search || "").trim();
+  if (!term) return query;
+
+  const regex = new RegExp(escapeRegex(term), "i");
+  const UserModel = userModel === "Seller" ? Seller : Delivery;
+  const userFields = userModel === "Seller"
+    ? [{ name: regex }, { shopName: regex }, { phone: regex }]
+    : [{ name: regex }, { phone: regex }];
+
+  const [users, orders] = await Promise.all([
+    UserModel.find({ $or: userFields }).select("_id").limit(500).lean(),
+    userModel === "Seller"
+      ? Order.find({ orderId: regex }).select("_id").limit(500).lean()
+      : [],
+  ]);
+
+  const or = [{ reference: regex }];
+  if (users.length) or.push({ user: { $in: users.map((u) => u._id) } });
+  if (orders.length) or.push({ order: { $in: orders.map((o) => o._id) } });
+  if (/^[a-f\d]{24}$/i.test(term)) {
+    or.push({ _id: new mongoose.Types.ObjectId(term) });
+  }
+  query.$or = or;
+  return query;
+}
 
 export async function getAdminWalletOverview({ page, limit }) {
   const stats = await getAdminFinanceSummary();
@@ -45,8 +77,9 @@ export async function getAdminWalletOverview({ page, limit }) {
   };
 }
 
-export async function getDeliveryTransactionsData({ page, limit, skip }) {
+export async function getDeliveryTransactionsData({ page, limit, skip, search }) {
   const query = { userModel: "Delivery" };
+  await applyTransactionSearch(query, search, "Delivery");
   const transactions = await Transaction.find(query)
     .populate("user", "name phone documents")
     .sort({ createdAt: -1 })
@@ -65,8 +98,9 @@ export async function getDeliveryTransactionsData({ page, limit, skip }) {
   };
 }
 
-export async function getSellerWithdrawalsData({ page, limit, skip }) {
+export async function getSellerWithdrawalsData({ page, limit, skip, search }) {
   const query = { userModel: "Seller", type: "Withdrawal" };
+  await applyTransactionSearch(query, search, "Seller");
 
   const [transactions, total] = await Promise.all([
     Transaction.find(query)
@@ -87,8 +121,9 @@ export async function getSellerWithdrawalsData({ page, limit, skip }) {
   };
 }
 
-export async function getSellerTransactionsData({ page, limit, skip }) {
+export async function getSellerTransactionsData({ page, limit, skip, search }) {
   const query = { userModel: "Seller" };
+  await applyTransactionSearch(query, search, "Seller");
   const transactions = await Transaction.find(query)
     .populate("user", "name shopName phone bankDetails")
     .populate({
@@ -115,8 +150,9 @@ export async function getSellerTransactionsData({ page, limit, skip }) {
   };
 }
 
-export async function getDeliveryWithdrawalsData({ page, limit, skip }) {
+export async function getDeliveryWithdrawalsData({ page, limit, skip, search }) {
   const query = { userModel: "Delivery", type: "Withdrawal" };
+  await applyTransactionSearch(query, search, "Delivery");
 
   const [transactions, total] = await Promise.all([
     Transaction.find(query)

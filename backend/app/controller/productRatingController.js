@@ -4,6 +4,8 @@ import Order from "../models/order.js";
 import Product from "../models/product.js";
 import handleResponse from "../utils/helper.js";
 import getPagination from "../utils/pagination.js";
+import User from "../models/customer.js";
+import { escapeRegex } from "../utils/regex.js";
 import { WORKFLOW_STATUS } from "../constants/orderWorkflow.js";
 import {
   RATING_STATUSES,
@@ -454,11 +456,23 @@ export const getAdminProductRatings = async (req, res) => {
       query.rating = Number(rating);
     }
 
-    if (search) {
+    const term = String(search || "").trim();
+    if (term) {
+      const regex = new RegExp(escapeRegex(term), "i");
+      const [customers, products, orders] = await Promise.all([
+        User.find({ $or: [{ name: regex }, { email: regex }, { phone: regex }] })
+          .select("_id").limit(500).lean(),
+        Product.find({ name: regex }).select("_id").limit(500).lean(),
+        Order.find({ orderId: regex }).select("_id").limit(500).lean(),
+      ]);
       query.$or = [
-        { comment: { $regex: search, $options: "i" } },
-        { flagReason: { $regex: search, $options: "i" } },
+        { comment: regex },
+        { flagReason: regex },
+        { feedbackTags: regex },
       ];
+      if (customers.length) query.$or.push({ customerId: { $in: customers.map((c) => c._id) } });
+      if (products.length) query.$or.push({ productId: { $in: products.map((p) => p._id) } });
+      if (orders.length) query.$or.push({ orderId: { $in: orders.map((o) => o._id) } });
     }
 
     const [items, total] = await Promise.all([

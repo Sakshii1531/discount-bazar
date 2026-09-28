@@ -2,10 +2,20 @@ import mongoose from "mongoose";
 import User from "../../models/customer.js";
 import Order from "../../models/order.js";
 import { normalizePhoneNumber } from "../../utils/phone.js";
+import { escapeRegex } from "../../utils/regex.js";
 
-export async function getUsersData({ page, limit, skip }) {
+export async function getUsersData({ page, limit, skip, search = "", status = "" }) {
+  const match = { role: "user" };
+  const term = String(search || "").trim();
+  if (term) {
+    const regex = new RegExp(escapeRegex(term), "i");
+    match.$or = [{ name: regex }, { email: regex }, { phone: regex }];
+  }
+  if (status === "active") match.isActive = { $ne: false };
+  if (status === "inactive") match.isActive = false;
+
   const pipeline = [
-    { $match: { role: "user" } },
+    { $match: match },
     {
       $lookup: {
         from: "orders",

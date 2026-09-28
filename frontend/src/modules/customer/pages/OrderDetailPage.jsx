@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatCurrencyInteger } from "@shared/utils/currency";
+import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import InvoiceModal from "../components/order/InvoiceModal";
 import HelpModal from "../components/order/HelpModal";
 import DeliveryRatingModal from "../components/order/DeliveryRatingModal";
@@ -900,7 +900,7 @@ const OrderDetailPage = () => {
           amount: paymentData.amount,
           currency: paymentData.currency || "INR",
           name: "Discount Bazar",
-          description: `Order #${order.orderId.slice(-8)}`,
+          description: `Order #${order.orderId}`,
           order_id: paymentData.razorpayOrderId,
           prefill: {
             name: order.address?.name || "",
@@ -996,7 +996,7 @@ const OrderDetailPage = () => {
         </button>
         <div className="flex-1 text-center">
           <h1 className="text-base font-bold text-slate-800">Order</h1>
-          <p className="text-xs text-slate-500 font-medium">#{order.orderId.slice(-8)}</p>
+          <p className="text-xs text-slate-500 font-medium">#{order.orderId}</p>
         </div>
         <div className="w-10" />
       </div>
@@ -1352,7 +1352,7 @@ const OrderDetailPage = () => {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="font-bold text-slate-900">
-                        ₹{item.price * item.quantity}
+                        ₹{formatAmount(item.price * item.quantity)}
                       </p>
                     </div>
                   </div>
@@ -1601,7 +1601,7 @@ const OrderDetailPage = () => {
                   <div className="bg-brand-50 p-4 rounded-2xl border border-brand-100">
                     <p className="text-xs font-bold text-brand-800 uppercase tracking-wider mb-1">Refund Successful</p>
                     <p className="text-sm text-brand-700 font-medium">
-                      ₹{returnDetails.returnRefundAmount} has been credited to your {order.paymentMethod === 'cod' ? 'hand (Cash)' : 'wallet'}.
+                      ₹{formatAmount(returnDetails.returnRefundAmount)} has been credited to your {order.paymentMethod === 'cod' ? 'hand (Cash)' : 'wallet'}.
                     </p>
                   </div>
                 )}
@@ -1656,7 +1656,7 @@ const OrderDetailPage = () => {
                         {item.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Qty: {item.quantity} • ₹{item.price * item.quantity}
+                        Qty: {item.quantity} • ₹{formatAmount(item.price * item.quantity)}
                       </p>
                     </div>
                   </label>

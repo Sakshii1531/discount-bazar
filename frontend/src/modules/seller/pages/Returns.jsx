@@ -19,6 +19,7 @@ import { Loader2, X } from "lucide-react";
 import { onReturnDropOtp, onSellerReturnRequested } from "@core/services/orderSocket";
 import { createSocketTokenReader } from "@core/utils/authStorage";
 import { STORAGE_KEYS } from "@core/utils/storage";
+import { formatAmount } from "@shared/utils/currency";
 
 const toSafeArray = (val) => {
     if (Array.isArray(val)) return val;
@@ -721,7 +722,7 @@ const Returns = () => {
                                                         </p>
                                                     </div>
                                                     <p className="text-xs font-black text-slate-900">
-                                                        ₹{(Number(item.price) || 0) * (Number(item.quantity) || 1)}
+                                                        ₹{formatAmount((Number(item.price) || 0) * (Number(item.quantity) || 1))}
                                                     </p>
                                                 </div>
                                             ));

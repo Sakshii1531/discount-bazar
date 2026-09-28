@@ -41,6 +41,7 @@ const FleetTrackingTable = () => {
       const response = await adminApi.getActiveFleet({
         page: requestedPage,
         limit: pageSize,
+        search: searchTerm.trim() || undefined,
       });
       const payload = response.data.result || {};
       const data = Array.isArray(payload.items)
@@ -58,20 +59,25 @@ const FleetTrackingTable = () => {
   };
 
   useEffect(() => {
-    fetchFleet(1);
+    const timer = setTimeout(() => {
+      fetchFleet(1);
+    }, 400);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageSize]);
+  }, [pageSize, searchTerm]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchFleet(page), 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, searchTerm]);
 
+  const fleetQuery = searchTerm.toLowerCase().trim();
   const filteredFleet = fleet.filter(
     (item) =>
-      item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.deliveryBoy.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      String(item.id || "").toLowerCase().includes(fleetQuery) ||
+      String(item.deliveryBoy?.name || "").toLowerCase().includes(fleetQuery) ||
+      String(item.deliveryBoy?.phone || "").toLowerCase().includes(fleetQuery),
   );
 
   return (

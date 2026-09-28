@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { businessApi } from "../services/businessApi";
 import { posApi } from "../services/posApi";
 import { sellerApi } from "../services/sellerApi";
+import { formatPriceInteger } from "@shared/utils/currency";
 import {
     HiOutlineSquares2X2,
     HiOutlineShoppingBag,
@@ -46,7 +47,9 @@ const REPORTS = [
 // Store timezone (loaded from settings); business days follow it, not the browser.
 let storeTz = "Asia/Kolkata";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: storeTz }).format(new Date());
-const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+// Amounts/totals are rounded up to the whole rupee (same as checkout); unit rates stay exact.
+const inr = (n) => `${Number(n || 0) < 0 ? "-" : ""}₹${Math.abs(formatPriceInteger(n)).toLocaleString("en-IN")}`;
+const inrExact = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const unwrap = (res) => res?.data?.results ?? res?.data?.result ?? res?.data?.data;
 const errMsg = (e) => e?.response?.data?.message || e?.message || "Something went wrong";
 
@@ -57,7 +60,10 @@ const ghostBtn = "px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bo
 const fmtCell = (k, v) => {
     if (v == null || v === "") return "—";
     if (/date|At$/.test(k) && !Number.isNaN(Date.parse(v))) return new Date(v).toLocaleDateString("en-IN");
-    if (typeof v === "number") return /count|units|stock|days|lowStockAlert/i.test(k) ? v : inr(v);
+    if (typeof v === "number") {
+        if (/count|units|stock|days|lowStockAlert/i.test(k)) return v;
+        return /(cost|price|rate|mrp)$/i.test(k) ? inrExact(v) : inr(v);
+    }
     if (typeof v === "object") return v.name || JSON.stringify(v);
     return String(v);
 };
@@ -608,6 +614,8 @@ const DashboardTab = ({ onNavigateTab }) => {
 const emptyLine = { productId: "", variantSku: "", quantity: 1, cost: "", gstPercent: 0 };
 
 const PurchasesTab = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [suppliers, setSuppliers] = useState([]);
     const [products, setProducts] = useState([]);
     const [bills, setBills] = useState([]);
@@ -621,6 +629,10 @@ const PurchasesTab = () => {
     const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
     const [targetLineIndex, setTargetLineIndex] = useState(null);
     const [quickBusy, setQuickBusy] = useState(false);
+    const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+    const [supplierForm, setSupplierForm] = useState({ name: "", phone: "" });
+    const [supplierBusy, setSupplierBusy] = useState(false);
+    const hasSupplier = Boolean(form.supplierId);
     const [quickProd, setQuickProd] = useState({
         name: "",
         header: "",
@@ -641,32 +653,99 @@ const PurchasesTab = () => {
         return `${prefix}-${String(index).padStart(3, "0")}`;
     };
 
+    // Restore draft if returning from Add Product page
+    useEffect(() => {
+        try {
+            const rawDraft = sessionStorage.getItem("seller_purchases_draft");
+            if (rawDraft) {
+                const parsed = JSON.parse(rawDraft);
+                if (parsed.form) setForm((f) => ({ ...f, ...parsed.form }));
+                if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
+                    setLines(parsed.lines);
+                }
+                if (parsed.targetLineIndex !== undefined && parsed.targetLineIndex !== null) {
+                    setTargetLineIndex(parsed.targetLineIndex);
+                }
+                sessionStorage.removeItem("seller_purchases_draft");
+            }
+        } catch (e) {}
+    }, []);
+
     const load = useCallback(() => {
         businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
         businessApi.listSuppliers().then((r) => setSuppliers(unwrap(r) || []));
     }, []);
     useEffect(() => {
         load();
-        posApi.getCatalog({}).then((r) => setProducts(unwrap(r) || []));
+        posApi.getCatalog({}).then((r) => {
+            const list = unwrap(r) || [];
+            setProducts(list);
+            const createdId = location.state?.createdProductId;
+            if (createdId) {
+                const targetIdx = location.state?.targetLineIndex;
+                setLines((prevLines) => {
+                    const idx = targetIdx !== undefined && targetIdx !== null && targetIdx < prevLines.length
+                        ? targetIdx
+                        : 0;
+                    return prevLines.map((line, i) => i === idx ? { ...line, productId: createdId } : line);
+                });
+            }
+        });
         sellerApi.getCategoryTree().then((r) => {
             const cats = r.data?.results || r.data?.result || [];
             setDbCategories(cats);
         }).catch(() => {});
-    }, [load]);
+    }, [load, location.state]);
+
+    const openAddSupplier = () => {
+        setSupplierForm({ name: "", phone: "" });
+        setIsSupplierModalOpen(true);
+    };
+
+    const handleCreateSupplier = async (e) => {
+        e?.preventDefault();
+        const name = capitalizeWords(supplierForm.name.trim());
+        const phone = supplierForm.phone.trim();
+        const phoneDigits = phone.replace(/\D/g, "");
+        if (name.length < 2) {
+            toast.error("Please enter a valid name (at least 2 characters)");
+            return;
+        }
+        if (/^\d+$/.test(name)) {
+            toast.error("Name cannot contain only numbers");
+            return;
+        }
+        if (phone && (phoneDigits.length < 10 || phoneDigits.length > 13)) {
+            toast.error("Please enter a valid 10-digit phone number or leave it blank");
+            return;
+        }
+        setSupplierBusy(true);
+        try {
+            const res = await businessApi.saveSupplier({ name, phone });
+            const created = unwrap(res);
+            const list = unwrap(await businessApi.listSuppliers()) || [];
+            setSuppliers(list);
+            const createdId = created?._id || list.find((x) => x.name === name)?._id;
+            if (createdId) setForm((f) => ({ ...f, supplierId: createdId }));
+            toast.success("Supplier added and selected");
+            setIsSupplierModalOpen(false);
+        } catch (err) {
+            toast.error(errMsg(err));
+        } finally {
+            setSupplierBusy(false);
+        }
+    };
 
     const openQuickAddProduct = (lineIdx = null) => {
-        setTargetLineIndex(lineIdx);
-        setQuickProd({
-            name: "",
-            header: "",
-            category: "",
-            subcategory: "",
-            price: "",
-            variantName: "Standard",
-            sku: "",
-            barcode: "",
+        try {
+            sessionStorage.setItem(
+                "seller_purchases_draft",
+                JSON.stringify({ form, lines, targetLineIndex: lineIdx })
+            );
+        } catch (e) {}
+        navigate("/seller/products/add?returnTo=/seller/business/purchases", {
+            state: { returnTo: "/seller/business/purchases", targetLineIndex: lineIdx }
         });
-        setIsQuickProductOpen(true);
     };
 
     const handleCreateQuickProduct = async (e) => {
@@ -829,10 +908,21 @@ const PurchasesTab = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Select Supplier *</label>
-                        <select className={inputCls} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
-                            <option value="">— Choose supplier —</option>
-                            {suppliers.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
-                        </select>
+                        <div className="flex items-center gap-1.5">
+                            <select className={inputCls} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
+                                <option value="">— Choose supplier —</option>
+                                {suppliers.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={openAddSupplier}
+                                className="shrink-0 px-2.5 py-2.5 rounded-xl border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                title="Add new supplier"
+                            >
+                                <HiOutlineUserPlus className="h-3.5 w-3.5" />
+                                <span className="hidden xl:inline text-xs">New</span>
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Bill / Invoice No.</label>
@@ -855,6 +945,15 @@ const PurchasesTab = () => {
                         <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">Purchase Items & Stock Inward</p>
                         <p className="text-[11px] text-slate-500 font-medium">Enter incoming stock quantity and purchase cost received from supplier</p>
                     </div>
+
+                    {!hasSupplier && (
+                        <div className="p-3 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-start gap-2">
+                            <HiOutlineExclamationTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                                Select a supplier first (or add a new one) to add or select products for this bill.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Column Headers for clarity */}
                     <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
@@ -883,15 +982,21 @@ const PurchasesTab = () => {
                                         </button>
                                     </div>
                                     <div className="flex items-center gap-1.5">
-                                        <select className={inputCls} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })}>
-                                            <option value="">— Select product —</option>
+                                        <select
+                                            className={cn(inputCls, !hasSupplier && "bg-slate-100 text-slate-400 cursor-not-allowed")}
+                                            disabled={!hasSupplier}
+                                            title={!hasSupplier ? "Select a supplier first" : undefined}
+                                            value={l.productId}
+                                            onChange={(e) => setLine(i, { productId: e.target.value })}
+                                        >
+                                            <option value="">{hasSupplier ? "— Select product —" : "— Select supplier first —"}</option>
                                             {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
                                         </select>
                                         <button
                                             type="button"
                                             onClick={() => openQuickAddProduct(i)}
                                             className="shrink-0 px-2.5 py-2.5 rounded-xl border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                                            title="Create new product"
+                                            title="Add new product"
                                         >
                                             <HiOutlinePlus className="h-3.5 w-3.5" />
                                             <span className="hidden xl:inline text-xs">New</span>
@@ -901,7 +1006,7 @@ const PurchasesTab = () => {
                                 <div className="col-span-2 md:col-span-1">
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Variant / Unit</label>
                                     {hasVariants ? (
-                                        <select className={inputCls} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
+                                        <select className={inputCls} disabled={!hasSupplier} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
                                             <option value="">— Choose variant —</option>
                                             {prod.variants.map((v) => <option key={v.sku} value={v.sku}>{v.name || v.sku}</option>)}
                                         </select>
@@ -934,15 +1039,16 @@ const PurchasesTab = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button type="button" className={ghostBtn} onClick={() => setLines((ls) => [...ls, { ...emptyLine }])}>
+                    <button type="button" className={`${ghostBtn} disabled:opacity-40 disabled:pointer-events-none`} disabled={!hasSupplier} title={!hasSupplier ? "Select a supplier first" : undefined} onClick={() => setLines((ls) => [...ls, { ...emptyLine }])}>
                         <HiOutlinePlus className="h-4 w-4" /> Add Line Item
                     </button>
                     <button
                         type="button"
+                        title="Add new product"
                         className="px-3 py-1.5 rounded-xl border border-primary/30 text-xs font-bold text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
                         onClick={() => openQuickAddProduct(null)}
                     >
-                        <HiOutlinePlus className="h-4 w-4" /> Create New Product
+                        <HiOutlinePlus className="h-4 w-4" /> Add New Product
                     </button>
                     <div className="ml-auto text-right">
                         <span className="text-xs text-slate-500 font-medium mr-2">Total (incl. GST):</span>
@@ -1160,7 +1266,7 @@ const PurchasesTab = () => {
                                                     {item.variantSku ? <span className="text-[11px] font-normal text-slate-500 block">Variant/SKU: {item.variantSku}</span> : null}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-center font-bold text-slate-800">{item.quantity}</td>
-                                                <td className="py-2.5 px-3 text-right">{inr(item.cost)}</td>
+                                                <td className="py-2.5 px-3 text-right">{inrExact(item.cost)}</td>
                                                 <td className="py-2.5 px-3 text-center text-slate-500">{item.gstPercent || 0}%</td>
                                                 <td className="py-2.5 px-3 text-right font-bold text-slate-900">
                                                     {inr(item.lineTotal || (item.quantity * item.cost * (1 + (item.gstPercent || 0) / 100)))}
@@ -1423,6 +1529,79 @@ const PurchasesTab = () => {
                     </div>
                 </div>
             )}
+
+            {isSupplierModalOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                    <HiOutlineUserPlus className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900">Add New Supplier</h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">Create a supplier & select it for this purchase bill</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !supplierBusy && setIsSupplierModalOpen(false)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            >
+                                <HiOutlineXMark className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateSupplier} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Supplier Name <span className="text-rose-500">*</span></label>
+                                <input
+                                    autoFocus
+                                    autoCapitalize="words"
+                                    className={`${inputCls} capitalize`}
+                                    placeholder="e.g. Mahavir Textiles"
+                                    maxLength={100}
+                                    value={supplierForm.name}
+                                    onChange={(e) => setSupplierForm({ ...supplierForm, name: capitalizeWords(e.target.value) })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Phone Number <span className="text-slate-400 font-normal">(Optional, 10 Digits)</span>
+                                </label>
+                                <input
+                                    type="tel"
+                                    inputMode="numeric"
+                                    className={inputCls}
+                                    placeholder="e.g. 9876543210"
+                                    maxLength={15}
+                                    value={supplierForm.phone}
+                                    onChange={(e) => {
+                                        let val = e.target.value.replace(/[^\d+]/g, "");
+                                        if (val.indexOf("+") > 0) val = val.replace(/\+/g, "");
+                                        setSupplierForm({ ...supplierForm, phone: val.slice(0, 15) });
+                                    }}
+                                />
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                                <button type="button" disabled={supplierBusy} onClick={() => setIsSupplierModalOpen(false)} className={ghostBtn}>
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={supplierBusy || supplierForm.name.trim().length < 2} className={btnCls}>
+                                    {supplierBusy ? (
+                                        <>
+                                            <HiOutlineArrowPath className="h-4 w-4 animate-spin" /> Adding...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <HiOutlineUserPlus className="h-4 w-4" /> Add & Select Supplier
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1453,6 +1632,20 @@ const PartiesTab = () => {
         setForm({ name: "", phone: "" });
         setTouched({ name: false, phone: false });
     }, [load]);
+
+    useEffect(() => {
+        if (ledger) {
+            document.body.style.overflow = "hidden";
+            document.documentElement.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+            document.documentElement.style.overflow = "";
+        }
+        return () => {
+            document.body.style.overflow = "";
+            document.documentElement.style.overflow = "";
+        };
+    }, [ledger]);
 
     // Validation computations
     const nameTrimmed = form.name.trim();
@@ -1788,76 +1981,85 @@ const PartiesTab = () => {
                 )}
             </div>
 
-            {/* Ledger Statement Drawer / Modal */}
+            {/* Ledger Statement Modal Card */}
             {ledger && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-base font-black text-slate-900">{ledger.party.name}</h3>
-                                <span className="text-xs text-slate-500 font-medium">({kind === "suppliers" ? "Supplier" : "Customer"})</span>
-                            </div>
-                            <p className="text-xs text-slate-500">
-                                {ledger.party.phone ? `Phone: ${ledger.party.phone}` : "No phone provided"}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="text-right">
-                                <p className="text-[10px] uppercase font-bold text-slate-400">Current Balance</p>
-                                <p className={cn(
-                                    "text-lg font-black",
-                                    ledger.balance > 0 ? (kind === "suppliers" ? "text-rose-600" : "text-amber-600") : "text-emerald-600"
-                                )}>
-                                    {inr(ledger.balance)}
+                <div
+                    className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+                    onClick={(e) => { if (e.target === e.currentTarget) setLedger(null); }}
+                >
+                    <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-base font-black text-slate-900">{ledger.party.name}</h3>
+                                    <span className="text-xs text-slate-500 font-medium">({kind === "suppliers" ? "Supplier Ledger" : "Customer Ledger"})</span>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {ledger.party.phone ? `Phone: ${ledger.party.phone}` : "No phone provided"}
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setLedger(null)}
-                                className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer transition-colors"
-                            >
-                                <HiOutlineXMark className="h-5 w-5" />
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">Current Balance</p>
+                                    <p className={cn(
+                                        "text-lg font-black",
+                                        ledger.balance > 0 ? (kind === "suppliers" ? "text-rose-600" : "text-amber-600") : "text-emerald-600"
+                                    )}>
+                                        {inr(ledger.balance)}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setLedger(null)}
+                                    className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer transition-colors"
+                                >
+                                    <HiOutlineXMark className="h-5 w-5" />
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Record Payment Sub-Card */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2.5">
-                        <p className="text-xs font-bold text-slate-800">
-                            Record Payment {kind === "suppliers" ? "Made to Supplier" : "Received from Customer"}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
-                            <input
-                                className={inputCls}
-                                type="number"
-                                min="0"
-                                placeholder={kind === "suppliers" ? "Amount paid (₹)" : "Amount received (₹)"}
-                                value={pay.amount}
-                                onChange={(e) => setPay({ ...pay, amount: e.target.value })}
-                            />
-                            <select className={inputCls} value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })}>
-                                {["CASH", "UPI", "CARD", "OTHER"].map((m) => <option key={m}>{m}</option>)}
-                            </select>
-                            <button className={btnCls} disabled={!Number(pay.amount)} onClick={pay1}>
-                                Save Payment
-                            </button>
+                        {/* Modal Body */}
+                        <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                            {/* Record Payment Sub-Card */}
+                            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2.5">
+                                <p className="text-xs font-bold text-slate-800">
+                                    Record Payment {kind === "suppliers" ? "Made to Supplier" : "Received from Customer"}
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                                    <input
+                                        className={inputCls}
+                                        type="number"
+                                        min="0"
+                                        placeholder={kind === "suppliers" ? "Amount paid (₹)" : "Amount received (₹)"}
+                                        value={pay.amount}
+                                        onChange={(e) => setPay({ ...pay, amount: e.target.value })}
+                                    />
+                                    <select className={inputCls} value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })}>
+                                        {["CASH", "UPI", "CARD", "OTHER"].map((m) => <option key={m}>{m}</option>)}
+                                    </select>
+                                    <button className={btnCls} disabled={!Number(pay.amount)} onClick={pay1}>
+                                        Save Payment
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Statement Table */}
+                            <div className="space-y-2">
+                                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
+                                <Table
+                                    rows={ledger.entries.map((e) => ({
+                                        date: e.date,
+                                        kind: e.kind,
+                                        refNo: e.refNo || "—",
+                                        method: e.method || "—",
+                                        debit: e.effect === 1 ? inr(e.amount) : "—",
+                                        credit: e.effect === -1 ? inr(e.amount) : "—",
+                                        balance: inr(e.balance),
+                                    }))}
+                                />
+                            </div>
                         </div>
-                    </div>
-
-                    {/* Statement Table */}
-                    <div className="space-y-2">
-                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
-                        <Table
-                            rows={ledger.entries.map((e) => ({
-                                date: e.date,
-                                kind: e.kind,
-                                refNo: e.refNo || "—",
-                                method: e.method || "—",
-                                debit: e.effect === 1 ? inr(e.amount) : "—",
-                                credit: e.effect === -1 ? inr(e.amount) : "—",
-                                balance: inr(e.balance),
-                            }))}
-                        />
                     </div>
                 </div>
             )}
@@ -2012,21 +2214,192 @@ const ReportsTab = () => {
     );
 };
 
+/* ---------- Account (payments made / received) ---------- */
+const ACCOUNT_VIEWS = [
+    { key: "payments", label: "Payment", hint: "Money you paid out — suppliers, refunds, expenses, cash out", icon: HiOutlineArrowUpRight },
+    { key: "received", label: "Received", hint: "Money you received — sales, online orders, customer payments, cash in", icon: HiOutlineArrowDownLeft },
+];
+const monthStart = () => `${today().slice(0, 8)}01`;
+
+const AccountTab = ({ view }) => {
+    const [from, setFrom] = useState(monthStart());
+    const [to, setTo] = useState(today());
+    const [searchTerm, setSearchTerm] = useState("");
+    const [typeFilter, setTypeFilter] = useState("all");
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        setLoading(true);
+        businessApi.accounts(view, { from, to })
+            .then((r) => { if (active) setData(unwrap(r)); })
+            .catch((e) => { if (active) { setData(null); toast.error(errMsg(e)); } })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [view, from, to]);
+
+    useEffect(() => { setTypeFilter("all"); }, [view]);
+
+    const rows = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
+        return (data?.rows || []).filter((r) => {
+            if (typeFilter !== "all" && r.type !== typeFilter) return false;
+            if (!q) return true;
+            return [r.type, r.party, r.reference, r.method, r.note, String(r.amount)]
+                .some((v) => String(v || "").toLowerCase().includes(q));
+        });
+    }, [data, searchTerm, typeFilter]);
+
+    const filteredTotal = useMemo(() => rows.reduce((s, r) => s + formatPriceInteger(r.amount), 0), [rows]);
+    const roundedTotals = useMemo(() => {
+        const byType = {};
+        let amount = 0;
+        for (const r of data?.rows || []) {
+            const v = formatPriceInteger(r.amount);
+            byType[r.type] = (byType[r.type] || 0) + v;
+            amount += v;
+        }
+        return { amount, byType };
+    }, [data]);
+    const isPayments = view === "payments";
+    const active = ACCOUNT_VIEWS.find((v) => v.key === view);
+
+    return (
+        <div className="space-y-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                            "h-9 w-9 rounded-xl flex items-center justify-center font-bold",
+                            isPayments ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                        )}>
+                            <active.icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-black text-slate-900">{isPayments ? "Payments Made" : "Payments Received"}</h3>
+                            <p className="text-xs text-slate-500">{active.hint}</p>
+                        </div>
+                    </div>
+                    <div className="text-left lg:text-right">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{isPayments ? "Total Paid" : "Total Received"}</p>
+                        <p className={cn("text-xl font-black", isPayments ? "text-rose-600" : "text-emerald-600")}>{inr(roundedTotals.amount)}</p>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-center">
+                    <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
+                        <span>From:</span>
+                        <input type="date" className={`${inputCls} max-w-[150px]`} value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
+                        <span>To:</span>
+                        <input type="date" className={`${inputCls} max-w-[150px]`} value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+                    </div>
+                    <select className={`${inputCls} max-w-[200px]`} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                        <option value="all">All types</option>
+                        {Object.keys(data?.totals?.byType || {}).map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <div className="relative flex-1 min-w-[200px]">
+                        <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                            className={`${inputCls} pl-10`}
+                            placeholder="Search by party, reference, method or note..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                {Object.keys(roundedTotals.byType).length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                        {Object.entries(roundedTotals.byType).map(([k, v]) => (
+                            <span key={k} className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-700">
+                                {k}: <span className="text-primary font-black">{inr(v)}</span>
+                            </span>
+                        ))}
+                    </div>
+                )}
+
+                {loading && !data ? (
+                    <div className="py-8 text-center text-sm text-slate-400">Loading transactions…</div>
+                ) : rows.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-slate-400">
+                        {isPayments ? "No payments made in this period." : "No payments received in this period."}
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                        <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                <tr>
+                                    <th className="px-3 py-2.5 text-left">Date</th>
+                                    <th className="px-3 py-2.5 text-left">Type</th>
+                                    <th className="px-3 py-2.5 text-left">{isPayments ? "Paid To" : "Received From"}</th>
+                                    <th className="px-3 py-2.5 text-left">Reference</th>
+                                    <th className="px-3 py-2.5 text-left">Method</th>
+                                    <th className="px-3 py-2.5 text-left">Note</th>
+                                    <th className="px-3 py-2.5 text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {rows.map((r) => (
+                                    <tr key={`${r.type}-${r.id}`} className="hover:bg-slate-50/70">
+                                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
+                                            {new Date(r.date).toLocaleString("en-IN", { timeZone: storeTz, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                        </td>
+                                        <td className="px-3 py-2.5 whitespace-nowrap font-bold text-slate-800">{r.type}</td>
+                                        <td className="px-3 py-2.5 text-slate-700">{r.party || "—"}</td>
+                                        <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{r.reference || "—"}</td>
+                                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{r.method || "—"}</td>
+                                        <td className="px-3 py-2.5 text-slate-500 max-w-[240px] truncate" title={r.note}>{r.note || "—"}</td>
+                                        <td className={cn("px-3 py-2.5 text-right font-black whitespace-nowrap", isPayments ? "text-rose-600" : "text-emerald-600")}>
+                                            {isPayments ? "− " : "+ "}{inr(r.amount)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="bg-slate-50">
+                                <tr>
+                                    <td colSpan={6} className="px-3 py-2.5 text-xs font-bold text-slate-600">
+                                        {rows.length} transaction{rows.length === 1 ? "" : "s"}
+                                    </td>
+                                    <td className={cn("px-3 py-2.5 text-right font-black", isPayments ? "text-rose-600" : "text-emerald-600")}>
+                                        {inr(filteredTotal)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // URL section (/seller/business/:section) <-> internal tab key
-const SECTION_TO_TAB = { purchases: "purchases", ledgers: "parties", cash: "cash", reports: "reports" };
+const SECTION_TO_TAB = { purchases: "purchases", ledgers: "parties", cash: "cash", reports: "reports", account: "account" };
 const TAB_TO_PATH = {
     dashboard: "/seller/business",
     purchases: "/seller/business/purchases",
     parties: "/seller/business/ledgers",
     cash: "/seller/business/cash",
     reports: "/seller/business/reports",
+    account: "/seller/business/account/payment",
 };
 
+// Account sub-pages: /seller/business/account/payment | /received (sidebar sub-links)
+const ACCOUNT_PATH_TO_VIEW = { payment: "payments", received: "received" };
+
 const Business = () => {
-    const { section } = useParams();
+    const { section, view } = useParams();
     const navigate = useNavigate();
     const tab = SECTION_TO_TAB[section] || "dashboard";
     const setTab = (k) => navigate(TAB_TO_PATH[k] || TAB_TO_PATH.dashboard);
+    const accountView = ACCOUNT_PATH_TO_VIEW[view];
+
+    useEffect(() => {
+        if (tab === "account" && !accountView) navigate("/seller/business/account/payment", { replace: true });
+    }, [tab, accountView, navigate]);
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-10">
             {/* Page Header */}
@@ -2043,6 +2416,7 @@ const Business = () => {
             {tab === "parties" && <PartiesTab />}
             {tab === "cash" && <CashTab />}
             {tab === "reports" && <ReportsTab />}
+            {tab === "account" && accountView && <AccountTab key={accountView} view={accountView} />}
         </div>
     );
 };

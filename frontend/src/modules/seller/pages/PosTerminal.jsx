@@ -18,6 +18,7 @@ import {
     SalesHistory,
     OnlineOrdersPanel,
 } from "../components/pos";
+import { formatAmount } from "@shared/utils/currency";
 
 const PACKING_WORKFLOW_STATUSES = [
     "SELLER_PENDING",
@@ -153,7 +154,8 @@ const PosTerminal = () => {
         return products.filter(
             (p) =>
                 String(p.name || "").toLowerCase().includes(term) ||
-                String(p.sku || "").toLowerCase().includes(term),
+                String(p.sku || "").toLowerCase().includes(term) ||
+                String(p.barcode || "").toLowerCase().includes(term),
         );
     }, [products, searchTerm]);
 
@@ -533,7 +535,7 @@ const PosTerminal = () => {
                             <div key={bill.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-bold text-slate-900">
-                                        ₹{Number(bill.total || 0).toLocaleString("en-IN")} ·{" "}
+                                        ₹{formatAmount(bill.total)} ·{" "}
                                         {(bill.cart || []).length} item(s)
                                     </p>
                                     <p className="text-[11px] text-slate-500 truncate">

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Card from '@shared/components/ui/Card';
 import Button from '@shared/components/ui/Button';
 import Badge from '@shared/components/ui/Badge';
-import { formatCurrencyInteger } from "@shared/utils/currency";
+import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import Input from '@shared/components/ui/Input';
 import {
     HiOutlineMagnifyingGlass,
@@ -70,27 +70,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { getOrderStatusVariant } from '../components/orders';
 import { useSellerOrders } from '../context/SellerOrdersContext';
 
-// Helper to minimize order ID length while guaranteeing 100% uniqueness
-const formatMinOrderId = (rawId, index = 0, allOrders = []) => {
+// Show the real order ID (new IDs are already short: ORD- + 8 chars) so every order stays unique on screen.
+const formatMinOrderId = (rawId, index = 0) => {
     if (!rawId) return `ORD-${String(index + 1).padStart(4, '0')}`;
-    const str = String(rawId).trim();
-    if (str.length <= 10 && !str.toLowerCase().startsWith('ord-')) {
-        return `ORD-${str}`;
-    }
-    const cleanStr = str.replace(/^ORD-?/i, '');
-    let shortCode = cleanStr.slice(-6).toUpperCase();
-
-    if (Array.isArray(allOrders) && allOrders.length > 0) {
-        const collisions = allOrders.filter(o => {
-            const oId = String(o.orderId || o.id || o._id || '').replace(/^ORD-?/i, '');
-            return oId.slice(-6).toUpperCase() === shortCode;
-        });
-        if (collisions.length > 1) {
-            shortCode = cleanStr.slice(-8).toUpperCase();
-        }
-    }
-
-    return `ORD-${shortCode}`;
+    return String(rawId).trim();
 };
 
 // Strict status progression hierarchy - sellers only manage acceptance & packaging
@@ -190,6 +173,21 @@ const Orders = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, startDate, endDate]);
 
+    // Search runs on the server so it covers every page, not just the one loaded
+    const searchMountedRef = useRef(false);
+    useEffect(() => {
+        if (!searchMountedRef.current) {
+            searchMountedRef.current = true;
+            return undefined;
+        }
+        const timer = setTimeout(() => {
+            if (page !== 1) setPage(1);
+            else fetchOrders(1, false);
+        }, 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchTerm]);
+
     // Real-time updates: when global context detects new orders, refresh current page silently
     useEffect(() => {
         if (!hasMountedRef.current) return;
@@ -205,6 +203,9 @@ const Orders = () => {
             const params = { page: requestedPage };
             if (startDate) params.startDate = startDate;
             if (endDate) params.endDate = endDate;
+            // Short IDs are shown as "ORD-" + the last 6 chars, so match on the part after the prefix
+            const serverSearch = (searchTerm || '').trim().replace(/^ORD-?/i, '');
+            if (serverSearch) params.search = serverSearch;
 
             const response = await sellerApi.getOrders(params);
 
@@ -231,6 +232,9 @@ const Orders = () => {
                     id: order.orderId || order._id,
                     displayId: shortId,
                     _id: order._id,
+                    walkInCustomer: order.walkInCustomer || null,
+                    addressName: order.address?.name || '',
+                    addressPhone: order.address?.phone || '',
                     customer: {
                         name: order.customer?.name || 'Unknown',
                         phone: order.customer?.phone || '',
@@ -321,10 +325,16 @@ const Orders = () => {
             const orderIdStr = String(order.id || '').toLowerCase();
             const displayIdStr = String(order.displayId || '').toLowerCase();
             const customerNameStr = String(order.customer?.name || '').toLowerCase();
+            const customerPhoneStr = String(order.customer?.phone || '').toLowerCase();
+            const walkInStr = `${order.walkInCustomer?.name || ''} ${order.walkInCustomer?.phone || ''} ${order.addressName || ''} ${order.addressPhone || ''}`.toLowerCase();
+            const queryNoPrefix = query.replace(/^ord-?/, '');
             const matchesSearch = !query ||
                 orderIdStr.includes(query) ||
                 displayIdStr.includes(query) ||
-                customerNameStr.includes(query);
+                (queryNoPrefix && orderIdStr.includes(queryNoPrefix)) ||
+                customerNameStr.includes(query) ||
+                customerPhoneStr.includes(query) ||
+                walkInStr.includes(query);
             const orderStatus = String(order.status || '').toLowerCase();
             const matchesTab = activeTab === 'All'
                 ? true
@@ -762,7 +772,7 @@ const Orders = () => {
                                                         </div>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <p className="text-lg font-black text-slate-900 leading-tight">₹{order.total.toLocaleString('en-IN')}</p>
+                                                        <p className="text-lg font-black text-slate-900 leading-tight">₹{formatAmount(order.total)}</p>
                                                         <div className="flex items-center justify-end gap-1.5 mt-1">
                                                             <span className="text-[10px] font-bold text-slate-500">
                                                                 {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
@@ -798,7 +808,7 @@ const Orders = () => {
                                                         {order.discount > 0 && (
                                                             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[10px] font-bold text-emerald-600">
                                                                 <span>Coupon Discount {order.couponCode ? `(${order.couponCode})` : ''}</span>
-                                                                <span>-₹{order.discount}</span>
+                                                                <span>-₹{formatAmount(order.discount)}</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -920,10 +930,10 @@ const Orders = () => {
                                                     </td>
                                                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                                                         <div className="flex flex-col">
-                                                            <span className="text-xs font-bold text-slate-900">₹{order.total.toLocaleString()}</span>
+                                                            <span className="text-xs font-bold text-slate-900">₹{formatAmount(order.total)}</span>
                                                             {order.discount > 0 && (
                                                                 <span className="text-[10px] font-bold text-emerald-600">
-                                                                    Coupon: -₹{order.discount} {order.couponCode ? `(${order.couponCode})` : ''}
+                                                                    Coupon: -₹{formatAmount(order.discount)} {order.couponCode ? `(${order.couponCode})` : ''}
                                                                 </span>
                                                             )}
                                                             <span className="text-xs font-semibold text-slate-600">{order.items.length} items</span>
@@ -1089,11 +1099,11 @@ const Orders = () => {
                                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
                                             <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-sm">
                                                 <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Revenue</p>
-                                                <p className="text-base sm:text-xl font-black text-slate-900 truncate">₹{Number(summary.totalAmount || 0).toLocaleString('en-IN')}</p>
+                                                <p className="text-base sm:text-xl font-black text-slate-900 truncate">₹{formatAmount(summary.totalAmount)}</p>
                                             </div>
                                             <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-sm">
                                                 <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Avg. Order Value</p>
-                                                <p className="text-base sm:text-xl font-black text-slate-900">₹{summary.totalOrders ? (summary.totalAmount / summary.totalOrders).toFixed(0) : '0'}</p>
+                                                <p className="text-base sm:text-xl font-black text-slate-900">₹{summary.totalOrders ? formatAmount(summary.totalAmount / summary.totalOrders) : '0'}</p>
                                             </div>
                                             <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-sm">
                                                 <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Orders</p>

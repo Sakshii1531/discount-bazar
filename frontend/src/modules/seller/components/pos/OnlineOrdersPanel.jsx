@@ -13,6 +13,7 @@ import {
 import Button from "@shared/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { sellerApi } from "../../services/sellerApi";
+import { formatAmount } from "@shared/utils/currency";
 
 /**
  * Clean & minimal online orders queue for POS counter.
@@ -239,7 +240,7 @@ const OnlineOrdersPanel = ({ orders = [], onChanged }) => {
                                 <div className="text-right shrink-0">
                                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount</p>
                                     <p className="text-base font-black text-slate-900">
-                                        ₹{grandTotal.toLocaleString("en-IN")}
+                                        ₹{formatAmount(grandTotal)}
                                     </p>
                                 </div>
                             </div>

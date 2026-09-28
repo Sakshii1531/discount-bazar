@@ -27,6 +27,7 @@ import { MagicCard } from '@/components/ui/magic-card';
 import { sellerApi } from '../services/sellerApi';
 import { toast } from 'sonner';
 import { invalidateCache } from '@core/api/dedupe';
+import { formatAmount } from "@shared/utils/currency";
 
 const StockManagement = () => {
     const navigate = useNavigate();
@@ -130,12 +131,12 @@ const StockManagement = () => {
         { label: 'Out of Stock', value: inventory.filter(i => i.stock === 0).length, icon: HiOutlineArchiveBoxXMark, color: 'text-rose-600', bg: 'bg-rose-50', status: 'Out of Stock' },
         {
             label: 'Stock Valuation',
-            value: `₹${inventory.reduce((acc, item) => {
+            value: `₹${formatAmount(inventory.reduce((acc, item) => {
                 const mrp = Number(item.price || item.variants?.[0]?.price || 0);
                 const sale = Number(item.salePrice !== undefined ? item.salePrice : (item.variants?.[0]?.salePrice || 0));
                 const effective = sale > 0 && sale < mrp ? sale : mrp;
                 return acc + (item.stock * effective);
-            }, 0).toLocaleString()}`,
+            }, 0))}`,
             icon: HiOutlineArrowsUpDown,
             color: 'text-brand-600',
             bg: 'bg-brand-50',
@@ -144,11 +145,18 @@ const StockManagement = () => {
     ], [inventory]);
 
     const filteredInventory = useMemo(() => {
-        const term = searchTerm.toLowerCase();
+        const term = searchTerm.trim().toLowerCase();
         return inventory.filter(item => {
+            const variants = Array.isArray(item.variants) ? item.variants : [];
             const matchesSearch =
-                item.name.toLowerCase().includes(term) ||
-                (item.sku || '').toString().toLowerCase().includes(term);
+                !term ||
+                String(item.name || '').toLowerCase().includes(term) ||
+                (item.sku || '').toString().toLowerCase().includes(term) ||
+                String(item.barcode || '').toLowerCase().includes(term) ||
+                variants.some((v) =>
+                    String(v?.sku || '').toLowerCase().includes(term) ||
+                    String(v?.barcode || '').toLowerCase().includes(term) ||
+                    String(v?.name || '').toLowerCase().includes(term));
             const matchesStatus = filterStatus === 'All' || item.status === filterStatus;
             return matchesSearch && matchesStatus;
         });

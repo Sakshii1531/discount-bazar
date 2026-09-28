@@ -15,6 +15,7 @@ import Button from "@/shared/components/ui/Button";
 import Card from "@/shared/components/ui/Card";
 import { deliveryApi } from "../services/deliveryApi";
 import { cn } from "@/lib/utils";
+import { formatPriceInteger } from "@shared/utils/currency";
 
 const RUPEE = "₹";
 const DOT = "•";
@@ -54,10 +55,7 @@ const resolveTipAmount = (txn) =>
       0,
   );
 
-const formatAmount = (val) => {
-  const num = Math.round(Number(val || 0));
-  return num.toLocaleString("en-IN");
-};
+const formatAmount = (val) => formatPriceInteger(val).toLocaleString("en-IN");
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {

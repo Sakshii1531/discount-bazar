@@ -31,6 +31,7 @@ import { useToast } from '@shared/components/ui/Toast';
 import Modal from '@shared/components/ui/Modal';
 import { motion } from 'framer-motion';
 import { exportToCSV } from '@/lib/exportUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const SellerDetail = () => {
     const { id } = useParams();
@@ -38,6 +39,7 @@ const SellerDetail = () => {
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState('orders');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [orderSearch, setOrderSearch] = useState('');
 
     // Mock Data for Seller
     const [seller, setSeller] = useState({
@@ -80,6 +82,12 @@ const SellerDetail = () => {
         { id: '#ORD-9750', customer: 'Priya Verma', status: 'cancelled', amount: 2100, date: 'Yesterday' },
         { id: '#ORD-9690', customer: 'Rohan Mehra', status: 'delivered', amount: 150, date: '14 Feb' },
     ];
+
+    const orderQuery = orderSearch.toLowerCase().trim();
+    const filteredRecentOrders = recentOrders.filter(o =>
+        o.id.toLowerCase().includes(orderQuery) ||
+        o.customer.toLowerCase().includes(orderQuery)
+    );
 
     const handleExportOrders = () => {
         const formatted = recentOrders.map(o => ({
@@ -194,6 +202,8 @@ const SellerDetail = () => {
                                             <input
                                                 type="text"
                                                 placeholder="Order ID..."
+                                                value={orderSearch}
+                                                onChange={(e) => setOrderSearch(e.target.value)}
                                                 className="pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs font-bold w-40 outline-none ring-1 ring-transparent focus:ring-primary/20"
                                             />
                                         </div>
@@ -217,7 +227,7 @@ const SellerDetail = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
-                                            {recentOrders.map((order, i) => (
+                                            {filteredRecentOrders.map((order, i) => (
                                                 <tr key={i} className="group hover:bg-slate-50/50 transition-colors cursor-pointer">
                                                     <td className="px-4 py-5">
                                                         <span className="text-xs font-black text-slate-900">{order.id}</span>
@@ -235,7 +245,7 @@ const SellerDetail = () => {
                                                         </Badge>
                                                     </td>
                                                     <td className="px-4 py-5 text-right font-black text-slate-900">
-                                                        ₹{order.amount.toLocaleString()}
+                                                        ₹{formatAmount(order.amount)}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -272,7 +282,7 @@ const SellerDetail = () => {
                                             </div>
                                             <div className="text-right">
                                                 <p className={cn("text-sm font-black", txn.type === 'credit' ? "text-brand-600" : "text-rose-600")}>
-                                                    {txn.type === 'credit' ? '+' : '-'} ₹{txn.amount.toLocaleString()}
+                                                    {txn.type === 'credit' ? '+' : '-'} ₹{formatAmount(txn.amount)}
                                                 </p>
                                             </div>
                                         </div>

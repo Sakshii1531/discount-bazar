@@ -25,11 +25,17 @@ export const listCoupons = async (req, res) => {
             const term = search.trim();
             // P3-5: substring search preserved; user input is regex-escaped.
             const safe = buildSearchRegex(term, { anchored: false });
-            query.$or = [
+            const searchOr = [
                 { code: safe },
                 { title: safe },
                 { description: safe },
             ];
+            if (query.$or) {
+                query.$and = [{ $or: query.$or }, { $or: searchOr }];
+                delete query.$or;
+            } else {
+                query.$or = searchOr;
+            }
         }
 
         const coupons = await Coupon.find(query).sort({ createdAt: -1 }).lean();

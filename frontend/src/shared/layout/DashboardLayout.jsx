@@ -7,7 +7,7 @@ import BottomNav from './BottomNav';
 import { sellerApi } from '@/modules/seller/services/sellerApi';
 import { useAuth } from "@core/context/AuthContext";
 import { motion, AnimatePresence } from 'framer-motion';
-import { BellRing, Check, X, Clock, Truck, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { BellRing, Check, X, Clock, Truck, RotateCcw, AlertTriangle, Loader2, Eye, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import SellerOrdersContext from '@/modules/seller/context/SellerOrdersContext';
@@ -16,6 +16,7 @@ import { getOrderSocket, onSellerOrderNew, onReturnDropOtp, onSellerReturnReques
 import { createSocketTokenReader } from '@core/utils/authStorage';
 import { STORAGE_KEYS } from '@core/utils/storage';
 import orderAlertSound from '@/assets/sounds/order_alert.mp3';
+import { formatAmount } from "@shared/utils/currency";
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -107,9 +108,19 @@ const stopWebAudioBeepRingtone = () => {
 function secondsLeftUntilSellerExpiry(order) {
     if (!order) return 0;
     const raw = order.sellerPendingExpiresAt ?? order.expiresAt;
-    if (!raw) return 60;
+    if (!raw) return 3600;
     const ms = new Date(raw).getTime() - Date.now();
     return Math.max(0, Math.ceil(ms / 1000));
+}
+
+/** 3599 -> "59m 59s", 45 -> "45 seconds" */
+function formatAcceptCountdown(totalSeconds) {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    if (s < 60) return `${s} ${s === 1 ? "second" : "seconds"}`;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0 ? `${h}h ${m}m ${sec}s` : `${m}m ${String(sec).padStart(2, "0")}s`;
 }
 
 function isSellerAlertEligible(order) {
@@ -135,7 +146,11 @@ const DashboardLayout = ({ children, navItems, title }) => {
     const [shownReturnOrderIds, setShownReturnOrderIds] = useState(() => new Set());
     const [timeLeft, setTimeLeft] = useState(0);
     /** Total seconds in this acceptance window (for progress bar), set when modal opens */
-    const acceptWindowTotalRef = useRef(60);
+    const acceptWindowTotalRef = useRef(3600);
+    // "View Details" panel inside the new-order popup
+    const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+    const [orderDetails, setOrderDetails] = useState(null);
+    const [orderDetailsLoading, setOrderDetailsLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [returnDropOtpAlert, setReturnDropOtpAlert] = useState(null); // { orderId, otp, expiresAt }
     const [returnActionLoading, setReturnActionLoading] = useState(false);
@@ -702,6 +717,38 @@ const DashboardLayout = ({ children, navItems, title }) => {
         return () => clearInterval(timer);
     }, [newOrderAlert]);
 
+    // Collapse the details panel whenever a different order pops up
+    useEffect(() => {
+        setOrderDetailsOpen(false);
+        setOrderDetails(null);
+        setOrderDetailsLoading(false);
+    }, [newOrderAlert?.orderId]);
+
+    const toggleOrderDetails = async () => {
+        const orderId = newOrderAlert?.orderId;
+        if (!orderId) return;
+        if (orderDetailsOpen) {
+            setOrderDetailsOpen(false);
+            return;
+        }
+        setOrderDetailsOpen(true);
+        if (orderDetails?.orderId === orderId) return;
+        setOrderDetailsLoading(true);
+        try {
+            const res = await sellerApi.getOrderDetails(orderId);
+            const data = res?.data?.result ?? res?.data?.results ?? res?.data?.data;
+            if (newOrderAlertRef.current?.orderId === orderId) {
+                setOrderDetails(data ? { ...data, orderId: data.orderId || orderId } : null);
+            }
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Failed to load order details");
+            // Fall back to whatever the alert payload already carries
+            setOrderDetails({ ...newOrderAlertRef.current, orderId });
+        } finally {
+            setOrderDetailsLoading(false);
+        }
+    };
+
     const handleAcceptOrder = async (orderId) => {
         try {
             await sellerApi.updateOrderStatus(orderId, { status: 'confirmed' });
@@ -870,7 +917,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                             initial={{ scale: 0.9, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+                            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto"
                         >
                             <div className="flex flex-col items-center text-center">
                                 <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 animate-bounce">
@@ -881,7 +928,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                 <p className="text-slate-600 font-medium mb-3">
                                     You have a new order{" "}
                                     <span className="text-primary font-bold font-mono">
-                                        #{newOrderAlert.orderId?.length > 14 ? `ORD-${newOrderAlert.orderId.slice(-8)}` : newOrderAlert.orderId}
+                                        #{newOrderAlert.orderId}
                                     </span>
                                 </p>
 
@@ -890,13 +937,13 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     <div className="text-left">
                                         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Item Amount</div>
                                         <div className="text-lg font-black text-slate-900">
-                                            ₹{Math.round(Number(newOrderAlert.itemAmount ?? newOrderAlert.paymentBreakdown?.productSubtotal ?? newOrderAlert.pricing?.subtotal ?? newOrderAlert.pricing?.total ?? newOrderAlert.total ?? 0)).toLocaleString('en-IN')}
+                                            ₹{formatAmount(newOrderAlert.itemAmount ?? newOrderAlert.paymentBreakdown?.productSubtotal ?? newOrderAlert.pricing?.subtotal ?? newOrderAlert.pricing?.total ?? newOrderAlert.total ?? 0)}
                                         </div>
                                     </div>
                                     <div className="text-left border-l border-slate-200 pl-4">
                                         <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Net Earning</div>
                                         <div className="text-lg font-black text-emerald-600">
-                                            ₹{Math.round(Number(newOrderAlert.netEarnings ?? newOrderAlert.paymentBreakdown?.sellerPayoutTotal ?? newOrderAlert.pricing?.subtotal ?? newOrderAlert.pricing?.total ?? newOrderAlert.total ?? 0)).toLocaleString('en-IN')}
+                                            ₹{formatAmount(newOrderAlert.netEarnings ?? newOrderAlert.paymentBreakdown?.sellerPayoutTotal ?? 0)}
                                         </div>
                                     </div>
                                 </div>
@@ -917,9 +964,95 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                 <div className="flex items-center gap-4 text-sm font-bold mb-8">
                                     <Clock className={cn("h-4 w-4", timeLeft < 15 ? "text-rose-500 animate-pulse" : "text-slate-600")} />
                                     <span className={timeLeft < 15 ? "text-rose-500" : "text-slate-600"}>
-                                        Accept within {timeLeft} {timeLeft === 1 ? "second" : "seconds"}
+                                        Accept within {formatAcceptCountdown(timeLeft)}
                                     </span>
                                 </div>
+
+                                {/* View order details before accepting / declining */}
+                                <button
+                                    type="button"
+                                    onClick={toggleOrderDetails}
+                                    className="w-full mb-4 flex items-center justify-center gap-2 py-3 rounded-2xl border border-primary/30 bg-primary/5 text-primary font-bold hover:bg-primary/10 transition-colors"
+                                >
+                                    <Eye className="h-5 w-5" />
+                                    {orderDetailsOpen ? "Hide Order Details" : "View Order Details"}
+                                    <ChevronDown className={cn("h-4 w-4 transition-transform", orderDetailsOpen && "rotate-180")} />
+                                </button>
+
+                                {orderDetailsOpen && (
+                                    <div className="w-full mb-6 text-left bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                                        {orderDetailsLoading ? (
+                                            <div className="flex items-center justify-center gap-2 py-6 text-sm font-semibold text-slate-500">
+                                                <Loader2 className="h-4 w-4 animate-spin" /> Loading order details…
+                                            </div>
+                                        ) : (() => {
+                                            const d = orderDetails || {};
+                                            const items = Array.isArray(d.items) ? d.items : [];
+                                            const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+                                            const payMode = String(d.paymentMode || d.payment?.method || "").toUpperCase();
+                                            const addr = d.address || {};
+                                            return (
+                                                <>
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                                            Items ({items.length}) · Qty {totalQty}
+                                                        </span>
+                                                        {payMode && (
+                                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700">
+                                                                {payMode === "COD" || payMode === "CASH" ? "Cash on Delivery" : "Paid Online"}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {items.length === 0 ? (
+                                                        <p className="text-sm text-slate-500 py-2">No item details available for this order.</p>
+                                                    ) : (
+                                                        <ul className="space-y-2">
+                                                            {items.map((it, idx) => {
+                                                                const product = it.product && typeof it.product === "object" ? it.product : {};
+                                                                const name = it.name || product.name || "Item";
+                                                                const image = it.image || product.mainImage;
+                                                                const qty = Number(it.quantity) || 0;
+                                                                const price = Number(it.price) || 0;
+                                                                return (
+                                                                    <li key={`${product._id || it.product || name}-${it.variantSlot || ""}-${idx}`} className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 p-2.5">
+                                                                        {image ? (
+                                                                            <img src={image} alt={name} className="h-12 w-12 rounded-lg object-cover bg-slate-100 shrink-0" />
+                                                                        ) : (
+                                                                            <div className="h-12 w-12 rounded-lg bg-slate-100 shrink-0" />
+                                                                        )}
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-sm font-bold text-slate-900 truncate" title={name}>{name}</p>
+                                                                            {it.variantSlot && (
+                                                                                <p className="text-xs text-slate-500 truncate">{it.variantSlot}</p>
+                                                                            )}
+                                                                            <p className="text-xs text-slate-500">₹{price} × {qty}</p>
+                                                                        </div>
+                                                                        <div className="text-right shrink-0">
+                                                                            <p className="text-sm font-black text-slate-900">₹{formatAmount(price * qty)}</p>
+                                                                            <p className="text-[10px] font-bold text-slate-500">Qty {qty}</p>
+                                                                        </div>
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    )}
+
+                                                    {(addr.name || addr.address || addr.city) && (
+                                                        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600">
+                                                            <span className="font-bold text-slate-700">Deliver to: </span>
+                                                            {[
+                                                                addr.name,
+                                                                addr.address,
+                                                                addr.city && !String(addr.address || "").includes(addr.city) ? addr.city : null,
+                                                            ].filter(Boolean).join(", ")}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-2 gap-4 w-full">
                                     <button
@@ -966,7 +1099,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                 <p className="text-slate-600 font-medium mb-4 text-sm">
                                     Order{" "}
                                     <span className="text-rose-600 font-bold font-mono">
-                                        #{newReturnAlert.orderId?.length > 14 ? `ORD-${newReturnAlert.orderId.slice(-8)}` : newReturnAlert.orderId}
+                                        #{newReturnAlert.orderId}
                                     </span>
                                 </p>
 
@@ -1004,7 +1137,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     {newReturnAlert.refundAmount > 0 && (
                                         <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-700 pt-2 border-t border-slate-200/60">
                                             <span>Refund Amount:</span>
-                                            <span className="text-rose-600 text-sm font-black">₹{Math.ceil(newReturnAlert.refundAmount).toLocaleString('en-IN')}</span>
+                                            <span className="text-rose-600 text-sm font-black">₹{formatAmount(newReturnAlert.refundAmount)}</span>
                                         </div>
                                     )}
                                 </div>

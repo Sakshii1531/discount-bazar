@@ -26,6 +26,7 @@ import mongoose from "mongoose";
 import Order from "../../models/order.js";
 import Product from "../../models/product.js";
 import { buildKey, getOrSet, getTTL } from "../cacheService.js";
+import { ceilRupees } from "../../utils/money.js";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
@@ -308,7 +309,7 @@ async function computeSellerStats(sellerOid, range) {
       return {
         name: item.name,
         sales: currSales,
-        revenue: `₹${(item.revenue || 0).toLocaleString()}`,
+        revenue: `₹${ceilRupees(item.revenue || 0).toLocaleString("en-IN")}`,
         trend,
       };
     })
@@ -329,9 +330,9 @@ async function computeSellerStats(sellerOid, range) {
 
   return {
     overview: {
-      totalSales: `₹${totalSales.toLocaleString()}`,
+      totalSales: `₹${ceilRupees(totalSales).toLocaleString("en-IN")}`,
       totalOrders: totalOrders.toLocaleString(),
-      avgOrderValue: `₹${Math.round(avgOrderValue).toLocaleString()}`,
+      avgOrderValue: `₹${ceilRupees(avgOrderValue).toLocaleString("en-IN")}`,
       conversionRate: totalOrders > 0 ? "4.2%" : "0%",
       salesTrend: `${salesTrendPerc > 0 ? "+" : ""}${salesTrendPerc}%`,
       ordersTrend: `${ordersTrendPerc > 0 ? "+" : ""}${ordersTrendPerc}%`,

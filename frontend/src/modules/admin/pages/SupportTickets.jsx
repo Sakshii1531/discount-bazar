@@ -341,9 +341,12 @@ const SupportTickets = () => {
     const riderCount = tickets.filter(t => ['rider', 'delivery'].includes(String(t.userType || '').toLowerCase())).length;
 
     const filteredTickets = tickets.filter(t => {
-        const matchesSearch = t.id.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.subject.toLowerCase().includes(searchTerm.toLowerCase());
+        const query = searchTerm.toLowerCase().trim();
+        const matchesSearch = t.id.toString().toLowerCase().includes(query) ||
+            t.user.toLowerCase().includes(query) ||
+            (t.userId?.email || '').toLowerCase().includes(query) ||
+            (t.subject || '').toLowerCase().includes(query) ||
+            (t.description || '').toLowerCase().includes(query);
         
         if (!matchesSearch) return false;
         if (roleFilter === 'all') return true;

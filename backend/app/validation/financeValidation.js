@@ -94,6 +94,7 @@ export const financeLedgerQuerySchema = Joi.object({
   paymentMode: Joi.string().valid("ONLINE", "COD").optional(),
   fromDate: Joi.date().optional(),
   toDate: Joi.date().optional(),
+  search: Joi.string().trim().allow("").max(200).optional(),
 });
 
 export const payoutProcessSchema = Joi.object({

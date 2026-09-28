@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import Pagination from '@shared/components/ui/Pagination';
 import { adminApi } from '../services/adminApi';
+import { formatAmount } from "@shared/utils/currency";
 
 const formatRiderId = (id) => {
     if (!id) return 'RD-N/A';
@@ -133,8 +134,12 @@ React.useEffect(() => {
 // Filtering logic
 const filteredRiders = useMemo(() => {
     return riders.filter(r => {
-        const matchesSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            r.phone.includes(searchTerm);
+        const query = searchTerm.toLowerCase().trim();
+        const matchesSearch = (r.name || '').toLowerCase().includes(query) ||
+            (r.phone || '').toLowerCase().includes(query) ||
+            (r.email || '').toLowerCase().includes(query) ||
+            (r.address || '').toLowerCase().includes(query) ||
+            (r.location || '').toLowerCase().includes(query);
         const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
@@ -387,7 +392,7 @@ return (
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Today Earnings</p>
                                             <div className="flex items-center gap-1.5">
                                                 <DollarSign className="h-3.5 w-3.5 text-brand-500" />
-                                                <span className="text-xs font-black text-slate-900">₹{rider.todayEarnings}</span>
+                                                <span className="text-xs font-black text-slate-900">₹{formatAmount(rider.todayEarnings)}</span>
                                             </div>
                                         </div>
                                         <div className="bg-slate-50 p-3 rounded-2xl">
@@ -624,7 +629,7 @@ return (
                                 </div>
                                 <div className="text-center border-l border-slate-800">
                                     <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Wallet Creds</p>
-                                    <span className="text-base font-black text-emerald-400">₹{(viewingRider.walletCreds || 0).toLocaleString()}</span>
+                                    <span className="text-base font-black text-emerald-400">₹{formatAmount(viewingRider.walletCreds || 0)}</span>
                                 </div>
                             </div>
 

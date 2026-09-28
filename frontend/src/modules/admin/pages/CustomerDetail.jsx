@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import Modal from '@shared/components/ui/Modal';
 import { useToast } from '@shared/components/ui/Toast';
 import { exportToCSV } from '@/lib/exportUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const CustomerDetail = () => {
     const { id } = useParams();
@@ -137,9 +138,11 @@ const CustomerDetail = () => {
     );
 
     const filteredOrders = useMemo(() => {
+        const query = orderSearch.toLowerCase().trim();
         return safeOrders.filter(o =>
-            (o.id || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-            (o.status || '').toLowerCase().includes(orderSearch.toLowerCase())
+            (o.id || '').toLowerCase().includes(query) ||
+            (o.status || '').toLowerCase().replace(/_/g, ' ').includes(query) ||
+            (o.status || '').toLowerCase().includes(query)
         ).slice(0, visibleOrders);
     }, [safeOrders, orderSearch, visibleOrders]);
 
@@ -226,9 +229,9 @@ const CustomerDetail = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 {[
-                                    { label: 'Total Spend', value: `₹${(customer.totalSpent || 0).toLocaleString()}`, trend: 'Lifetime', icon: IndianRupee, color: 'emerald' },
+                                    { label: 'Total Spend', value: `₹${formatAmount(customer.totalSpent || 0)}`, trend: 'Lifetime', icon: IndianRupee, color: 'emerald' },
                                     { label: 'Orders Placed', value: customer.totalOrders || 0, trend: 'Lifetime', icon: ShoppingBag, color: 'blue' },
-                                    { label: 'Average Spend', value: `₹${customer.totalOrders > 0 ? Math.round(customer.totalSpent / customer.totalOrders).toLocaleString() : 0}`, trend: 'Per Order', icon: TrendingUp, color: 'indigo' },
+                                    { label: 'Average Spend', value: `₹${customer.totalOrders > 0 ? formatAmount(customer.totalSpent / customer.totalOrders) : 0}`, trend: 'Per Order', icon: TrendingUp, color: 'indigo' },
                                     { label: 'Account Status', value: (customer.status || '').toUpperCase(), trend: 'Current', icon: CheckCircle2, color: 'fuchsia' },
                                 ].map((stat, i) => (
                                     <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center text-center">
@@ -255,7 +258,7 @@ const CustomerDetail = () => {
                     <Card className="p-6 !bg-black  text-primary-foreground rounded-xl border-none shadow-lg shadow-brand-200 relative overflow-hidden group">
                         <div className="relative z-10">
                             <p className="text-[10px] font-black opacity-90 uppercase tracking-widest mb-1">Lifetime Value</p>
-                            <h4 className="text-3xl font-black text-white">₹{(customer.totalSpent || 0).toLocaleString()}</h4>
+                            <h4 className="text-3xl font-black text-white">₹{formatAmount(customer.totalSpent || 0)}</h4>
                             <div className="mt-4 flex items-center gap-2">
                                 <div className="p-1 px-2 rounded-full bg-white/25 text-white text-[10px] font-black uppercase tracking-tighter">
                                     {customer.totalOrders} Orders
@@ -382,7 +385,7 @@ const CustomerDetail = () => {
                                                 </Badge>
                                             </td>
                                             <td className="py-5 text-right font-black text-slate-900 pr-8">
-                                                ₹{(order.amount || 0).toLocaleString()}
+                                                ₹{formatAmount(order.amount || 0)}
                                             </td>
                                         </tr>
                                     ))}

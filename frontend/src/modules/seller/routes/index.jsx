@@ -58,6 +58,13 @@ const navItems = [
       { label: "Ledgers", path: "/seller/business/ledgers" },
       { label: "Day Book & Cash", path: "/seller/business/cash" },
       { label: "Reports", path: "/seller/business/reports" },
+      {
+        label: "Account",
+        children: [
+          { label: "Payment", path: "/seller/business/account/payment" },
+          { label: "Received", path: "/seller/business/account/received" },
+        ],
+      },
     ],
   },
   { label: "Products", path: "/seller/products", icon: HiOutlineCube },
@@ -102,6 +109,7 @@ const SellerRoutes = () => {
         <Route path="/pos/:section?" element={<PosTerminal />} />
         <Route path="/business" element={<Business />} />
         <Route path="/business/:section" element={<Business />} />
+        <Route path="/business/:section/:view" element={<Business />} />
         <Route path="/products" element={<ProductManagement />} />
         <Route path="/products/add" element={<AddProduct />} />
         <Route path="/inventory" element={<StockManagement />} />

@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { posApi } from "../../services/posApi";
 import SaleEditPanel from "./SaleEditPanel";
 import ReturnReceipt from "./ReturnReceipt";
+import { formatAmount } from "@shared/utils/currency";
 
 const REFUND_METHODS = [
     { value: "CASH", label: "Cash", icon: HiOutlineBanknotes, desc: "Handed over cash" },
@@ -166,7 +167,7 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                     <div className="h-6 w-px bg-slate-100" />
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Refunded</p>
-                        <p className="text-sm font-black text-emerald-600">₹{totalRecentRefundAmount.toLocaleString("en-IN")}</p>
+                        <p className="text-sm font-black text-emerald-600">₹{formatAmount(totalRecentRefundAmount)}</p>
                     </div>
                 </div>
             </div>
@@ -260,7 +261,7 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                         Paid via {order.posPaymentMethod || "CASH"}
                                     </span>
                                     <span className="text-sm font-black text-slate-900">
-                                        Grand Total: ₹{Number(order.paymentBreakdown?.grandTotal || 0).toLocaleString("en-IN")}
+                                        Grand Total: ₹{formatAmount(order.paymentBreakdown?.grandTotal)}
                                     </span>
                                 </div>
                             </div>
@@ -556,7 +557,7 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                             #{ret.orderId}
                                         </span>
                                         <span className="text-xs font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
-                                            ₹{Math.round(Number(ret.refundTotal || 0)).toLocaleString("en-IN")}
+                                            ₹{formatAmount(ret.refundTotal)}
                                         </span>
                                     </div>
 

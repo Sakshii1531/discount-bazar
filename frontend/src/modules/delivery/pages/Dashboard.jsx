@@ -21,6 +21,7 @@ import Card from "@/shared/components/ui/Card";
 
 import { useAuth } from "@core/context/AuthContext";
 import { deliveryApi } from "../services/deliveryApi";
+import { formatAmount } from "@shared/utils/currency";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -368,7 +369,7 @@ const Dashboard = () => {
               <p className="ds-caption mb-0.5 text-slate-600 group-hover:text-amber-700 transition-colors flex items-center justify-center gap-0.5 font-extrabold text-[11px]">
                 Incentives <ChevronRight size={12} className="text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all" />
               </p>
-              <p className="font-black text-slate-900 text-base">₹{earnings.incentives}</p>
+              <p className="font-black text-slate-900 text-base">₹{formatAmount(earnings.incentives)}</p>
             </div>
 
             {/* COD Cash Card */}
@@ -388,7 +389,7 @@ const Dashboard = () => {
                 COD Cash <ChevronRight size={12} className="text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
               </p>
               <p className="font-black text-slate-900 text-base">
-                ₹{Math.round(earnings.cashCollected || 0)}
+                ₹{formatAmount(earnings.cashCollected || 0)}
               </p>
             </div>
           </div>
@@ -486,7 +487,7 @@ const Dashboard = () => {
                         <h4 className="font-bold text-gray-900">#{order.orderId}</h4>
                       </div>
                       <div className="text-right">
-                        <span className="block font-black text-brand-600 text-lg">₹{order.returnDeliveryCommission || 0}</span>
+                        <span className="block font-black text-brand-600 text-lg">₹{formatAmount(order.returnDeliveryCommission || 0)}</span>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Commission</span>
                       </div>
                     </div>

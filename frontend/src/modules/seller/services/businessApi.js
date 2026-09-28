@@ -5,6 +5,7 @@ const B = '/seller/business';
 export const businessApi = {
     dashboard: () => axiosInstance.get(`${B}/dashboard`),
     report: (type, params) => axiosInstance.get(`${B}/reports/${type}`, { params }),
+    accounts: (view, params) => axiosInstance.get(`${B}/accounts/${view}`, { params }),
 
     listSuppliers: () => axiosInstance.get(`${B}/suppliers`),
     saveSupplier: (data, id) => (id ? axiosInstance.put(`${B}/suppliers/${id}`, data) : axiosInstance.post(`${B}/suppliers`, data)),

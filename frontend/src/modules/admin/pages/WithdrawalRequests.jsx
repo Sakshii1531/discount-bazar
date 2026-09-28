@@ -34,6 +34,7 @@ import { exportToCSV } from "@/lib/exportUtils";
 import { getOrderSocket, onAdminWithdrawalNew } from '@/core/services/orderSocket';
 import { createSocketTokenReader } from '@core/utils/authStorage';
 import { STORAGE_KEYS } from '@core/utils/storage';
+import { formatAmount } from "@shared/utils/currency";
 
 const IFSC_BANK_MAP = {
     SBIN: "State Bank of India",
@@ -236,8 +237,12 @@ const WithdrawalRequests = () => {
         const data = activeTab === 'sellers' ? (sellerRequests || []) : (deliveryRequests || []);
         return data.filter(r => {
             const name = r.user?.shopName || r.user?.name || "";
-            const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r._id?.toLowerCase().includes(searchTerm.toLowerCase());
+            const query = searchTerm.toLowerCase().trim();
+            const matchesSearch = name.toLowerCase().includes(query) ||
+                (r.user?.name || '').toLowerCase().includes(query) ||
+                (r.user?.phone || '').toLowerCase().includes(query) ||
+                (r.reference || '').toLowerCase().includes(query) ||
+                r._id?.toLowerCase().includes(query);
             const matchesStatus = filterStatus === 'all' || r.status?.toLowerCase() === filterStatus.toLowerCase();
             return matchesSearch && matchesStatus;
         });
@@ -345,7 +350,7 @@ const WithdrawalRequests = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
                     { label: 'Total Pending', value: stats.sellers.pending + stats.delivery.pending, icon: Clock, color: 'amber', bg: 'bg-amber-50', iconColor: 'text-amber-500' },
-                    { label: 'Pending Volume', value: `₹${(stats.sellers.amount + stats.delivery.amount).toLocaleString()}`, icon: Banknote, color: 'blue', bg: 'bg-brand-50', iconColor: 'text-brand-500' },
+                    { label: 'Pending Volume', value: `₹${formatAmount(stats.sellers.amount + stats.delivery.amount)}`, icon: Banknote, color: 'blue', bg: 'bg-brand-50', iconColor: 'text-brand-500' },
                     { label: 'Settled Today', value: stats.sellers.processed + stats.delivery.processed, icon: CheckCircle2, color: 'emerald', bg: 'bg-brand-50', iconColor: 'text-brand-500' },
                 ].map((stat, i) => (
                     <Card key={i} className="p-6 border-none shadow-sm ring-1 ring-slate-100 bg-white">

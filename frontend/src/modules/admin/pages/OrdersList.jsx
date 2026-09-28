@@ -30,6 +30,7 @@ import {
     adminRouteMatchesOrder,
 } from '@/shared/utils/orderStatus';
 import { exportToCSV } from '@/lib/exportUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const OrdersList = () => {
     const { status = 'all' } = useParams();
@@ -103,6 +104,11 @@ const OrdersList = () => {
                     _id: o._id,
                     customer: o.customer?.name || 'Unknown',
                     seller: o.seller?.shopName || 'Unknown',
+                    searchText: [
+                        o.customer?.phone, o.seller?.name,
+                        o.address?.name, o.address?.phone,
+                        o.walkInCustomer?.name, o.walkInCustomer?.phone,
+                    ].filter(Boolean).join(' '),
                     items: o.items?.length || 0,
                     amount: Math.ceil(o.pricing?.total || o.total || 0),
                     status: getLegacyStatusFromOrder(o),
@@ -172,7 +178,7 @@ const OrdersList = () => {
         const activeOrders = summary.activeOrders;
 
         return [
-            { label: 'Total Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}`, trend: '+12.5%', icon: IndianRupee, color: 'emerald' },
+            { label: 'Total Earnings', value: `₹${formatAmount(totalEarnings)}`, trend: '+12.5%', icon: IndianRupee, color: 'emerald' },
             { label: 'Active Orders', value: activeOrders, trend: '+5', icon: ShoppingBag, color: 'blue' },
             { label: 'Average Prep Time', value: '18m', trend: '-2m', icon: Clock, color: 'amber' },
             { label: 'Delivery Rate', value: '98.2%', trend: '+0.4%', icon: CheckCircle2, color: 'fuchsia' },
@@ -182,11 +188,12 @@ const OrdersList = () => {
     const filteredOrders = useMemo(() => {
         return safeOrders.filter(order => {
             const safeLower = (value) => String(value || '').toLowerCase();
-            const query = safeLower(searchTerm);
+            const query = safeLower(searchTerm).trim();
             const matchesSearch =
                 safeLower(order.id).includes(query) ||
                 safeLower(order.customer).includes(query) ||
-                safeLower(order.seller).includes(query);
+                safeLower(order.seller).includes(query) ||
+                safeLower(order.searchText).includes(query);
 
             const matchesStatus = adminRouteMatchesOrder(status, order);
             const matchesPayment = paymentFilter === 'All' || order.payment === paymentFilter;
@@ -506,7 +513,7 @@ const OrdersList = () => {
                                     </td>
                                     <td className="px-4 py-5 text-right">
                                         <div className="flex flex-col items-end">
-                                            <span className="text-sm font-black text-slate-900">₹{Math.ceil(order.amount || 0).toLocaleString('en-IN')}</span>
+                                            <span className="text-sm font-black text-slate-900">₹{formatAmount(order.amount || 0)}</span>
                                             <span className="text-[10px] font-bold text-slate-400 mt-0.5">{order.payment}</span>
                                         </div>
                                     </td>

@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { exportToCSV } from "@/lib/exportUtils";
 import { useSellerEarnings } from "../context/SellerEarningsContext";
+import { formatAmount } from "@shared/utils/currency";
 
 const Earnings = () => {
   const navigate = useNavigate();
@@ -72,7 +73,7 @@ const Earnings = () => {
     const exportData = ledger.map((txn) => ({
       id: txn.id ?? txn.ref ?? "",
       type: txn.type ?? "",
-      amount: `₹${Number(txn.amount ?? 0).toLocaleString()}`,
+      amount: `₹${formatAmount(txn.amount ?? 0)}`,
       status: txn.status ?? "",
       date: txn.date ?? (txn.createdAt ? new Date(txn.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ""),
       customer: txn.customer ?? "",
@@ -140,7 +141,7 @@ const Earnings = () => {
             </div>
           </div>
           <div className="mt-3">
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">₹{totalRevenue.toLocaleString()}</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">₹{formatAmount(totalRevenue)}</h2>
             <div className="mt-2 flex items-center gap-1 text-[11px] font-bold text-emerald-400">
               <TrendingUp className="h-3.5 w-3.5" />
               <span>Real-time Order Earnings</span>
@@ -157,7 +158,7 @@ const Earnings = () => {
             </div>
           </div>
           <div className="mt-3">
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">₹{totalWithdrawn.toLocaleString()}</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">₹{formatAmount(totalWithdrawn)}</h2>
             <p className="mt-2 text-[11px] font-semibold text-slate-500">Total settled bank payouts</p>
           </div>
         </div>
@@ -242,7 +243,7 @@ const Earnings = () => {
                     fontSize: "12px",
                     fontWeight: "700",
                   }}
-                  formatter={(val) => [`₹${val.toLocaleString()}`, "Revenue"]}
+                  formatter={(val) => [`₹${formatAmount(val)}`, "Revenue"]}
                 />
                 <Bar
                   dataKey="revenue"

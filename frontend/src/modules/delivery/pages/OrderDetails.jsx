@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@core/context/AuthContext";
-import { formatCurrencyInteger } from "@shared/utils/currency";
+import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import {
   Phone,
   MessageSquare,
@@ -592,7 +592,7 @@ const OrderDetails = () => {
   if (!order) return null;
 
   const orderShortId =
-    typeof order.orderId === "string" ? order.orderId.slice(-8) : order.orderId;
+    order.orderId;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-28 font-sans">
@@ -671,7 +671,7 @@ const OrderDetails = () => {
                       Earnings
                     </p>
                     <p className="text-xl font-black text-white">
-                      ₹{order.returnDeliveryCommission || 0}
+                      ₹{formatAmount(order.returnDeliveryCommission || 0)}
                     </p>
                   </div>
                   <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
@@ -819,7 +819,7 @@ const OrderDetails = () => {
                 Expected Earnings
               </p>
               <p className="text-xl font-black text-emerald-700 leading-none">
-                ₹{isReturn ? (order.returnDeliveryCommission || 0) : (order.paymentBreakdown?.riderPayoutTotal || 0)}
+                ₹{formatAmount(isReturn ? (order.returnDeliveryCommission || 0) : (order.paymentBreakdown?.riderPayoutTotal || 0))}
               </p>
             </div>
           </div>

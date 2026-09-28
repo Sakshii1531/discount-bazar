@@ -102,7 +102,7 @@ const CategoryManagement = () => {
     const filteredCategories = useMemo(() => {
         const filterNode = (node) => {
             const name = node.name || '';
-            const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase().trim());
             const matchesStatus = filterStatus === 'all' || node.status === filterStatus;
 
             // Always filter children first
@@ -153,9 +153,9 @@ const CategoryManagement = () => {
 
     const filteredSubcategories = useMemo(() => {
         return allSubcategories.filter(sub => {
-            const searchLower = searchTerm.toLowerCase();
+            const searchLower = searchTerm.toLowerCase().trim();
             const matchesSearch =
-                sub.name.toLowerCase().includes(searchLower) ||
+                (sub.name || '').toLowerCase().includes(searchLower) ||
                 (sub.headerName && sub.headerName.toLowerCase().includes(searchLower)) ||
                 (sub.parentCategory && sub.parentCategory.toLowerCase().includes(searchLower));
 

@@ -26,6 +26,7 @@ import { downloadBlob } from "@/lib/exportUtils";
 import { generateWithdrawalReceiptPDF } from "@/lib/pdfExport";
 import { useSellerEarnings } from "../context/SellerEarningsContext";
 import Pagination from "@shared/components/ui/Pagination";
+import { formatAmount } from "@shared/utils/currency";
 
 const Withdrawals = () => {
     const { earningsData: data, earningsLoading: loading, refreshEarnings } = useSellerEarnings();
@@ -42,12 +43,12 @@ const Withdrawals = () => {
     const withdrawalHistory = ledger.filter((t) => (t.type || '').toString() === 'Withdrawal');
 
     const filteredHistory = useMemo(() => {
-        const term = searchTerm.toLowerCase();
+        const term = searchTerm.trim().toLowerCase();
         const result = withdrawalHistory.filter((item) => {
             const id = (item.id ?? item.ref ?? '').toString().toLowerCase();
             const status = (item.status ?? '').toString().toLowerCase();
             const method = (item.method ?? item.customer ?? '').toString().toLowerCase();
-            const amount = Math.abs(Number(item.amount ?? 0)).toString();
+            const amount = `${Math.abs(Number(item.amount ?? 0))} ${formatAmount(Math.abs(Number(item.amount ?? 0)))}`;
             return (
                 !term ||
                 id.includes(term) ||
@@ -153,9 +154,9 @@ const Withdrawals = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {[
                     { label: 'Available Balance', value: `₹${balances.available.toLocaleString()}`, icon: Wallet, color: 'emerald', sub: 'Ready to withdraw' },
-                    { label: 'On Hold', value: `₹${balances.onHold.toLocaleString()}`, icon: Clock, color: 'blue', sub: 'Return window open' },
-                    { label: 'Withdrawal Pending', value: `₹${balances.pending.toLocaleString()}`, icon: History, color: 'amber', sub: 'Awaiting approval' },
-                    { label: 'Last Withdrawal', value: `₹${balances.lastWithdrawal.toLocaleString()}`, icon: CheckCircle2, color: 'indigo', sub: 'Sent to bank' },
+                    { label: 'On Hold', value: `₹${formatAmount(balances.onHold)}`, icon: Clock, color: 'blue', sub: 'Return window open' },
+                    { label: 'Withdrawal Pending', value: `₹${formatAmount(balances.pending)}`, icon: History, color: 'amber', sub: 'Awaiting approval' },
+                    { label: 'Last Withdrawal', value: `₹${formatAmount(balances.lastWithdrawal)}`, icon: CheckCircle2, color: 'indigo', sub: 'Sent to bank' },
                 ].map((stat, i) => (
                     <BlurFade key={i} delay={0.2 + i * 0.1}>
                         <Card className="p-6 border-none shadow-sm ring-1 ring-slate-100 hover:ring-brand-200 transition-all bg-white group relative overflow-hidden">
@@ -227,7 +228,7 @@ const Withdrawals = () => {
                                             <p className="text-xs font-bold text-slate-600 mt-0.5 uppercase tracking-tighter">{item.date} • {item.time}</p>
                                         </td>
                                         <td className="px-8 py-5">
-                                            <p className="text-sm font-black text-slate-900">₹{Math.abs(item.amount).toLocaleString()}</p>
+                                            <p className="text-sm font-black text-slate-900">₹{formatAmount(Math.abs(item.amount))}</p>
                                         </td>
                                         <td className="px-8 py-5 text-center">
                                             <Badge

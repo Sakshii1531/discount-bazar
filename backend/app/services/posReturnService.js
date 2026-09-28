@@ -22,8 +22,11 @@ async function loadPosOrder({ sellerId, orderId, session = null }) {
   // Public order IDs are always uppercase Crockford base32 (see
   // orderIdService.buildPublicOrderId) — normalize so a cashier typing the
   // receipt ID in lowercase still matches.
+  // Also accept a pasted "#ORD-..." or the ID typed without its "ORD-" prefix.
+  let normalizedId = String(orderId).trim().toUpperCase().replace(/^#/, "");
+  if (normalizedId && !normalizedId.startsWith("ORD-")) normalizedId = `ORD-${normalizedId.replace(/^ORD/, "")}`;
   const query = Order.findOne({
-    orderId: String(orderId).trim().toUpperCase(),
+    orderId: normalizedId,
     seller: sellerId,
     orderSource: "POS",
   });

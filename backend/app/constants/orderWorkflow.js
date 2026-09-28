@@ -16,7 +16,7 @@ export const WORKFLOW_STATUS = {
 
 /** Milliseconds — override via env in services */
 export const DEFAULT_SELLER_TIMEOUT_MS = () =>
-  parseInt(process.env.SELLER_TIMEOUT_MS || "60000", 10);
+  parseInt(process.env.SELLER_TIMEOUT_MS || "3600000", 10); // 1 hour for seller to accept/reject
 export const DEFAULT_DELIVERY_TIMEOUT_MS = () =>
   parseInt(process.env.DELIVERY_TIMEOUT_MS || "60000", 10);
 

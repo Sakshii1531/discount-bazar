@@ -112,7 +112,12 @@ const PendingDeliveryBoys = () => {
 
     const filteredRiders = useMemo(() => {
         return pendingRiders.filter(r => {
-            const matchesSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.phone.includes(searchTerm);
+            const query = searchTerm.toLowerCase().trim();
+            const matchesSearch = (r.name || '').toLowerCase().includes(query) ||
+                (r.phone || '').toLowerCase().includes(query) ||
+                (r.email || '').toLowerCase().includes(query) ||
+                (r.location || '').toLowerCase().includes(query) ||
+                (r.address || '').toLowerCase().includes(query);
             
             let matchesStatus = true;
             if (filterStatus === 'pending') {

@@ -7,7 +7,7 @@ import handleResponse from "../utils/helper.js";
 import { verifyToken, allowRoles, requireApprovedSeller } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
 import * as svc from "../services/businessService.js";
-import { runReport, dashboard, dayBook, REPORT_TYPES } from "../services/businessReportService.js";
+import { runReport, dashboard, dayBook, REPORT_TYPES, accountTransactions, ACCOUNT_VIEWS } from "../services/businessReportService.js";
 import { getSellerTz, todayKey, dayStart, dayEnd } from "../services/businessTime.js";
 
 const router = express.Router();
@@ -136,6 +136,12 @@ router.put("/settings", validate(Joi.object({ timezone: str.max(64).required() }
 
 /* dashboard + reports */
 router.get("/dashboard", wrap(async (req) => ({ data: await dashboard(sid(req)) })));
+router.get("/accounts/:view", wrap(async (req) => {
+  if (!ACCOUNT_VIEWS.includes(req.params.view)) {
+    return { status: 404, message: `Unknown account view. Available: ${ACCOUNT_VIEWS.join(", ")}` };
+  }
+  return { data: await accountTransactions(sid(req), req.params.view, req.query) };
+}));
 router.get("/reports/:type", wrap(async (req) => {
   const data = await runReport(req.params.type, sid(req), req.query);
   if (!data) return { status: 404, message: `Unknown report. Available: ${REPORT_TYPES.join(", ")}` };

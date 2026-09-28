@@ -119,9 +119,13 @@ const DeliveryTracking = () => {
 
   const filteredDeliveries = useMemo(() => {
     const result = deliveries.filter((dlv) => {
+      const term = searchTerm.trim().toLowerCase();
       const matchesSearch =
-        dlv.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        dlv.deliveryBoy.name.toLowerCase().includes(searchTerm.toLowerCase());
+        !term ||
+        String(dlv.orderId || "").toLowerCase().includes(term) ||
+        String(dlv.deliveryBoy?.name || "").toLowerCase().includes(term) ||
+        String(dlv.deliveryBoy?.phone || "").toLowerCase().includes(term) ||
+        String(dlv.customerName || "").toLowerCase().includes(term);
 
       const isCompleted = dlv.status === "Delivered";
       if (activeTab === "Active") return matchesSearch && !isCompleted;

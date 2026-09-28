@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { sellerApi } from "../services/sellerApi";
+import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
 import { toast } from "sonner";
 import Pagination from "@shared/components/ui/Pagination";
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
@@ -53,6 +54,7 @@ const ProductManagement = () => {
         sort: sortBy,
         approvalStatus: filterApproval,
         imageStatus: filterImage !== "all" ? filterImage : undefined,
+        search: searchTerm.trim() || undefined,
       });
       if (res.data.success) {
         // Backend returns handleResponse(..., { items, page, limit, total, totalPages })
@@ -189,7 +191,8 @@ const ProductManagement = () => {
   }, [isFilterOpen]);
 
   React.useEffect(() => {
-    fetchProducts(1);
+    const timer = setTimeout(() => fetchProducts(1), searchTerm ? 350 : 0);
+    return () => clearTimeout(timer);
   }, [searchTerm, filterCategory, filterStatus, filterApproval, filterImage, sortBy, pageSize]);
 
   const [formData, setFormData] = useState({
@@ -214,6 +217,7 @@ const ProductManagement = () => {
     mrp: "",
     purchaseCost: "",
     gstPercent: "",
+    purchaseGstType: "EXCLUSIVE",
     expiryDate: "",
     mainImage: null,
     galleryImages: [],
@@ -249,8 +253,12 @@ const ProductManagement = () => {
 
       const matchesSearch =
         !term ||
-        p.name.toLowerCase().includes(term) ||
-        (!!skuCandidate && skuCandidate.includes(term));
+        String(p.name || "").toLowerCase().includes(term) ||
+        (!!skuCandidate && skuCandidate.includes(term)) ||
+        variantSkus.some((s) => s.includes(term)) ||
+        String(p.slug || "").toLowerCase().includes(term) ||
+        String(p.barcode || "").toLowerCase().includes(term) ||
+        (Array.isArray(p.variants) && p.variants.some((v) => String(v?.barcode || "").toLowerCase().includes(term)));
       const matchesCategory =
         filterCategory === "all" ||
         (p.categoryId?._id || p.categoryId) === filterCategory ||
@@ -378,6 +386,13 @@ const ProductManagement = () => {
         return;
       }
 
+      const purchaseGstError = findPurchaseGstError(formData.variants, formData.gstPercent, formData.purchaseGstType);
+      if (purchaseGstError) {
+        toast.error(purchaseGstError);
+        setModalTab("variants");
+        return;
+      }
+
       if (formData.returnPolicy?.isReturnable) {
         if (!formData.returnPolicy.returnWindowDays || Number(formData.returnPolicy.returnWindowDays) <= 0 || Number(formData.returnPolicy.returnWindowDays) > 30) {
           toast.error("Please enter a valid Return Window (1 to 30 days).");
@@ -430,6 +445,7 @@ const ProductManagement = () => {
       ["gstPercent", "expiryDate"].forEach((k) => {
         data.append(k, formData[k] ?? "");
       });
+      data.append("purchaseGstType", formData.purchaseGstType || "EXCLUSIVE");
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -540,6 +556,7 @@ const ProductManagement = () => {
         mrp: item.mrp ?? "",
         purchaseCost: item.purchaseCost ?? "",
         gstPercent: item.gstPercent ?? "",
+        purchaseGstType: item.purchaseGstType || "EXCLUSIVE",
         expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : "",
         shelfLife: item.shelfLife || "",
         countryOfOrigin: item.countryOfOrigin || "",
@@ -592,6 +609,7 @@ const ProductManagement = () => {
         mrp: "",
         purchaseCost: "",
         gstPercent: "",
+        purchaseGstType: "EXCLUSIVE",
         expiryDate: "",
         shelfLife: "",
         countryOfOrigin: "",
@@ -1282,7 +1300,6 @@ const ProductManagement = () => {
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
-                          ["gstPercent", "GST %", "number"],
                           ["expiryDate", "Expiry Date", "date"],
                         ].map(([key, label, type]) => (
                           <div key={key} className="space-y-1.5 flex flex-col">
@@ -1604,6 +1621,12 @@ const ProductManagement = () => {
                           }}
                           className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-[10px] font-bold">+ ADD</button>
                       </div>
+                      <PurchaseGstSettings
+                        gstType={formData.purchaseGstType}
+                        gstRate={formData.gstPercent}
+                        onTypeChange={(t) => setFormData((prev) => ({ ...prev, purchaseGstType: t }))}
+                        onRateChange={(r) => setFormData((prev) => ({ ...prev, gstPercent: r }))}
+                      />
                       <div className="space-y-4">
                         {formData.variants.map((v, i) => (
                           <div
@@ -1836,6 +1859,10 @@ const ProductManagement = () => {
                                 <input
                                   type="number"
                                   min="0"
+                                  step="any"
+                                  onKeyDown={(e) => {
+                                    if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                                  }}
                                   value={v.purchaseCost ?? ""}
                                   onChange={(e) => {
                                     const news = [...formData.variants];
@@ -1847,6 +1874,13 @@ const ProductManagement = () => {
                                 />
                               </div>
                             </div>
+
+                            {/* Purchase GST breakdown (live) */}
+                            <PurchaseGstBreakdown
+                              purchaseCost={v.purchaseCost}
+                              gstRate={formData.gstPercent}
+                              gstType={formData.purchaseGstType}
+                            />
                           </div>
                         ))}
                       </div>

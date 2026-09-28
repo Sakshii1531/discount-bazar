@@ -19,6 +19,7 @@ import { deliveryApi } from "../../services/deliveryApi";
 import { getOrderSocket, onNotificationNew } from "@/core/services/orderSocket";
 import { createSocketTokenReader } from "@core/utils/authStorage";
 import { STORAGE_KEYS } from "@core/utils/storage";
+import { formatAmount } from "@shared/utils/currency";
 
 const Withdrawals = () => {
     const navigate = useNavigate();
@@ -151,7 +152,7 @@ const Withdrawals = () => {
                         <div className="mt-6 flex items-center justify-between text-white bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/10">
                             <div className="flex items-center">
                                 <Clock size={16} className="mr-2 opacity-80" />
-                                <span className="text-[11px] font-bold">Pending: ₹{stats.pendingWithdrawals.toLocaleString()}</span>
+                                <span className="text-[11px] font-bold">Pending: ₹{formatAmount(stats.pendingWithdrawals)}</span>
                             </div>
                             <ArrowUpRight size={16} className="opacity-80" />
                         </div>
@@ -245,7 +246,7 @@ const Withdrawals = () => {
                                                         <Clock size={18} />}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-gray-900">₹{Math.abs(item.amount).toLocaleString()}</p>
+                                                <p className="font-bold text-gray-900">₹{formatAmount(Math.abs(item.amount))}</p>
                                                 <p className="text-[10px] font-medium text-gray-400 mt-0.5">
                                                     {itemDate ? new Date(itemDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''} • {itemRef}
                                                 </p>

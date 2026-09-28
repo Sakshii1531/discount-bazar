@@ -2,6 +2,8 @@ import Ticket from "../models/ticket.js";
 import Admin from "../models/admin.js";
 import handleResponse from "../utils/helper.js";
 import getPagination from "../utils/pagination.js";
+import User from "../models/customer.js";
+import { escapeRegex } from "../utils/regex.js";
 import { emitTicketCreated, emitTicketMessage, emitTicketStatusUpdated } from "../services/ticketSocketEmitter.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
@@ -85,9 +87,24 @@ export const getAllTickets = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req, { defaultLimit: 25, maxLimit: 200 });
 
+        const query = {};
+        const term = String(req.query.search || "").trim();
+        if (term) {
+            const escaped = escapeRegex(term);
+            const regex = new RegExp(escaped, "i");
+            const users = await User.find({ $or: [{ name: regex }, { email: regex }] })
+                .select("_id").limit(500).lean();
+            query.$or = [
+                { subject: regex },
+                { description: regex },
+                { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: escaped, options: "i" } } },
+            ];
+            if (users.length) query.$or.push({ userId: { $in: users.map((u) => u._id) } });
+        }
+
         const [tickets, total] = await Promise.all([
-            Ticket.find().populate("userId", "name email").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-            Ticket.countDocuments()
+            Ticket.find(query).populate("userId", "name email").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            Ticket.countDocuments(query)
         ]);
 
         return handleResponse(res, 200, "All tickets fetched successfully", {

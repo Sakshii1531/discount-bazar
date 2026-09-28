@@ -4,6 +4,7 @@ import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import { useToast } from "@shared/components/ui/Toast";
 
 import { useCart } from "../../../context/CartContext";
+import { formatAmount } from "@shared/utils/currency";
 
 /**
  * CheckoutCartSummary
@@ -116,8 +117,8 @@ const CheckoutCartSummary = React.memo(function CheckoutCartSummary({
                 sale > 0 &&
                 sale < mrp;
               const unit = hasDiscount ? sale : mrp;
-              const total = Math.round(unit * qty);
-              const totalMrp = Math.round(mrp * qty);
+              const total = formatAmount(unit * qty);
+              const totalMrp = formatAmount(mrp * qty);
               return (
                 <div className="text-right leading-tight">
                   <p className="text-base font-black text-slate-800">₹{total}</p>

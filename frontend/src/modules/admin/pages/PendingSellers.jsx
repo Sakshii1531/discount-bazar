@@ -44,7 +44,7 @@ const PendingSellers = () => {
     const fetchPendingSellers = async () => {
         setIsLoading(true);
         try {
-            const response = await adminApi.getPendingSellers({ q: searchTerm || undefined });
+            const response = await adminApi.getPendingSellers({ q: searchTerm.trim() || undefined });
             const payload = response.data.result || {};
             const items = Array.isArray(payload.items) ? payload.items : [];
             setPendingSellers(items);
@@ -63,9 +63,12 @@ const PendingSellers = () => {
     };
 
     useEffect(() => {
-        fetchPendingSellers();
+        const timer = setTimeout(() => {
+            fetchPendingSellers();
+        }, 500);
+        return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [searchTerm]);
 
     useEffect(() => {
         if (isReviewModalOpen) {
@@ -88,9 +91,13 @@ const PendingSellers = () => {
     }), [summaryStats]);
 
     const filteredSellers = useMemo(() => {
+        const query = searchTerm.toLowerCase().trim();
         return pendingSellers.filter(s =>
-            String(s.shopName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            String(s.ownerName || '').toLowerCase().includes(searchTerm.toLowerCase())
+            String(s.shopName || '').toLowerCase().includes(query) ||
+            String(s.ownerName || '').toLowerCase().includes(query) ||
+            String(s.email || '').toLowerCase().includes(query) ||
+            String(s.phone || '').toLowerCase().includes(query) ||
+            String(s.location || '').toLowerCase().includes(query)
         );
     }, [pendingSellers, searchTerm]);
 

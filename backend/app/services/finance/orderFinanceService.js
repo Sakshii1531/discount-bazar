@@ -8,7 +8,7 @@ import {
   OWNER_TYPE,
   PAYOUT_TYPE,
 } from "../../constants/finance.js";
-import { addMoney, roundCurrency } from "../../utils/money.js";
+import { addMoney, roundCurrency, ceilRupees } from "../../utils/money.js";
 import { computeReturnWindowDates } from "../../utils/returnWindow.js";
 import { createLedgerEntry } from "./ledgerService.js";
 import { createFinanceAuditLog } from "./auditLogService.js";
@@ -949,7 +949,7 @@ export async function reverseOrderFinanceOnCancellation(
           customerId,
           orderId: order.orderId,
           amount: totalRefunded,
-          message: `₹${totalRefunded} has been refunded to your wallet for order #${order.orderId}.`,
+          message: `₹${ceilRupees(totalRefunded)} has been refunded to your wallet for order #${order.orderId}.`,
         });
       } catch (notifErr) {
         // Non-blocking notification

@@ -33,6 +33,64 @@ const colorMap = {
   dark: "text-gray-800 bg-gray-100 border-gray-200 group-hover:bg-gray-200/50",
 };
 
+// Optional third level: a child that has its own `children` renders as a
+// collapsible group of links (e.g. Business > Account > Payment / Received).
+const SidebarSubGroup = ({ child }) => {
+  const location = useLocation();
+  const hasActive = child.children.some((g) => location.pathname === g.path);
+  const [open, setOpen] = useState(hasActive);
+  const expanded = open || hasActive;
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !(prev || hasActive))}
+        className={cn(
+          "w-full flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg transition-all duration-300",
+          hasActive
+            ? "text-white font-bold"
+            : "text-gray-500 hover:text-gray-300 hover:bg-white/5",
+        )}>
+        <span>{child.label}</span>
+        <HiChevronDown
+          className={cn(
+            "h-3.5 w-3.5 transition-all duration-300",
+            expanded ? "rotate-180 text-primary" : "rotate-0 text-gray-600",
+          )}
+        />
+      </button>
+      {expanded && (
+        <div className="pl-3 space-y-1 border-l border-white/5 ml-2.5">
+          {child.children.map((g) => (
+            <NavLink
+              key={g.path}
+              to={g.path}
+              end={g.end !== undefined ? g.end : false}
+              className={({ isActive }) =>
+                cn(
+                  "block text-xs py-1.5 px-2.5 rounded-lg transition-all duration-300 relative",
+                  isActive
+                    ? "text-white font-bold bg-white/10 shadow-sm ring-1 ring-white/5"
+                    : "text-gray-500 hover:text-gray-300 hover:bg-white/5",
+                )
+              }>
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+                  )}
+                  {g.label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SidebarItem = ({
   item,
   isOpen,
@@ -48,7 +106,11 @@ const SidebarItem = ({
   const hasChildren = item.children && item.children.length > 0;
   const isChildActive =
     hasChildren &&
-    item.children.some((child) => location.pathname === child.path);
+    item.children.some(
+      (child) =>
+        location.pathname === child.path ||
+        (child.children || []).some((g) => location.pathname === g.path),
+    );
 
   if (hasChildren) {
     return (
@@ -118,6 +180,9 @@ const SidebarItem = ({
         {isOpen && (
           <div className="pl-9 pr-3 py-1 space-y-1 animate-in slide-in-from-top-2 fade-in duration-500">
             {item.children.map((child) => {
+              if (child.children && child.children.length > 0) {
+                return <SidebarSubGroup key={child.path || child.label} child={child} />;
+              }
               const childBadgeCount = Number(child?.badgeCount || 0);
               const isSupportTicket = String(child?.path || "") === "/admin/support-tickets";
               const effectiveChildCount =

@@ -53,6 +53,13 @@ const productSchema = new mongoose.Schema(
         mrp: { type: Number, min: 0, default: 0 },
         purchaseCost: { type: Number, min: 0, default: 0 },
         gstPercent: { type: Number, min: 0, max: 100, default: 0 },
+        // Whether purchaseCost already includes GST (at gstPercent). Existing
+        // products default to EXCLUSIVE — how purchase bills already treat cost.
+        purchaseGstType: { type: String, enum: ["INCLUSIVE", "EXCLUSIVE"], default: "EXCLUSIVE" },
+        // Server-computed from purchaseCost + gstPercent + purchaseGstType (never client-set)
+        purchaseBasePrice: { type: Number, min: 0, default: 0 },
+        purchaseGstAmount: { type: Number, min: 0, default: 0 },
+        purchaseFinalPrice: { type: Number, min: 0, default: 0 },
         expiryDate: { type: Date, default: null },
         weight: {
             type: String,
@@ -151,6 +158,10 @@ const productSchema = new mongoose.Schema(
                 sku: String,
                 barcode: { type: String, trim: true },
                 purchaseCost: { type: Number, min: 0 },
+                // Server-computed purchase GST breakdown for this variant's purchaseCost
+                purchaseBasePrice: { type: Number, min: 0 },
+                purchaseGstAmount: { type: Number, min: 0 },
+                purchaseFinalPrice: { type: Number, min: 0 },
             }
         ],
         isFeatured: {

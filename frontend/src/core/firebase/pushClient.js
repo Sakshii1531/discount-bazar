@@ -3,6 +3,7 @@ import { getFirebaseApp } from "./client";
 import axiosInstance from "@core/api/axios";
 import TurboCartBridge from "../../lib/turboCartBridge";
 import { rawGet, rawSet, rawRemove, KEY_PREFIXES } from "@core/utils/storage";
+import { formatAmount } from "@shared/utils/currency";
 
 let foregroundListenerStarted = false;
 let foregroundUnsubscribe = null;
@@ -146,8 +147,8 @@ async function showSystemNotification({ title, body, data } = {}) {
     if (!safeBody || (!safeBody.includes("Item Amount") && !safeBody.includes("Net Earning"))) {
       const parts = [];
       if (data.orderId) parts.push(`Order #${data.orderId}`);
-      if (itemAmount != null && !isNaN(itemAmount)) parts.push(`Item Amount: ₹${itemAmount}`);
-      if (netEarnings != null && !isNaN(netEarnings)) parts.push(`Net Earning: ₹${netEarnings}`);
+      if (itemAmount != null && !isNaN(itemAmount)) parts.push(`Item Amount: ₹${formatAmount(itemAmount)}`);
+      if (netEarnings != null && !isNaN(netEarnings)) parts.push(`Net Earning: ₹${formatAmount(netEarnings)}`);
       if (parts.length > 0) safeBody = parts.join(" • ");
     }
   }

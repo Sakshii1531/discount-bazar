@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Card from "@/shared/components/ui/Card";
 import { deliveryApi } from "../services/deliveryApi";
 import { toast } from "sonner";
+import { formatAmount } from "@shared/utils/currency";
 
 const displayOrderStatus = (order) => {
   if (order?.workflowStatus === "DELIVERED" || order?.status === "delivered")
@@ -244,7 +245,7 @@ const OrderHistory = () => {
                       </div>
                       <div className="text-left sm:text-right shrink-0">
                         <span className="block font-bold text-lg text-brand-600 whitespace-nowrap">
-                          ₹{order.paymentBreakdown?.riderPayoutTotal || order.returnDeliveryCommission || 0}
+                          ₹{formatAmount(order.paymentBreakdown?.riderPayoutTotal || order.returnDeliveryCommission || 0)}
                         </span>
                         <span className="ds-caption text-gray-400">Earnings</span>
                       </div>

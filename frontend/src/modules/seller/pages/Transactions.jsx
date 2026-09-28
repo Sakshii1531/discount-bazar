@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { exportToCSV } from "@/lib/exportUtils";
 import { useSellerEarnings } from "../context/SellerEarningsContext";
 import Pagination from "@shared/components/ui/Pagination";
+import { formatAmount } from "@shared/utils/currency";
 
 const Transactions = () => {
   const { earningsData: data, earningsLoading: loading } = useSellerEarnings();
@@ -40,21 +41,21 @@ const Transactions = () => {
   const stats = [
     {
       label: "Settled Balance",
-      value: `₹${(data?.balances?.settledBalance || 0).toLocaleString()}`,
+      value: `₹${formatAmount(data?.balances?.settledBalance || 0)}`,
       icon: HiOutlineBanknotes,
       color: "text-brand-600",
       bg: "bg-brand-50",
     },
     {
       label: "Pending Payouts",
-      value: `₹${(data?.balances?.pendingPayouts || 0).toLocaleString()}`,
+      value: `₹${formatAmount(data?.balances?.pendingPayouts || 0)}`,
       icon: HiOutlineClock,
       color: "text-amber-600",
       bg: "bg-amber-50",
     },
     {
       label: "Total Revenue",
-      value: `₹${(data?.balances?.totalRevenue || 0).toLocaleString()}`,
+      value: `₹${formatAmount(data?.balances?.totalRevenue || 0)}`,
       icon: HiOutlineCreditCard,
       color: "text-brand-600",
       bg: "bg-brand-50",
@@ -63,15 +64,15 @@ const Transactions = () => {
 
   const ledger = Array.isArray(data?.ledger) ? data.ledger : [];
   const filteredTransactions = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
     const result = ledger.filter((txn) => {
       if (!term && activeTab === "All") return true;
       const id = (txn.id ?? txn.ref ?? "").toString().toLowerCase();
-      const customer = (txn.customer ?? "").toString().toLowerCase();
+      const customer = `${txn.customer ?? ""} ${txn.customerName ?? ""}`.toLowerCase();
       const ref = (txn.ref ?? "").toString().toLowerCase();
       const status = (txn.status ?? "").toString().toLowerCase();
       const type = (txn.type ?? "").toString().toLowerCase();
-      const amount = Math.abs(Number(txn.amount ?? 0)).toString();
+      const amount = `${Math.abs(Number(txn.amount ?? 0))} ${formatAmount(Math.abs(Number(txn.amount ?? 0)))}`;
       const matchesSearch =
         !term ||
         id.includes(term) ||
@@ -102,7 +103,7 @@ const Transactions = () => {
       const record = {
         id: txn.id ?? txn.ref ?? "",
         type: txn.type ?? "",
-        amount: `₹${Math.abs(Number(txn.amount ?? 0)).toLocaleString()}`,
+        amount: `₹${formatAmount(Math.abs(Number(txn.amount ?? 0)))}`,
         status: txn.status ?? "",
         date:
           txn.date ??
@@ -167,7 +168,7 @@ const Transactions = () => {
                   const exportData = filteredTransactions.map((txn) => ({
                     id: txn.id ?? txn.ref ?? "",
                     type: txn.type ?? "",
-                    amount: `₹${Number(txn.amount ?? 0).toLocaleString()}`,
+                    amount: `₹${formatAmount(txn.amount ?? 0)}`,
                     status: txn.status ?? "",
                     date: txn.date ?? (txn.createdAt ? new Date(txn.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ""),
                     time: txn.time ?? (txn.createdAt ? new Date(txn.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""),
@@ -350,7 +351,7 @@ const Transactions = () => {
                               : "text-rose-600",
                           )}>
                           {Number(txn.amount ?? 0) > 0 ? "+" : ""}₹
-                          {Math.abs(Number(txn.amount ?? 0)).toLocaleString()}
+                          {formatAmount(Math.abs(Number(txn.amount ?? 0)))}
                         </p>
                         <p className="text-[10px] sm:text-xs font-bold text-slate-600 mt-0.5">
                           Settlement: {(txn.status ?? "") === "Settled" ? "Complete" : "T+2"}
@@ -427,7 +428,7 @@ const Transactions = () => {
                   Number(selectedTxn.amount ?? 0) > 0 ? "text-brand-600" : "text-rose-600",
                 )}>
                 {Number(selectedTxn.amount ?? 0) > 0 ? "+" : ""}₹
-                {Math.abs(Number(selectedTxn.amount ?? 0)).toLocaleString()}
+                {formatAmount(Math.abs(Number(selectedTxn.amount ?? 0)))}
               </h2>
               <Badge className="mt-4 uppercase font-black text-[10px] sm:text-xs px-3 py-1">
                 {selectedTxn.status ?? "—"}

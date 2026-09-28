@@ -5,6 +5,7 @@ import {
   LEDGER_STATUS,
 } from "../../constants/finance.js";
 import { roundCurrency } from "../../utils/money.js";
+import { escapeRegex } from "../../utils/regex.js";
 
 function buildTransactionId(prefix = "LEDGER") {
   const now = Date.now();
@@ -110,6 +111,7 @@ export async function getLedgerEntries({
   paymentMode,
   fromDate,
   toDate,
+  search,
 } = {}) {
   const safePage = Math.max(parseInt(page, 10) || 1, 1);
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 200);
@@ -129,6 +131,28 @@ export async function getLedgerEntries({
       const end = new Date(toDate);
       end.setHours(23, 59, 59, 999);
       query.createdAt.$lte = end;
+    }
+  }
+  const term = String(search || "").trim();
+  if (term) {
+    // Spaces also match underscores so "order payment" finds ORDER_PAYMENT.
+    const pattern = term
+      .split(/\s+/)
+      .map((part) => escapeRegex(part))
+      .join("[\\s_]+");
+    const regex = new RegExp(pattern, "i");
+    query.$or = [
+      { transactionId: regex },
+      { reference: regex },
+      { description: regex },
+      { type: regex },
+      { actorType: regex },
+      { status: regex },
+      { paymentMode: regex },
+    ];
+    const numeric = Number(term);
+    if (Number.isFinite(numeric)) {
+      query.$or.push({ amount: numeric }, { amount: -numeric });
     }
   }
 

@@ -13,6 +13,8 @@ import { buildKey, getOrSet, getTTL } from "./cacheService.js";
 import { resolveWorkflowStatus } from "./orderWorkflowService.js";
 import { decorateOrderWithReturnEligibility } from "../utils/returnEligibilityHelper.js";
 import logger from "./logger.js";
+import User from "../models/customer.js";
+import { escapeRegex } from "../utils/regex.js";
 
 function svcErr(message, statusCode) {
   const error = new Error(message);
@@ -107,6 +109,7 @@ export async function fetchSellerOrdersPage({
   skip,
   limit,
   orderSource,
+  search,
 }) {
   const query = buildSellerOrdersQuery({
     role,
@@ -116,6 +119,25 @@ export async function fetchSellerOrdersPage({
     endDate,
     orderSource,
   });
+
+  const term = String(search || "").trim();
+  if (term) {
+    const regex = new RegExp(escapeRegex(term), "i");
+    const [customers, sellers] = await Promise.all([
+      User.find({ $or: [{ name: regex }, { phone: regex }] }).select("_id").limit(500).lean(),
+      Seller.find({ $or: [{ shopName: regex }, { name: regex }] }).select("_id").limit(500).lean(),
+    ]);
+    const searchOr = [
+      { orderId: regex },
+      { "address.name": regex },
+      { "address.phone": regex },
+      { "walkInCustomer.name": regex },
+      { "walkInCustomer.phone": regex },
+    ];
+    if (customers.length) searchOr.push({ customer: { $in: customers.map((c) => c._id) } });
+    if (sellers.length) searchOr.push({ seller: { $in: sellers.map((sl) => sl._id) } });
+    query.$and = [...(query.$and || []), { $or: searchOr }];
+  }
 
   const [orders, total, summaryRows] = await Promise.all([
     Order.find(query)

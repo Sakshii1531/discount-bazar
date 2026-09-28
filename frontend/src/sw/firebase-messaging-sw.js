@@ -79,8 +79,8 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
       if (!safeBody || (!safeBody.includes("Item Amount") && !safeBody.includes("Net Earning"))) {
         const parts = [];
         if (data.orderId) parts.push(`Order #${data.orderId}`);
-        if (itemAmount != null && !isNaN(itemAmount)) parts.push(`Item Amount: ₹${itemAmount}`);
-        if (netEarnings != null && !isNaN(netEarnings)) parts.push(`Net Earning: ₹${netEarnings}`);
+        if (itemAmount != null && !isNaN(itemAmount)) parts.push(`Item Amount: ₹${Math.ceil(Math.round(Number(itemAmount) * 100) / 100)}`);
+        if (netEarnings != null && !isNaN(netEarnings)) parts.push(`Net Earning: ₹${Math.ceil(Math.round(Number(netEarnings) * 100) / 100)}`);
         if (parts.length > 0) safeBody = parts.join(" • ");
       }
     }

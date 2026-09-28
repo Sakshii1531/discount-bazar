@@ -64,16 +64,16 @@ const CategoryHierarchy = () => {
 
   // Filter Logic
   const filteredHeaders = useMemo(() => {
-    if (!searchTerm) return categories.filter((c) => c.type === "header");
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return categories.filter((c) => c.type === "header");
 
-    // If searching, we want to show path to matches
-    // But for Miller columns, simple filtering of top level might be confusing
-    // So we'll just filter the current list being viewed
-    return categories.filter(
-      (c) =>
-        c.type === "header" &&
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    // A header matches if its own name or any nested category name matches,
+    // so searching for a level-2 / subcategory still surfaces its header.
+    const matchesTree = (node) =>
+      String(node?.name || "").toLowerCase().includes(query) ||
+      (Array.isArray(node?.children) && node.children.some(matchesTree));
+
+    return categories.filter((c) => c.type === "header" && matchesTree(c));
   }, [categories, searchTerm]);
 
   const activeLevel2 = useMemo(() => {

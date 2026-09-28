@@ -24,6 +24,7 @@ import Pagination from '@shared/components/ui/Pagination';
 import { adminApi } from '../services/adminApi';
 import { toast } from 'sonner';
 import { exportToCSV } from '@/lib/exportUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const CustomerManagement = () => {
     const navigate = useNavigate();
@@ -383,7 +384,7 @@ const CustomerManagement = () => {
                                             </div>
                                         </td>
                                         <td className="ds-table-cell ds-h4">
-                                            ₹{(cust.totalSpent || 0).toLocaleString()}
+                                            ₹{formatAmount(cust.totalSpent || 0)}
                                         </td>
                                         <td className="ds-table-cell">
                                             <Badge

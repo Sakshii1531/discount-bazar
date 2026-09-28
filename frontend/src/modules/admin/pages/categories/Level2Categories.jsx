@@ -179,9 +179,9 @@ const Level2Categories = () => {
 
   const filteredCategories = useMemo(() => {
     const filtered = categories.filter((cat) => {
-      const matchesSearch = cat.name
+      const matchesSearch = String(cat.name || "")
         .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+        .includes(searchTerm.toLowerCase().trim());
       const matchesHeader =
         filterHeader === "all" ||
         (cat.parentId && cat.parentId._id === filterHeader) ||

@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Pagination from '@shared/components/ui/Pagination';
 import { adminApi } from '../services/adminApi';
 import { toast } from 'sonner';
+import { formatAmount } from "@shared/utils/currency";
 
 const DeliveryFunds = () => {
     const [transfers, setTransfers] = useState([]);
@@ -54,6 +55,7 @@ const DeliveryFunds = () => {
                 id: tx.reference?.length > 16 ? tx.reference.slice(0, 8) + '...' + tx.reference.slice(-5) : (tx.reference || 'N/A'),
                 _id: tx._id,
                 riderName: tx.user?.name || 'Unknown',
+                riderPhone: tx.user?.phone || '',
                 riderId: tx.user?._id?.slice(-6).toUpperCase() || 'N/A',
                 amount: Math.abs(tx.amount),
                 status: tx.status?.toLowerCase() || 'pending',
@@ -108,7 +110,11 @@ const DeliveryFunds = () => {
 
     const filteredTransfers = useMemo(() => {
         return transfers.filter(tx => {
-            const matchesSearch = tx.riderName.toLowerCase().includes(searchTerm.toLowerCase()) || tx.referenceId.toLowerCase().includes(searchTerm.toLowerCase());
+            const query = searchTerm.toLowerCase().trim();
+            const matchesSearch = tx.riderName.toLowerCase().includes(query) ||
+                (tx.riderPhone || '').toLowerCase().includes(query) ||
+                (tx.referenceId || '').toLowerCase().includes(query) ||
+                String(tx._id || '').toLowerCase().includes(query);
             const matchesStatus = filterStatus === 'all' || tx.status === filterStatus;
             return matchesSearch && matchesStatus;
         });
@@ -120,9 +126,9 @@ const DeliveryFunds = () => {
         const float = transfers.reduce((acc, tx) => acc + tx.amount, 0);
 
         return [
-            { label: 'Total Settled', value: `₹${settled.toLocaleString()}`, icon: Banknote, color: 'emerald' },
-            { label: 'Pending Payouts', value: `₹${pending.toLocaleString()}`, icon: Clock, color: 'amber' },
-            { label: 'System Float', value: `₹${float.toLocaleString()}`, icon: Wallet, color: 'indigo' },
+            { label: 'Total Settled', value: `₹${formatAmount(settled)}`, icon: Banknote, color: 'emerald' },
+            { label: 'Pending Payouts', value: `₹${formatAmount(pending)}`, icon: Clock, color: 'amber' },
+            { label: 'System Float', value: `₹${formatAmount(float)}`, icon: Wallet, color: 'indigo' },
             { label: 'Riders Involved', value: [...new Set(transfers.map(tx => tx.riderId))].length, icon: Users, color: 'rose' },
         ];
     }, [transfers]);
@@ -269,7 +275,7 @@ const DeliveryFunds = () => {
                                         </td>
                                         <td className="px-4 py-7 text-center">
                                             <div className="flex flex-col items-center">
-                                                <p className="text-sm font-black text-slate-900">₹{tx.amount.toLocaleString()}</p>
+                                                <p className="text-sm font-black text-slate-900">₹{formatAmount(tx.amount)}</p>
                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{tx.paymentMethod}</span>
                                             </div>
                                         </td>
@@ -374,7 +380,7 @@ const DeliveryFunds = () => {
                                     )}>
                                         <Banknote className="h-10 w-10" />
                                     </div>
-                                    <h4 className="text-3xl font-black text-slate-900 tracking-tight">₹{viewingTxn.amount.toLocaleString()}</h4>
+                                    <h4 className="text-3xl font-black text-slate-900 tracking-tight">₹{formatAmount(viewingTxn.amount)}</h4>
                                     <div className="flex items-center justify-center gap-2 mt-2">
                                         <Badge variant={viewingTxn.status === 'completed' ? 'success' : 'warning'} className="uppercase font-black text-[9px]">
                                             {viewingTxn.status}

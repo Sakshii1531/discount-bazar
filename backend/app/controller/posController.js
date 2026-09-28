@@ -1,5 +1,6 @@
 import Product from "../models/product.js";
 import Order from "../models/order.js";
+import PosCustomer from "../models/posCustomer.js";
 import handleResponse from "../utils/helper.js";
 import { getPagination } from "../utils/pagination.js";
 import { getSellerTz, dayStart, dayEnd } from "../services/businessTime.js";
@@ -118,6 +119,12 @@ export const getPosSales = async (req, res) => {
         { "walkInCustomer.name": regex },
         { "walkInCustomer.phone": regex },
       ];
+      // Udhaar bills may be linked only to a ledger customer (no walk-in name typed)
+      const ledgerCustomers = await PosCustomer.find({ seller: sellerId, $or: [{ name: regex }, { phone: regex }] })
+        .select("_id")
+        .limit(200)
+        .lean();
+      if (ledgerCustomers.length) query.$or.push({ posCustomer: { $in: ledgerCustomers.map((c) => c._id) } });
     }
 
     const [items, total] = await Promise.all([

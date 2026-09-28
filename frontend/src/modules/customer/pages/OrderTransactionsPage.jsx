@@ -97,7 +97,7 @@ const OrderTransactionsPage = () => {
                                 const isRefund = paymentStatus === 'refunded' || paymentStatus === 'refund_completed' || order.returnStatus === 'refund_completed';
                                 const amount = getOrderAmount(order);
                                 const createdAt = order.createdAt ? new Date(order.createdAt) : null;
-                                const orderCode = order.orderId ? order.orderId.slice(-8) : (order._id ? order._id.slice(-8) : '');
+                                const orderCode = order.orderId || (order._id ? order._id.slice(-8) : '');
 
                                 return (
                                     <div

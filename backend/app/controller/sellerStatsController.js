@@ -31,7 +31,11 @@ export const getSellerEarnings = async (req, res) => {
 
         const transactions = await Transaction.find({ user: sellerId, userModel: 'Seller' })
             .sort({ createdAt: -1 })
-            .populate("order", "orderId");
+            .populate({
+                path: "order",
+                select: "orderId customer address.name address.phone walkInCustomer",
+                populate: { path: "customer", select: "name phone" },
+            });
 
         const settledBalance = transactions
             .filter(t => t.status === 'Settled')
@@ -131,7 +135,16 @@ export const getSellerEarnings = async (req, res) => {
                 date: t.createdAt.toISOString().split('T')[0],
                 time: t.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 customer: t.type === 'Withdrawal' ? 'Bank Transfer' : 'Customer',
-                ref: t.order ? `#${t.order.orderId}` : t.reference || t._id
+                ref: t.order ? `#${t.order.orderId}` : t.reference || t._id,
+                // Real customer name/phone for the order — used by the seller's transaction search
+                customerName: [
+                    t.order?.walkInCustomer?.name,
+                    t.order?.address?.name,
+                    t.order?.customer?.name,
+                    t.order?.walkInCustomer?.phone,
+                    t.order?.address?.phone,
+                    t.order?.customer?.phone,
+                ].filter(Boolean).join(' ')
             }))
         });
     } catch (error) {

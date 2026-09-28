@@ -193,9 +193,9 @@ const SubCategories = () => {
 
   const filteredCategories = useMemo(() => {
     const filtered = categories.filter((cat) => {
-      const matchesSearch = cat.name
+      const matchesSearch = String(cat.name || "")
         .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+        .includes(searchTerm.toLowerCase().trim());
       const matchesParent =
         filterLevel2 === "all" ||
         (cat.parentId && cat.parentId._id === filterLevel2) ||

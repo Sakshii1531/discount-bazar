@@ -13,6 +13,7 @@ import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { customerApi } from '../../services/customerApi';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { formatAmount } from "@shared/utils/currency";
 
 const AccordionItem = ({ title, children, id, icon, expandedSections, toggleSection }) => {
     const isOpen = expandedSections.includes(id);
@@ -661,7 +662,7 @@ const ProductDetailSheet = () => {
                                                         <span className="text-[12px] font-[700] uppercase tracking-wider">View Cart</span>
                                                     </div>
                                                     <div className="flex items-center justify-center gap-1.5 bg-white/10 px-2 py-1 rounded-lg">
-                                                        <span className="text-[13px] font-[800] tracking-tight">₹{cartTotal}</span>
+                                                        <span className="text-[13px] font-[800] tracking-tight">₹{formatAmount(cartTotal)}</span>
                                                         <ChevronRight size={14} strokeWidth={2.5} />
                                                     </div>
                                                 </Link>
@@ -1223,7 +1224,7 @@ const ProductDetailSheet = () => {
                                                 <span className="text-[11px] font-bold opacity-90 mt-1">{cartCount} {cartCount === 1 ? 'item' : 'items'} in cart</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[16px] font-[1000] tracking-tight">₹{cartTotal}</span>
+                                                <span className="text-[16px] font-[1000] tracking-tight">₹{formatAmount(cartTotal)}</span>
                                                 <ChevronRight size={18} strokeWidth={4} />
                                             </div>
                                         </Link>

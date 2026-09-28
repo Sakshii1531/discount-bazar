@@ -8,6 +8,8 @@ import PartyLedgerEntry from "../models/partyLedgerEntry.js";
 import Expense from "../models/expense.js";
 import CashEntry from "../models/cashEntry.js";
 import CashDay from "../models/cashDay.js";
+import Supplier from "../models/supplier.js";
+import PosCustomer from "../models/posCustomer.js";
 import { listParties } from "./businessService.js";
 import { roundCurrency as r2 } from "../utils/money.js";
 
@@ -372,4 +374,123 @@ export async function runReport(type, sellerId, query) {
   const fn = REPORTS[type];
   if (!fn) return null;
   return fn(sellerId, parseRange(query, await getSellerTz(sellerId)));
+}
+
+/* ---------------- account (money paid / received) ----------------
+ * Itemised view of the same money movements `cashMovements` totals, so the
+ * Account section always agrees with the Day Book.
+ */
+const POS_METHOD = { QR: "UPI" };
+const tenderLabel = (m) => POS_METHOD[m] || m || "CASH";
+
+async function partyNames(entries) {
+  const ids = (type) => [...new Set(entries.filter((e) => e.partyType === type).map((e) => String(e.party)))];
+  const [sups, custs] = await Promise.all([
+    Supplier.find({ _id: { $in: ids("SUPPLIER") } }).select("name").lean(),
+    PosCustomer.find({ _id: { $in: ids("CUSTOMER") } }).select("name").lean(),
+  ]);
+  return new Map([...sups, ...custs].map((p) => [String(p._id), p.name]));
+}
+
+async function paymentsMade(s, between) {
+  const [supplierPaid, refunds, expenses, manual] = await Promise.all([
+    PartyLedgerEntry.find({ seller: s, partyType: "SUPPLIER", kind: "PAYMENT", date: between }).lean(),
+    // CREDIT refunds only reduce the customer's udhaar; no money leaves the shop.
+    PosReturn.find({ seller: s, createdAt: between, refundMethod: { $ne: "CREDIT" } }).lean(),
+    Expense.find({ seller: s, date: between }).lean(),
+    CashEntry.find({ seller: s, direction: "OUT", date: between }).lean(),
+  ]);
+  const names = await partyNames(supplierPaid);
+  return [
+    ...supplierPaid.map((e) => ({
+      id: String(e._id), date: e.date, type: "Supplier Payment",
+      party: names.get(String(e.party)) || "Supplier",
+      reference: e.refNo || "", method: e.method || "CASH", note: e.note || "", amount: r2(e.amount),
+    })),
+    ...refunds.map((x) => ({
+      id: String(x._id), date: x.createdAt, type: "Customer Refund", party: "Customer",
+      reference: x.orderId || "", method: tenderLabel(x.refundMethod), note: x.reason || x.notes || "", amount: r2(x.refundTotal),
+    })),
+    ...expenses.map((x) => ({
+      id: String(x._id), date: x.date, type: "Expense", party: x.category || "General",
+      reference: "", method: x.method || "CASH", note: x.note || "", amount: r2(x.amount),
+    })),
+    ...manual.map((x) => ({
+      id: String(x._id), date: x.date, type: "Cash Out", party: "—",
+      reference: "", method: "CASH", note: x.note || "", amount: r2(x.amount),
+    })),
+  ];
+}
+
+async function paymentsReceived(s, between) {
+  const [posOrders, appOrders, receipts, manual] = await Promise.all([
+    Order.find({ seller: s, orderSource: "POS", createdAt: between })
+      .select("orderId createdAt posPaymentMethod posPayments posAmountPaid paymentBreakdown.grandTotal posCustomer walkInCustomer")
+      .populate("posCustomer", "name")
+      .lean(),
+    Order.find({ seller: s, orderSource: { $ne: "POS" }, workflowStatus: "DELIVERED", createdAt: between })
+      .select("orderId createdAt paymentMode paymentBreakdown.grandTotal address.name")
+      .lean(),
+    // "paid at billing" entries are already part of the POS sale amount.
+    PartyLedgerEntry.find({ seller: s, partyType: "CUSTOMER", kind: "PAYMENT", refModel: { $ne: "Order" }, date: between }).lean(),
+    CashEntry.find({ seller: s, direction: "IN", date: between }).lean(),
+  ]);
+  const names = await partyNames(receipts);
+  const rows = [];
+  for (const o of posOrders) {
+    const lines = o.posPayments?.length
+      ? o.posPayments
+      : [{ method: o.posPaymentMethod, amount: o.posAmountPaid ?? o.paymentBreakdown?.grandTotal }];
+    const amount = lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+    if (amount <= 0) continue;
+    const methods = [...new Set(lines.map((l) => tenderLabel(l.method)))].join(" + ");
+    rows.push({
+      id: String(o._id), date: o.createdAt, type: "POS Sale",
+      party: o.posCustomer?.name || o.walkInCustomer?.name || "Walk-in Customer",
+      reference: o.orderId || "", method: o.posPaymentMethod === "CREDIT" ? "CASH (Udhaar paid)" : methods,
+      note: "", amount: r2(amount),
+    });
+  }
+  for (const o of appOrders) {
+    const amount = Number(o.paymentBreakdown?.grandTotal) || 0;
+    if (amount <= 0) continue;
+    rows.push({
+      id: String(o._id), date: o.createdAt, type: "Online Order",
+      party: o.address?.name || "Customer", reference: o.orderId || "",
+      method: o.paymentMode || "ONLINE", note: "", amount: r2(amount),
+    });
+  }
+  for (const e of receipts) {
+    rows.push({
+      id: String(e._id), date: e.date, type: "Customer Payment",
+      party: names.get(String(e.party)) || "Customer",
+      reference: e.refNo || "", method: e.method || "CASH", note: e.note || "", amount: r2(e.amount),
+    });
+  }
+  for (const x of manual) {
+    rows.push({
+      id: String(x._id), date: x.date, type: "Cash In", party: "—",
+      reference: "", method: "CASH", note: x.note || "", amount: r2(x.amount),
+    });
+  }
+  return rows;
+}
+
+export const ACCOUNT_VIEWS = ["payments", "received"];
+
+export async function accountTransactions(sellerId, view, query = {}) {
+  const tz = await getSellerTz(sellerId);
+  const { fromKey, toKey, from, to } = parseRange(query, tz);
+  const s = oid(sellerId);
+  const between = { $gte: from, $lte: to };
+  const rows = (view === "payments" ? await paymentsMade(s, between) : await paymentsReceived(s, between))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const byType = {};
+  for (const r of rows) byType[r.type] = r2((byType[r.type] || 0) + r.amount);
+  return {
+    from: fromKey,
+    to: toKey,
+    rows,
+    totals: { count: rows.length, amount: r2(rows.reduce((sum, r) => sum + r.amount, 0)), byType },
+  };
 }

@@ -36,9 +36,12 @@ const ReviewModeration = () => {
     const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => {
-        fetchReviews(1);
+        const timer = setTimeout(() => {
+            fetchReviews(1);
+        }, 500);
+        return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pageSize, statusFilter]);
+    }, [pageSize, statusFilter, searchQuery]);
 
     const fetchReviews = async (requestedPage = 1) => {
         try {

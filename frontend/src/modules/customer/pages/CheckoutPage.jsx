@@ -76,6 +76,7 @@ import CheckoutCouponSection from "./checkout/components/CheckoutCouponSection";
 import CheckoutRecommendedProducts from "./checkout/components/CheckoutRecommendedProducts";
 import CheckoutWishlistSection from "./checkout/components/CheckoutWishlistSection";
 import CheckoutOrderSuccess from "./checkout/components/CheckoutOrderSuccess";
+import { formatAmount } from "@shared/utils/currency";
 
 const placesLibrary = ["places"];
 
@@ -1495,7 +1496,7 @@ const CheckoutPage = () => {
                         );
                       })()
                     ) : (
-                      `Total: ₹${cartTotal}`
+                      `Total: ₹${formatAmount(cartTotal)}`
                     )}
                   </div>
                 </div>

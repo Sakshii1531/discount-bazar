@@ -38,11 +38,7 @@ const InvoiceModal = ({ isOpen, onClose, order }) => {
   };
 
   const rawOrderId = order.orderId || order.id || order._id || "";
-  const displayOrderId = rawOrderId
-    ? rawOrderId.length > 14
-      ? `ORD-${rawOrderId.slice(-8)}`
-      : rawOrderId
-    : "N/A";
+  const displayOrderId = rawOrderId || "N/A";
 
   const orderDate = order.createdAt
     ? new Date(order.createdAt).toLocaleDateString("en-IN", {

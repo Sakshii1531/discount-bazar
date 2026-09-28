@@ -1,11 +1,11 @@
 import { buildCheckoutGroupId, buildPublicOrderId } from "../app/services/orderIdService.js";
 
 describe("orderIdService", () => {
-  test("public order IDs use collision-resistant sortable format", () => {
+  test("public order IDs are short (ORD- + 8 chars) and collision-resistant", () => {
     const ids = new Set();
     for (let i = 0; i < 1000; i += 1) {
       const id = buildPublicOrderId();
-      expect(id).toMatch(/^ORD-[0-9A-Z]{10}$/);
+      expect(id).toMatch(/^ORD-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{8}$/);
       ids.add(id);
     }
     expect(ids.size).toBe(1000);

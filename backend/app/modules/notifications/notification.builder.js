@@ -3,6 +3,7 @@ import {
   NOTIFICATION_ROLES,
   ROLE_TO_RECIPIENT_MODEL,
 } from "./notification.constants.js";
+import { ceilRupees } from "../../utils/money.js";
 
 function normalizeId(value) {
   if (!value) return null;
@@ -168,7 +169,7 @@ function eventDefinition(eventType) {
         body: (payload) =>
           payload.message ||
           (payload.amount
-            ? `₹${payload.amount} has been refunded to your wallet for order #${payload.orderId || ""}.`
+            ? `₹${ceilRupees(payload.amount)} has been refunded to your wallet for order #${payload.orderId || ""}.`
             : "Refund has been completed."),
       };
     case NOTIFICATION_EVENTS.NEW_ORDER:
@@ -197,8 +198,8 @@ function eventDefinition(eventType) {
               : null;
 
           const orderIdStr = payload.orderId ? `Order #${payload.orderId}` : "New order";
-          const itemStr = itemAmount != null && !isNaN(itemAmount) ? `Item Amount: ₹${Math.round(itemAmount)}` : null;
-          const earnStr = netEarnings != null && !isNaN(netEarnings) ? `Net Earning: ₹${Math.round(netEarnings)}` : null;
+          const itemStr = itemAmount != null && !isNaN(itemAmount) ? `Item Amount: ₹${ceilRupees(itemAmount)}` : null;
+          const earnStr = netEarnings != null && !isNaN(netEarnings) ? `Net Earning: ₹${ceilRupees(netEarnings)}` : null;
 
           if (itemStr && earnStr) {
             return `${orderIdStr} • ${itemStr} • ${earnStr}`;
@@ -333,7 +334,7 @@ function eventDefinition(eventType) {
         title: () => "QC Passed — Refund Initiated 💸",
         body: (payload) =>
           `Quality check passed for order #${payload.orderId || ""}. Refund of ₹${
-            payload.data?.refundAmount || 0
+            ceilRupees(payload.data?.refundAmount || 0)
           } credited to your wallet.`,
       };
     case NOTIFICATION_EVENTS.RETURN_QC_FAILED:

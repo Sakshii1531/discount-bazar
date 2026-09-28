@@ -8,6 +8,7 @@ import {
   emitPendingReviewUpdateToAdmins,
   emitDeliveryApproved,
 } from "../../services/orderSocketEmitter.js";
+import { escapeRegex } from "../../utils/regex.js";
 
 export const getDeliveryPartners = async (req, res) => {
   try {
@@ -27,7 +28,7 @@ export const getDeliveryPartners = async (req, res) => {
     }
 
     if (search && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), "i");
+      const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
       query.$or = [
         { name: searchRegex },
         { phone: searchRegex },
@@ -312,6 +313,19 @@ export const getActiveFleet = async (req, res) => {
         $in: ["confirmed", "packed", "shipped", "out_for_delivery"],
       },
     };
+
+    const term = String(req.query.search || "").trim();
+    if (term) {
+      const regex = new RegExp(escapeRegex(term), "i");
+      const partners = await Delivery.find({ $or: [{ name: regex }, { phone: regex }] })
+        .select("_id")
+        .limit(500)
+        .lean();
+      query.$or = [{ orderId: regex }];
+      if (partners.length) {
+        query.$or.push({ deliveryBoy: { $in: partners.map((p) => p._id) } });
+      }
+    }
 
     const [activeOrders, total] = await Promise.all([
       Order.find(query)

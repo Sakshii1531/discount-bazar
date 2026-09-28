@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@shared/components/ui/Toast';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
+import { formatAmount } from "@shared/utils/currency";
 
 const CartPage = () => {
     const { cart, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
@@ -102,7 +103,7 @@ const CartPage = () => {
                                                                 const mrp = Number(item.price || 0);
                                                                 const sale = Number(item.salePrice || 0);
                                                                 const unit = sale > 0 && sale < mrp ? sale : mrp;
-                                                                return Math.round(unit * Number(item.quantity || 0));
+                                                                return formatAmount(unit * Number(item.quantity || 0));
                                                             })()}
                                                         </div>
                                                         <div className="pb-0.5 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
@@ -171,7 +172,7 @@ const CartPage = () => {
                                     <div className="space-y-3 rounded-[1.5rem] bg-white/5 p-4 backdrop-blur-sm">
                                         <div className="flex justify-between text-sm text-white/75">
                                             <span>Subtotal</span>
-                                            <span className="font-bold text-white">₹{cartTotal}</span>
+                                            <span className="font-bold text-white">₹{formatAmount(cartTotal)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm text-white/75">
                                             <span>Delivery Fee</span>
@@ -179,7 +180,7 @@ const CartPage = () => {
                                         </div>
                                         <div className="border-t border-white/10 pt-4 flex items-center justify-between">
                                             <span className="text-base font-bold text-white/85">Total Amount</span>
-                                            <span className="text-3xl font-black tracking-tight text-brand-300">₹{cartTotal}</span>
+                                            <span className="text-3xl font-black tracking-tight text-brand-300">₹{formatAmount(cartTotal)}</span>
                                         </div>
                                     </div>
 
