@@ -10,7 +10,7 @@ import Modal from "./ui/Modal";
 import Button from "./ui/Button";
 import Input from "./ui/Input";
 
-const libraries = ["places"];
+const libraries = ["places", "geometry"];
 const mapContainerStyle = {
   width: "100%",
   height: "100%",

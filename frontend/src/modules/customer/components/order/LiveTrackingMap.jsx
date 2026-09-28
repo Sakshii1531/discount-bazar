@@ -18,7 +18,7 @@ import customerPin from "@/assets/customer-pin.png";
 import deliveryIcon from "@/assets/deliveryIcon.png";
 import storePin from "@/assets/store-pin.png";
 
-const libraries = ["geometry"];
+const libraries = ["places", "geometry"];
 
 const containerStyle = {
   width: "100%",
@@ -72,10 +72,16 @@ const LiveTrackingMap = memo(({
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: "customer-tracking-map",
+    id: "google-map-script",
     googleMapsApiKey: apiKey,
     libraries,
   });
+
+  useEffect(() => {
+    if (window.google?.maps?.importLibrary && !window.google?.maps?.geometry) {
+      window.google.maps.importLibrary("geometry").catch(() => {});
+    }
+  }, [isLoaded]);
 
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
@@ -83,19 +89,37 @@ const LiveTrackingMap = memo(({
   }, []);
 
   const focusOnRider500m = useCallback((map, rider) => {
-    if (!map || !window.google || !hasValidLatLng(rider)) return;
-    const center = new window.google.maps.LatLng(rider.lat, rider.lng);
-    const bounds = new window.google.maps.LatLngBounds();
-    const offsets = [0, 90, 180, 270];
-    offsets.forEach((heading) => {
-      const point = window.google.maps.geometry.spherical.computeOffset(
-        center,
-        RIDER_FOCUS_RADIUS_M,
-        heading,
-      );
-      bounds.extend(point);
-    });
-    map.fitBounds(bounds, 24);
+    if (!map || !window.google?.maps || !hasValidLatLng(rider)) return;
+    try {
+      const center = new window.google.maps.LatLng(rider.lat, rider.lng);
+      const bounds = new window.google.maps.LatLngBounds();
+      const spherical = window.google?.maps?.geometry?.spherical;
+
+      if (spherical && typeof spherical.computeOffset === "function") {
+        const offsets = [0, 90, 180, 270];
+        offsets.forEach((heading) => {
+          const point = spherical.computeOffset(
+            center,
+            RIDER_FOCUS_RADIUS_M,
+            heading,
+          );
+          bounds.extend(point);
+        });
+      } else {
+        // Fallback: 500m bounding box calculation (approx ~111,320m per degree latitude)
+        const latDelta = RIDER_FOCUS_RADIUS_M / 111320;
+        const cosLat = Math.cos((rider.lat * Math.PI) / 180);
+        const lngDelta = RIDER_FOCUS_RADIUS_M / (111320 * (Math.abs(cosLat) > 0.0001 ? Math.abs(cosLat) : 1));
+        bounds.extend(new window.google.maps.LatLng(rider.lat - latDelta, rider.lng - lngDelta));
+        bounds.extend(new window.google.maps.LatLng(rider.lat + latDelta, rider.lng + lngDelta));
+      }
+      map.fitBounds(bounds, 24);
+    } catch (err) {
+      console.warn("[LiveTrackingMap] Error focusing on rider:", err);
+      try {
+        map.panTo({ lat: rider.lat, lng: rider.lng });
+      } catch (_) {}
+    }
   }, []);
 
   const activeTargetLocation = routePhase === "delivery" ? destinationLocation : sellerLocation;

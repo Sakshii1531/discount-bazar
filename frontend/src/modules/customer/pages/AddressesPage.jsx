@@ -19,7 +19,7 @@ import { useLocation } from '../context/LocationContext';
 import MapPicker from '../../../shared/components/MapPicker';
 import { useJsApiLoader } from "@react-google-maps/api";
 
-const libraries = ["places"];
+const libraries = ["places", "geometry"];
 
 const ADDRESS_COMPONENT_PRIORITY = {
     locality: [
