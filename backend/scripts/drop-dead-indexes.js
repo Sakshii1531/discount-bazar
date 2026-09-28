@@ -37,6 +37,11 @@ const DROP_LIST = [
   // ledgerentries: fields are `actorType` + `actorId`, not `ownerType` + `ownerId`.
   { coll: "ledgerentries", name: "idx_ownerType_ownerId_created" },
 
+  // deliveryratings: legacy UNIQUE index on `order` — the schema field is `orderId`.
+  // Every rating is missing `order`, so the index treats them all as null and allows
+  // only ONE rating in the whole collection; later ratings fail with E11000.
+  { coll: "deliveryratings", name: "order_1" },
+
   // withdrawals indexes (the collection itself is dropped below if empty).
   { coll: "withdrawals", name: "idx_status_created" },
   { coll: "withdrawals", name: "idx_user_userModel_created" },

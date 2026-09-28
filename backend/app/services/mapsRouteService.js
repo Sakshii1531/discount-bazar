@@ -88,6 +88,46 @@ function hasValidPoint(point) {
   );
 }
 
+/** Rider within this distance of a cached route is still "on" it (GPS error + road width). */
+const ON_ROUTE_THRESHOLD_M = () =>
+  parseInt(process.env.ROUTE_ON_ROUTE_THRESHOLD_METERS || "60", 10);
+
+/** Shortest distance (m) from a point to an encoded polyline, or Infinity. */
+function distanceToEncodedRoute(point, encoded) {
+  let coords;
+  try {
+    coords = polyline.decode(encoded);
+  } catch {
+    return Infinity;
+  }
+  if (!Array.isArray(coords) || coords.length < 2) return Infinity;
+  const R = 6371000;
+  const rad = (d) => (d * Math.PI) / 180;
+  const cosLat = Math.cos(rad(point.lat));
+  const px = rad(point.lng) * cosLat * R;
+  const py = rad(point.lat) * R;
+  let best = Infinity;
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const ax = rad(coords[i][1]) * cosLat * R;
+    const ay = rad(coords[i][0]) * R;
+    const bx = rad(coords[i + 1][1]) * cosLat * R;
+    const by = rad(coords[i + 1][0]) * R;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/**
+ * A cached route is reusable when it is for the same phase/mode/destination and the
+ * rider is either near where it started or still travelling on it. A rider who has
+ * left the route (detour / shortcut) gets a fresh route instead of a stale line.
+ */
 function isRouteCacheCompatible(cached, origin, dest, phase, mode) {
   if (!cached?.polyline) return false;
   if ((cached.phase || "pickup") !== phase) return false;
@@ -97,21 +137,23 @@ function isRouteCacheCompatible(cached, origin, dest, phase, mode) {
     return false;
   }
 
-  const originDrift = distanceMeters(
-    origin.lat,
-    origin.lng,
-    cached.origin.lat,
-    cached.origin.lng,
-  );
+  const threshold = Math.max(25, ROUTE_CACHE_MATCH_THRESHOLD_M());
   const destDrift = distanceMeters(
     dest.lat,
     dest.lng,
     cached.destination.lat,
     cached.destination.lng,
   );
+  if (destDrift > threshold) return false;
 
-  const threshold = Math.max(25, ROUTE_CACHE_MATCH_THRESHOLD_M());
-  return originDrift <= threshold && destDrift <= threshold;
+  const originDrift = distanceMeters(
+    origin.lat,
+    origin.lng,
+    cached.origin.lat,
+    cached.origin.lng,
+  );
+  if (originDrift <= threshold) return true;
+  return distanceToEncodedRoute(origin, cached.polyline) <= ON_ROUTE_THRESHOLD_M();
 }
 
 /**
@@ -124,10 +166,19 @@ function isRouteCacheCompatible(cached, origin, dest, phase, mode) {
  * @param {string} mode - "driving" | "walking" | "bicycling" | "transit"
  * @param {string} orderId - Optional order ID for Firebase caching
  * @param {string} phase - "pickup" | "delivery"
+ * @param {Object} [options]
+ * @param {boolean} [options.forceRefresh] - rider left the route: skip every cache and re-route
  */
-export async function getCachedRoute(origin, dest, mode = "driving", orderId = null, phase = "pickup") {
+export async function getCachedRoute(
+  origin,
+  dest,
+  mode = "driving",
+  orderId = null,
+  phase = "pickup",
+  { forceRefresh = false } = {},
+) {
   // Try Firebase cache first if orderId is provided
-  if (orderId) {
+  if (orderId && !forceRefresh) {
     try {
       const firebaseRoute = await getRoutePolyline(orderId);
       const cachedPhase = firebaseRoute?.phase || "pickup";
@@ -150,7 +201,7 @@ export async function getCachedRoute(origin, dest, mode = "driving", orderId = n
   // Try Redis cache
   const redis = getRedisClient();
   const key = cacheKey(origin, dest, mode);
-  if (redis) {
+  if (redis && !forceRefresh) {
     try {
       const cached = await redis.get(key);
       if (cached) {

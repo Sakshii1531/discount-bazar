@@ -17,6 +17,13 @@ import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import customerPin from "@/assets/customer-pin.png";
 import deliveryIcon from "@/assets/deliveryIcon.png";
 import storePin from "@/assets/store-pin.png";
+import {
+  ROUTE_TRACKING,
+  snapToRoute,
+  remainingPath,
+  pathLengthMeters,
+  toLatLngLiteral,
+} from "@shared/utils/routeGeometry";
 
 const libraries = ["places", "geometry"];
 
@@ -61,6 +68,7 @@ const LiveTrackingMap = memo(({
   destinationLocation,
   routePhase = "pickup",
   routePolyline,
+  onRouteProgress,
   onOpenInMaps,
 }) => {
   const mapRef = useRef(null);
@@ -137,7 +145,10 @@ const LiveTrackingMap = memo(({
       return null;
     }
     try {
-      const decoded = window.google.maps.geometry.encoding.decodePath(routePolyline.polyline);
+      const decoded = window.google.maps.geometry.encoding
+        .decodePath(routePolyline.polyline)
+        .map(toLatLngLiteral)
+        .filter(Boolean);
       console.log(`[LiveTrackingMap] ✓ Decoded polyline with ${decoded.length} points`);
       return decoded;
     } catch (err) {
@@ -146,13 +157,53 @@ const LiveTrackingMap = memo(({
     }
   }, [routePolyline, isLoaded]);
 
+  // Snap the rider's GPS onto the route and keep only the road still ahead.
+  const snapHintRef = useRef(0);
+  useEffect(() => {
+    snapHintRef.current = 0;
+  }, [decodedPath]);
+  const snap = useMemo(() => {
+    if (!hasValidLatLng(riderLocation) || !decodedPath?.length) return null;
+    const s = snapToRoute(decodedPath, riderLocation, snapHintRef.current);
+    if (s) snapHintRef.current = s.segmentIndex;
+    return s;
+  }, [riderLocation, decodedPath]);
+  const isOnRoute = Boolean(snap && snap.distance <= ROUTE_TRACKING.OFF_ROUTE_M);
+  // Marker and remaining line share one rule: on-route → both drawn on the road.
+  const isSnapped = isOnRoute;
+  const displayRider = isSnapped
+    ? snap.point
+    : hasValidLatLng(riderLocation)
+      ? { lat: riderLocation.lat, lng: riderLocation.lng }
+      : null;
+  const aheadPath = useMemo(() => {
+    if (!decodedPath?.length) return null;
+    return isOnRoute ? remainingPath(decodedPath, snap) : decodedPath;
+  }, [decodedPath, isOnRoute, snap]);
+
+  // Tell the page how far along the route the rider is (ETA scaling / reroute decisions).
+  useEffect(() => {
+    if (typeof onRouteProgress !== "function") return;
+    if (!decodedPath?.length || !snap) {
+      onRouteProgress(null);
+      return;
+    }
+    const full = pathLengthMeters(decodedPath);
+    const left = isOnRoute ? pathLengthMeters(aheadPath) : full;
+    onRouteProgress({
+      onRoute: isOnRoute,
+      remainingRatio: full > 0 ? Math.max(0, Math.min(1, left / full)) : 1,
+    });
+  }, [onRouteProgress, decodedPath, snap, isOnRoute, aheadPath]);
+
   const riderMarkerIcon = useMemo(() => {
     if (!isLoaded || !window.google?.maps) return undefined;
 
     return {
       url: deliveryIcon,
       scaledSize: new window.google.maps.Size(44, 64),
-      anchor: new window.google.maps.Point(22, 64),
+      // Vehicle icon is centred on its position (pins use a bottom anchor, a vehicle does not)
+      anchor: new window.google.maps.Point(22, 32),
     };
   }, [isLoaded]);
 
@@ -178,18 +229,19 @@ const LiveTrackingMap = memo(({
 
   // Calculate map center and bounds
   const mapCenter = useMemo(() => {
-    if (riderLocation) return riderLocation;
+    if (displayRider) return displayRider;
     if (hasValidLatLng(activeTargetLocation)) return activeTargetLocation;
     return { lat: 20.5937, lng: 78.9629 };
-  }, [activeTargetLocation, riderLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTargetLocation, displayRider?.lat, displayRider?.lng]);
 
   // Fit bounds when locations or route change
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.google) return;
 
-    if (hasValidLatLng(riderLocation)) {
-      focusOnRider500m(map, riderLocation);
+    if (displayRider) {
+      focusOnRider500m(map, displayRider);
       return;
     }
     
@@ -219,21 +271,24 @@ const LiveTrackingMap = memo(({
     } catch (err) {
       console.error("Error fitting bounds:", err);
     }
-  }, [activeTargetLocation, riderLocation, decodedPath, focusOnRider500m]);
+    // Re-fit on route/destination changes; the recenter timer follows the rider between fixes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTargetLocation, !!displayRider, decodedPath, focusOnRider500m]);
 
   // Keep rider centered during live tracking with a smooth map pan.
   useEffect(() => {
-    if (!isLoaded || !mapRef.current || !hasValidLatLng(riderLocation)) return undefined;
+    if (!isLoaded || !mapRef.current || !displayRider) return undefined;
 
     const intervalId = setInterval(() => {
       const map = mapRef.current;
-      if (!map || !hasValidLatLng(riderLocation)) return;
-      map.panTo(riderLocation);
-      focusOnRider500m(map, riderLocation);
+      if (!map || !displayRider) return;
+      map.panTo(displayRider);
+      focusOnRider500m(map, displayRider);
     }, RECENTER_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [isLoaded, riderLocation?.lat, riderLocation?.lng, focusOnRider500m]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, displayRider?.lat, displayRider?.lng, focusOnRider500m]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -281,7 +336,7 @@ const LiveTrackingMap = memo(({
           Waiting for seller to accept
         </h3>
         <p className="text-sm text-gray-500 text-center max-w-sm font-medium">
-          The store has up to 60 seconds to confirm. If they don&apos;t, your
+          The store has up to 1 hour to confirm. If they don&apos;t, your
           order will be cancelled automatically.
         </p>
       </div>
@@ -388,9 +443,9 @@ const LiveTrackingMap = memo(({
         }}
       >
         {/* Rider Location Marker */}
-        {riderLocation && (
+        {displayRider && (
           <Marker
-            position={riderLocation}
+            position={displayRider}
             title="Delivery Partner"
             icon={riderMarkerIcon}
           />
@@ -415,9 +470,9 @@ const LiveTrackingMap = memo(({
         )}
 
         {/* Line connecting rider to destination - use cached polyline if available */}
-        {decodedPath && decodedPath.length > 0 ? (
+        {aheadPath && aheadPath.length > 0 ? (
           <Polyline
-            path={decodedPath}
+            path={aheadPath}
             options={{
               strokeColor: "var(--primary)",
               strokeOpacity: 0.8,

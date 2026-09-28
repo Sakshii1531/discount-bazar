@@ -111,6 +111,18 @@ export function resolveWorkflowStatus(order) {
 export async function afterPlaceOrderV2(orderDoc) {
   const orderId = orderDoc.orderId;
   await scheduleSellerTimeoutJob(orderId);
+  // This is usually the first `order:new` the seller receives, so it must carry the
+  // seller's figures too — the accept/decline popup shows Item Amount + Net Earning.
+  const itemAmount =
+    orderDoc.paymentBreakdown?.productSubtotal ??
+    orderDoc.pricing?.subtotal ??
+    orderDoc.pricing?.total ??
+    0;
+  const netEarnings =
+    orderDoc.paymentBreakdown?.sellerPayoutTotal ??
+    orderDoc.pricing?.subtotal ??
+    orderDoc.pricing?.total ??
+    0;
   emitToSeller(orderDoc.seller?.toString(), {
     event: "order:new",
     payload: {
@@ -118,6 +130,9 @@ export async function afterPlaceOrderV2(orderDoc) {
       workflowStatus: WORKFLOW_STATUS.SELLER_PENDING,
       sellerPendingExpiresAt: orderDoc.sellerPendingExpiresAt,
       pricing: orderDoc.pricing,
+      paymentBreakdown: orderDoc.paymentBreakdown,
+      itemAmount,
+      netEarnings,
     },
   });
 }

@@ -9,10 +9,18 @@ import {
   getCachedDeliveryPartnerLocation,
   saveDeliveryPartnerLocation,
 } from "../utils/deliveryLastLocation";
+import {
+  ROUTE_TRACKING,
+  snapToRoute,
+  remainingPath,
+  pathLengthMeters,
+  toLatLngLiteral,
+} from "@shared/utils/routeGeometry";
 
 const libraries = ["geometry"];
-const ROUTE_REFRESH_THRESHOLD_M = 150;
-const ROUTE_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+// Periodic refresh keeps traffic-based ETA current; movement-based rerouting is
+// handled separately (off-route detection below), so this can be relaxed.
+const ROUTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const RECENTER_INTERVAL_MS = 15000;
 const RIDER_FOCUS_RADIUS_M = 500;
 const LOCATION_POST_INTERVAL_MS = 5000;
@@ -30,32 +38,6 @@ function coordsToLatLng(coords) {
   const [lng, lat] = coords;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return { lat, lng };
-}
-
-function distanceMeters(from, to) {
-  if (!from || !to) return null;
-  if (
-    typeof from.lat !== "number" ||
-    typeof from.lng !== "number" ||
-    typeof to.lat !== "number" ||
-    typeof to.lng !== "number" ||
-    !Number.isFinite(from.lat) ||
-    !Number.isFinite(from.lng) ||
-    !Number.isFinite(to.lat) ||
-    !Number.isFinite(to.lng)
-  ) {
-    return null;
-  }
-
-  const r = 6371000;
-  const dLat = ((to.lat - from.lat) * Math.PI) / 180;
-  const dLng = ((to.lng - from.lng) * Math.PI) / 180;
-  const lat1 = (from.lat * Math.PI) / 180;
-  const lat2 = (to.lat * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function destinationForPhase(order, phase) {
@@ -124,6 +106,10 @@ const DeliveryTrackingMapComponent = ({
   const [routeLoading, setRouteLoading] = useState(false);
   const lastFetchRef = useRef({ at: 0, phase: null, orderId: null });
   const routeOriginRef = useRef(null);
+  // Snapping / off-route state (refs: updated on every GPS fix without re-renders)
+  const snapHintRef = useRef(0);
+  const offRouteFixesRef = useRef(0);
+  const lastRerouteAtRef = useRef(0);
   const watchIdRef = useRef(null);
   const lastLocationPostRef = useRef(0);
   const locationInFlightRef = useRef(false);
@@ -146,9 +132,9 @@ const DeliveryTrackingMapComponent = ({
         const accuracy = pos.coords.accuracy;
         const heading = pos.coords.heading;
         const speed = pos.coords.speed;
-        
+
         saveDeliveryPartnerLocation(lat, lng);
-        setRider({ lat, lng });
+        setRider({ lat, lng, accuracy: Number.isFinite(accuracy) ? accuracy : null });
         riderRef.current = { lat, lng };
         
         // Throttle location POSTs to once every 5s and skip if one is already in-flight
@@ -189,7 +175,13 @@ const DeliveryTrackingMapComponent = ({
   const routeAbortRef = useRef(null);
   const routeInFlightRef = useRef(false);
 
-  const fetchRoute = useCallback(async () => {
+  /**
+   * Fetch the road route from the rider's current position.
+   * `reroute` = rider has left the drawn route → server skips its caches.
+   * Without `reroute`, a recent route for the same order/phase is kept (the
+   * drawn line is trimmed locally as the rider moves along it).
+   */
+  const fetchRoute = useCallback(async ({ reroute = false } = {}) => {
     const currentRider = riderRef.current;
     if (!orderId || !currentRider) return;
     if (routeInFlightRef.current) return;
@@ -197,16 +189,12 @@ const DeliveryTrackingMapComponent = ({
     const sameRouteContext =
       lastFetchRef.current.phase === phase &&
       lastFetchRef.current.orderId === orderId;
-    const originDrift =
-      routeOriginRef.current && currentRider
-        ? distanceMeters(routeOriginRef.current, currentRider)
-        : null;
 
     if (
+      !reroute &&
       sameRouteContext &&
       lastFetchRef.current.at &&
-      now - lastFetchRef.current.at < ROUTE_REFRESH_INTERVAL_MS &&
-      (originDrift === null || originDrift < ROUTE_REFRESH_THRESHOLD_M)
+      now - lastFetchRef.current.at < ROUTE_REFRESH_INTERVAL_MS
     ) {
       return;
     }
@@ -224,12 +212,15 @@ const DeliveryTrackingMapComponent = ({
         phase,
         originLat: currentRider.lat,
         originLng: currentRider.lng,
+        ...(reroute ? { reroute: 1 } : {}),
         _t: now,
       }, { signal: controller.signal });
       if (res.data?.success) {
         const nextRoute = res.data.result || res.data.data || null;
         setRouteData(nextRoute);
         routeOriginRef.current = { lat: currentRider.lat, lng: currentRider.lng };
+        snapHintRef.current = 0;
+        offRouteFixesRef.current = 0;
       }
     } catch {
       setRouteData((prev) => prev || { degraded: true });
@@ -270,9 +261,15 @@ const DeliveryTrackingMapComponent = ({
         String(order.returnStatus).toLowerCase()
       )
   );
+  // The server decides the leg from the order status; trust it over the local step
+  // so the drawn route and the destination pin always point the same way.
+  const effectivePhase = routeData?.phase === "pickup" || routeData?.phase === "delivery"
+    ? routeData.phase
+    : phase;
+
   // Use order address location, fall back to the destination resolved by the route API
   const dest = useMemo(() => {
-    const fromOrder = destinationForPhase(order, phase);
+    const fromOrder = destinationForPhase(order, effectivePhase);
     if (fromOrder) return fromOrder;
     // routeData may contain the resolved destination (set by backend geocode fallback)
     const rd = routeData?.destination;
@@ -280,20 +277,7 @@ const DeliveryTrackingMapComponent = ({
       return { lat: rd.lat, lng: rd.lng };
     }
     return null;
-  }, [order, phase, routeData]);
-
-  useEffect(() => {
-    if (typeof onRouteStatsChange !== "function") return undefined;
-    onRouteStatsChange({
-      phase,
-      rider,
-      destination: dest,
-      routeDurationSeconds: Number(routeData?.duration) || null,
-      routeDistanceMeters:
-        Number(routeData?.distanceMeters ?? routeData?.distance) || null,
-    });
-    return undefined;
-  }, [onRouteStatsChange, phase, rider, dest, routeData]);
+  }, [order, effectivePhase, routeData]);
 
   const decodedPath = useMemo(() => {
     const encoded = routeData?.polyline;
@@ -301,17 +285,78 @@ const DeliveryTrackingMapComponent = ({
     try {
       const decode = window.google?.maps?.geometry?.encoding?.decodePath;
       if (!decode) return null;
-      return decode(encoded);
+      return decode(encoded).map(toLatLngLiteral).filter(Boolean);
     } catch {
       return null;
     }
   }, [routeData?.polyline, isLoaded, mapInstance]);
 
-  /** Only the road polyline from the API — never a 2-point geodesic “fallback”. */
+  // Snap the GPS fix onto the route (GPS drifts 15–50 m; the rider is on the road).
+  const snap = useMemo(() => {
+    if (!rider || !decodedPath?.length) return null;
+    const s = snapToRoute(decodedPath, rider, snapHintRef.current);
+    if (s) snapHintRef.current = s.segmentIndex;
+    return s;
+  }, [rider, decodedPath]);
+  const isOnRoute = Boolean(snap && snap.distance <= ROUTE_TRACKING.OFF_ROUTE_M);
+  // Marker and remaining line share one rule: on-route → both drawn on the road.
+  const isSnapped = isOnRoute;
+
+  /** Rider position as drawn: on the road when close enough, raw GPS otherwise. */
+  const displayRider = isSnapped ? snap.point : rider ? { lat: rider.lat, lng: rider.lng } : null;
+
+  /** Only the road still ahead (travelled part trimmed); full route while off-route. */
   const linePath = useMemo(() => {
-    if (decodedPath?.length) return decodedPath;
-    return [];
-  }, [decodedPath]);
+    if (!decodedPath?.length) return [];
+    return isOnRoute ? remainingPath(decodedPath, snap) : decodedPath;
+  }, [decodedPath, isOnRoute, snap]);
+
+  // Off-route: consecutive fixes far from the line → rider took another road → reroute.
+  useEffect(() => {
+    if (!rider || !decodedPath?.length || !snap) return;
+    if (snap.distance > ROUTE_TRACKING.OFF_ROUTE_M) {
+      offRouteFixesRef.current += 1;
+    } else {
+      offRouteFixesRef.current = 0;
+      return;
+    }
+    const now = Date.now();
+    if (
+      offRouteFixesRef.current >= ROUTE_TRACKING.OFF_ROUTE_FIXES &&
+      now - lastRerouteAtRef.current >= ROUTE_TRACKING.REROUTE_MIN_INTERVAL_MS
+    ) {
+      lastRerouteAtRef.current = now;
+      offRouteFixesRef.current = 0;
+      fetchRoute({ reroute: true });
+    }
+  }, [rider, decodedPath, snap, fetchRoute]);
+
+  // Remaining distance / ETA shrink as the rider progresses along the route.
+  const remainingStats = useMemo(() => {
+    const totalM = Number(routeData?.distanceMeters ?? routeData?.distance) || null;
+    const totalS = Number(routeData?.duration) || null;
+    if (!decodedPath?.length || !isOnRoute) return { meters: totalM, seconds: totalS };
+    const fullLen = pathLengthMeters(decodedPath);
+    const leftLen = pathLengthMeters(linePath);
+    if (!fullLen) return { meters: totalM, seconds: totalS };
+    const ratio = Math.max(0, Math.min(1, leftLen / fullLen));
+    return {
+      meters: totalM ? Math.round(totalM * ratio) : Math.round(leftLen),
+      seconds: totalS ? Math.round(totalS * ratio) : null,
+    };
+  }, [routeData, decodedPath, linePath, isOnRoute]);
+
+  useEffect(() => {
+    if (typeof onRouteStatsChange !== "function") return undefined;
+    onRouteStatsChange({
+      phase: effectivePhase,
+      rider,
+      destination: dest,
+      routeDurationSeconds: remainingStats.seconds || null,
+      routeDistanceMeters: remainingStats.meters || null,
+    });
+    return undefined;
+  }, [onRouteStatsChange, effectivePhase, rider, dest, remainingStats]);
 
   const riderMarkerIcon = useMemo(() => {
     if (!isLoaded || !window.google?.maps) return undefined;
@@ -319,7 +364,8 @@ const DeliveryTrackingMapComponent = ({
     return {
       url: deliveryIcon,
       scaledSize: new window.google.maps.Size(44, 64),
-      anchor: new window.google.maps.Point(22, 64),
+      // Vehicle icon is centred on its position (pins use a bottom anchor, a vehicle does not)
+      anchor: new window.google.maps.Point(22, 32),
     };
   }, [isLoaded]);
 
@@ -344,10 +390,11 @@ const DeliveryTrackingMapComponent = ({
   }, [isLoaded]);
 
   const mapCenter = useMemo(() => {
-    if (rider) return rider;
+    if (displayRider) return displayRider;
     if (dest) return dest;
     return { lat: 20.5937, lng: 78.9629 };
-  }, [rider, dest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayRider?.lat, displayRider?.lng, dest]);
 
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
@@ -405,8 +452,8 @@ const DeliveryTrackingMapComponent = ({
     const map = mapRef.current;
     if (!map || !window.google) return;
 
-    if (rider) {
-      focusOnRider500m(map, rider);
+    if (displayRider) {
+      focusOnRider500m(map, displayRider);
       return;
     }
 
@@ -415,13 +462,14 @@ const DeliveryTrackingMapComponent = ({
       if (linePath?.length) {
         linePath.forEach((p) => bounds.extend(p));
       }
-      if (rider) bounds.extend(rider);
       if (dest) bounds.extend(dest);
       map.fitBounds(bounds, 32);
     } catch {
       /* ignore */
     }
-  }, [linePath, rider, dest, focusOnRider500m]);
+    // Re-fit on route/phase changes, not on every GPS fix (the recenter timer follows the rider)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedPath, !!displayRider, dest, focusOnRider500m]);
 
   // Smoothly keep rider centered and zoomed to 500m view.
   useEffect(() => {
@@ -431,13 +479,14 @@ const DeliveryTrackingMapComponent = ({
 
     const id = setInterval(() => {
       const currentMap = mapRef.current;
-      if (!currentMap || !rider) return;
-      currentMap.panTo(rider);
-      focusOnRider500m(currentMap, rider);
+      if (!currentMap || !displayRider) return;
+      currentMap.panTo(displayRider);
+      focusOnRider500m(currentMap, displayRider);
     }, RECENTER_INTERVAL_MS);
 
     return () => clearInterval(id);
-  }, [isLoaded, rider?.lat, rider?.lng, focusOnRider500m]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, displayRider?.lat, displayRider?.lng, focusOnRider500m]);
 
   // Add resize observer to handle dynamic height changes
   useEffect(() => {
@@ -448,15 +497,14 @@ const DeliveryTrackingMapComponent = ({
       window.google.maps.event.trigger(map, 'resize');
       // Re-focus rider after resize when available
       try {
-        if (rider) {
-          focusOnRider500m(map, rider);
+        if (displayRider) {
+          focusOnRider500m(map, displayRider);
           return;
         }
         const bounds = new window.google.maps.LatLngBounds();
         if (linePath?.length) {
           linePath.forEach((p) => bounds.extend(p));
         }
-        if (rider) bounds.extend(rider);
         if (dest) bounds.extend(dest);
         map.fitBounds(bounds, 32);
       } catch {
@@ -484,7 +532,8 @@ const DeliveryTrackingMapComponent = ({
         resizeObserver.disconnect();
       }
     };
-  }, [linePath, rider, dest, focusOnRider500m]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedPath, !!displayRider, dest, focusOnRider500m]);
 
   if (!apiKey) {
     return (
@@ -528,9 +577,9 @@ const DeliveryTrackingMapComponent = ({
           fullscreenControl: false,
         }}
       >
-        {rider && (
+        {displayRider && (
           <Marker
-            position={rider}
+            position={displayRider}
             title="Your location"
             icon={riderMarkerIcon}
           />
@@ -539,7 +588,7 @@ const DeliveryTrackingMapComponent = ({
           <Marker
             position={dest}
             title={
-              phase === "pickup"
+              effectivePhase === "pickup"
                 ? isReturn
                   ? "Pickup (customer)"
                   : "Pickup (store)"
@@ -548,7 +597,7 @@ const DeliveryTrackingMapComponent = ({
                   : "Drop (customer)"
             }
             icon={
-              phase === "pickup"
+              effectivePhase === "pickup"
                 ? isReturn
                   ? customerMarkerIcon
                   : storeMarkerIcon
@@ -560,7 +609,7 @@ const DeliveryTrackingMapComponent = ({
         )}
       </GoogleMap>
       <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur px-2 py-1 rounded-md text-[10px] text-slate-600 font-bold border border-slate-200 shadow-sm">
-        {routeLoading ? "Updating route…" : "Tracking View"}
+        {routeLoading ? "Updating route…" : isOnRoute || !decodedPath?.length ? "Tracking View" : "Off route — rerouting…"}
       </div>
       {routeData?.degraded && (
         <div className="absolute top-2 left-2 bg-amber-50/95 text-amber-900 text-[10px] px-2 py-1 rounded border border-amber-200 max-w-[85%] leading-snug">

@@ -24,12 +24,23 @@ import { creditWallet } from "../services/finance/walletService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 
+// Rider-step responses are merged into the rider's open order screen, so they must carry the
+// same populated store/customer as GET /orders/details (a bare seller ID there wipes the
+// store name, address and location used for the pickup card, map pin and navigation).
+async function withOrderParties(doc) {
+  if (!doc || typeof doc.populate !== "function") return doc;
+  return doc.populate([
+    { path: "seller", select: "shopName name address phone location" },
+    { path: "customer", select: "name email phone" },
+  ]);
+}
+
 export const confirmPickup = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { lat, lng } = req.body || {};
     const result = await confirmPickupAtomic(req.user.id, orderId, lat, lng);
-    return handleResponse(res, 200, "Pickup confirmed", result);
+    return handleResponse(res, 200, "Pickup confirmed", await withOrderParties(result));
   } catch (e) {
     return handleResponse(res, e.statusCode || 500, e.message);
   }
@@ -45,7 +56,7 @@ export const markArrivedAtStore = async (req, res) => {
       lat,
       lng,
     );
-    return handleResponse(res, 200, "Arrived at store", result);
+    return handleResponse(res, 200, "Arrived at store", await withOrderParties(result));
   } catch (e) {
     return handleResponse(res, e.statusCode || 500, e.message);
   }
@@ -55,7 +66,7 @@ export const advanceDeliveryRiderUi = async (req, res) => {
   try {
     const { orderId } = req.params;
     const result = await advanceDeliveryRiderUiAtomic(req.user.id, orderId);
-    return handleResponse(res, 200, "Delivery progress updated", result);
+    return handleResponse(res, 200, "Delivery progress updated", await withOrderParties(result));
   } catch (e) {
     return handleResponse(res, e.statusCode || 500, e.message);
   }
@@ -132,12 +143,41 @@ export const verifyDeliveryOtp = async (req, res) => {
 };
 
 /**
- * Query: phase=pickup|drop, originLat, originLng (rider position).
+ * Which leg the rider is on, from the order itself (server is the source of truth so the
+ * rider app, customer app and route cache can never disagree about the destination).
+ *  - Normal order: "delivery" (→ customer) once picked up / out for delivery, else "pickup" (→ store).
+ *  - Return: "delivery" (→ seller) once the item is in transit, else "pickup" (→ customer).
+ */
+function resolveRoutePhase(order, requestedPhase) {
+  const requested = String(requestedPhase || "").toLowerCase() === "pickup" ? "pickup" : "delivery";
+  const returnStatus = String(order.returnStatus || "").toLowerCase();
+  if (returnStatus && returnStatus !== "none") {
+    if (["return_in_transit", "return_drop_pending"].includes(returnStatus)) return "delivery";
+    if (["return_approved", "return_pickup_assigned"].includes(returnStatus)) return "pickup";
+    return requested;
+  }
+  const ws = String(order.workflowStatus || "").toUpperCase();
+  const legacy = String(order.status || "").toLowerCase();
+  if (
+    ["OUT_FOR_DELIVERY", "DELIVERED"].includes(ws) ||
+    ["out_for_delivery", "delivered"].includes(legacy) ||
+    Number(order.deliveryRiderStep) >= 3 ||
+    order.pickupConfirmedAt ||
+    order.outForDeliveryAt
+  ) {
+    return "delivery";
+  }
+  if (ws || legacy) return "pickup";
+  return requested;
+}
+
+/**
+ * Query: phase=pickup|drop (hint only), originLat, originLng (rider position), reroute=1 (rider left the route).
  */
 export const getOrderRoute = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const phase = (req.query.phase || "pickup").toLowerCase();
+    const forceRefresh = ["1", "true"].includes(String(req.query.reroute || "").toLowerCase());
     const originLat = parseFloat(req.query.originLat);
     const originLng = parseFloat(req.query.originLng);
 
@@ -156,6 +196,7 @@ export const getOrderRoute = async (req, res) => {
       return handleResponse(res, 404, "Order not found");
     }
 
+    const phase = resolveRoutePhase(order, req.query.phase);
     const seller = order.seller;
     const coords = seller?.location?.coordinates;
     const hasSellerLoc = Array.isArray(coords) && coords.length >= 2;
@@ -262,13 +303,13 @@ export const getOrderRoute = async (req, res) => {
         }
 
         if (!hasCustLoc) {
-          return handleResponse(res, 200, "Route", { polyline: null, degraded: true });
+          return handleResponse(res, 200, "Route", { polyline: null, degraded: true, phase });
         }
       }
     }
 
-    const route = await getCachedRoute(origin, dest, "driving", orderId, phase);
-    return handleResponse(res, 200, "Route", { ...route, destination: dest });
+    const route = await getCachedRoute(origin, dest, "driving", order.orderId || orderId, phase, { forceRefresh });
+    return handleResponse(res, 200, "Route", { ...route, phase, destination: dest });
   } catch (e) {
     return handleResponse(res, 500, e.message);
   }

@@ -131,7 +131,10 @@ export const createRating = async ({ orderId, customerId, rating, feedbackTags =
       status: RATING_STATUSES.ACTIVE,
     });
   } catch (error) {
-    if (error.code === 11000) {
+    // Only the (orderId, customerId) unique index means "already rated". Any other
+    // duplicate-key error is a real failure and must not be reported as success.
+    const dupKeys = Object.keys(error?.keyPattern || {});
+    if (error.code === 11000 && dupKeys.includes("orderId") && dupKeys.includes("customerId")) {
       const err = new Error("You have already submitted a rating for this order.");
       err.statusCode = 409;
       throw err;
@@ -254,7 +257,8 @@ export const getPartnerRatingsList = async (deliveryPartnerId, { page = 1, limit
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
-      .select("rating feedbackTags comment createdAt")
+      .select("rating feedbackTags comment createdAt customerId")
+      .populate("customerId", "name")
       .lean(),
     DeliveryRating.countDocuments(filter),
   ]);
@@ -264,7 +268,7 @@ export const getPartnerRatingsList = async (deliveryPartnerId, { page = 1, limit
     rating: r.rating,
     feedbackTags: r.feedbackTags || [],
     comment: r.comment || "",
-    customerName: "Anonymous customer",
+    customerName: String(r.customerId?.name || "").trim() || "Customer",
     createdAt: r.createdAt,
   }));
 

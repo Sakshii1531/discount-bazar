@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@core/context/AuthContext";
 import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
@@ -114,6 +114,25 @@ const getPersistedRiderStep = (order) => {
 
 const DEFAULT_CITY_SPEED_KMPH = 24;
 
+/**
+ * Merge an order returned by a workflow action into the one on screen. Some responses
+ * carry `seller` / `customer` / `deliveryBoy` as bare IDs — keep the populated objects
+ * we already have so the store name, address and location never disappear.
+ */
+const POPULATED_ORDER_REFS = ["seller", "customer", "deliveryBoy", "returnDeliveryBoy"];
+const mergeOrderUpdate = (prev, updated) => {
+  if (!updated || typeof updated !== "object") return prev;
+  const merged = { ...(prev || {}), ...updated };
+  POPULATED_ORDER_REFS.forEach((key) => {
+    const next = updated[key];
+    const current = prev?.[key];
+    if (current && typeof current === "object" && (next == null || typeof next !== "object")) {
+      merged[key] = current;
+    }
+  });
+  return merged;
+};
+
 const hasValidLatLng = (location) =>
   location &&
   typeof location.lat === "number" &&
@@ -176,6 +195,7 @@ const OrderDetails = () => {
   const [showDropOtpInput, setShowDropOtpInput] = useState(false);
   const [pickupProofSubmitted, setPickupProofSubmitted] = useState(false);
   const [routeStats, setRouteStats] = useState(null);
+  const reachedPickupRef = useRef(false);
   const [clockTick, setClockTick] = useState(Date.now());
 
   const isReturn = Boolean(
@@ -438,7 +458,7 @@ const OrderDetails = () => {
             lng: location.lng,
           });
           const updated = res.data.result;
-          setOrder((prev) => ({ ...(prev || {}), ...updated }));
+          setOrder((prev) => mergeOrderUpdate(prev, updated));
           setStep(2);
           toast.success(`${currentStep.action} Confirmed!`);
         } else if (step === 2) {
@@ -447,7 +467,7 @@ const OrderDetails = () => {
             lng: location.lng,
           });
           const updated = res.data.result;
-          setOrder((prev) => ({ ...(prev || {}), ...updated }));
+          setOrder((prev) => mergeOrderUpdate(prev, updated));
           setStep(3);
           toast.success(`${currentStep.action} Confirmed!`);
         } else if (step === 3) {
@@ -476,13 +496,17 @@ const OrderDetails = () => {
         : null;
     const customerLocation = order?.address?.location;
 
-    const dest = isReturn
-      ? step <= 1
-        ? customerLocation
-        : sellerLocation
-      : step >= 3
-        ? customerLocation
-        : sellerLocation;
+    // Same destination the in-app map shows (server-confirmed leg); fall back to the
+    // step-based phase — returns: steps 1-2 → customer, normal: steps 1-2 → store.
+    const dest = hasValidLatLng(routeStats?.destination)
+      ? routeStats.destination
+      : isReturn
+        ? step <= 2
+          ? customerLocation
+          : sellerLocation
+        : step >= 3
+          ? customerLocation
+          : sellerLocation;
 
     if (
       dest &&
@@ -527,14 +551,14 @@ const OrderDetails = () => {
     if (isReturn) {
       // Return pickup OTP → navigate to seller for drop-off
       setStep(3);
-      if (updatedOrder) setOrder(updatedOrder);
+      if (updatedOrder) setOrder((prev) => mergeOrderUpdate(prev, updatedOrder));
       window.scrollTo({ top: 0, behavior: "smooth" });
       toast.success("✅ Pickup verified! Navigate to seller for drop-off.");
     } else {
       // Standard delivery OTP → order is delivered, hide map immediately
       setStep(4);
       if (updatedOrder) {
-        setOrder({ ...updatedOrder, status: "delivered", workflowStatus: "DELIVERED" });
+        setOrder((prev) => ({ ...mergeOrderUpdate(prev, updatedOrder), status: "delivered", workflowStatus: "DELIVERED" }));
       } else {
         setOrder((prev) => prev ? { ...prev, status: "delivered", workflowStatus: "DELIVERED" } : prev);
       }
@@ -552,7 +576,7 @@ const OrderDetails = () => {
       setAccepting(true);
       const res = await deliveryApi.acceptReturnPickup(order.orderId);
       const updated = res.data.result;
-      setOrder(updated);
+      setOrder((prev) => mergeOrderUpdate(prev, updated));
       toast.success("Return pickup task accepted!");
       setStep(1);
     } catch (error) {
@@ -580,6 +604,23 @@ const OrderDetails = () => {
   // Determine current phase for map
   // Return: steps 1-2 = navigate to customer (pickup), steps 3-4 = navigate to seller (delivery)
   const currentPhase = isReturn ? (step <= 2 ? "pickup" : "delivery") : step <= 2 ? "pickup" : "delivery";
+
+  // Pickup-phase guard: rider reached the pickup point, then moved well away from it
+  // without confirming pickup (so navigation still points backwards).
+  const pickupPoint = currentPhase === "pickup" ? routeStats?.destination : null;
+  const riderToPickupM =
+    pickupPoint && routeStats?.rider ? distanceMeters(routeStats.rider, pickupPoint) : null;
+  if (currentPhase !== "pickup") {
+    reachedPickupRef.current = false;
+  } else if (riderToPickupM != null && riderToPickupM <= 150) {
+    reachedPickupRef.current = true;
+  }
+  const leftPickupWithoutConfirm =
+    currentPhase === "pickup" &&
+    routeStats?.phase !== "delivery" &&
+    reachedPickupRef.current &&
+    riderToPickupM != null &&
+    riderToPickupM > 250;
 
   if (loading) {
     return (
@@ -767,6 +808,27 @@ const OrderDetails = () => {
                 order={order}
                 onRouteStatsChange={setRouteStats}
               />
+            </div>
+          </motion.div>
+        )}
+
+        {/* Rider left the pickup point without confirming pickup → route still points back to it */}
+        {leftPickupWithoutConfirm && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex items-start gap-3"
+          >
+            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+            <div className="text-sm text-amber-900">
+              <p className="font-bold">
+                {isReturn ? "Left the customer's location?" : "Left the store?"}
+              </p>
+              <p className="text-xs mt-0.5 leading-relaxed">
+                {isReturn
+                  ? "Return pickup isn't confirmed yet, so the route still points back to the customer. Complete the pickup step below to start navigation to the seller."
+                  : "Pickup isn't confirmed yet, so the route still points back to the store. Complete the pickup step below to start navigation to the customer."}
+              </p>
             </div>
           </motion.div>
         )}
@@ -1186,7 +1248,7 @@ const OrderDetails = () => {
                 isReturnDrop={true}
                 onSuccess={(data) => {
                   const updatedOrder = data?.result || data?.data?.result;
-                  if (updatedOrder) setOrder(updatedOrder);
+                  if (updatedOrder) setOrder((prev) => mergeOrderUpdate(prev, updatedOrder));
                   setStep(5);
                   toast.success("✅ Return complete! Commission credited to your wallet.");
                   setTimeout(() => navigate("/delivery/dashboard"), 1800);

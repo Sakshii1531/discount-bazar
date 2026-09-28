@@ -7,7 +7,7 @@ import BottomNav from './BottomNav';
 import { sellerApi } from '@/modules/seller/services/sellerApi';
 import { useAuth } from "@core/context/AuthContext";
 import { motion, AnimatePresence } from 'framer-motion';
-import { BellRing, Check, X, Clock, Truck, RotateCcw, AlertTriangle, Loader2, Eye, ChevronDown } from 'lucide-react';
+import { BellRing, Check, X, Clock, Truck, RotateCcw, AlertTriangle, Loader2, Eye, ChevronDown, Minimize2, ArrowUpRight, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import SellerOrdersContext from '@/modules/seller/context/SellerOrdersContext';
@@ -151,6 +151,9 @@ const DashboardLayout = ({ children, navItems, title }) => {
     const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
     const [orderDetails, setOrderDetails] = useState(null);
     const [orderDetailsLoading, setOrderDetailsLoading] = useState(false);
+    // New-order popup can be minimized to a floating card so the seller can use the panel
+    // (check stock / products) while deciding; alarm pauses while minimized.
+    const [orderAlertMinimized, setOrderAlertMinimized] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [returnDropOtpAlert, setReturnDropOtpAlert] = useState(null); // { orderId, otp, expiresAt }
     const [returnActionLoading, setReturnActionLoading] = useState(false);
@@ -436,6 +439,17 @@ const DashboardLayout = ({ children, navItems, title }) => {
                     isFirstLoadRef.current = false;
                 }
 
+                // Popup opened from a lightweight socket event → fill in its figures from the full order
+                const openAlert = newOrderAlertRef.current;
+                if (openAlert && !openAlert.paymentBreakdown) {
+                    const full = allOrders.find((o) => o.orderId === openAlert.orderId);
+                    if (full?.paymentBreakdown) {
+                        const merged = { ...full, ...openAlert, paymentBreakdown: full.paymentBreakdown };
+                        newOrderAlertRef.current = merged;
+                        setNewOrderAlert(merged);
+                    }
+                }
+
                 const newOrder = pendingOrders.find((o) => !shownOrderIdsRef.current.has(o.orderId));
                 if (newOrder && !newOrderAlertRef.current) {
                     setNewOrderAlert(newOrder);
@@ -496,17 +510,17 @@ const DashboardLayout = ({ children, navItems, title }) => {
     }, [role]);
 
     useEffect(() => {
-        if (newOrderAlert || newReturnAlert) {
+        if ((newOrderAlert && !orderAlertMinimized) || newReturnAlert) {
             startOrderRingtone();
             return undefined;
         }
         stopOrderRingtone();
         return undefined;
-    }, [newOrderAlert, newReturnAlert]);
+    }, [newOrderAlert, newReturnAlert, orderAlertMinimized]);
 
     // Lock background scroll when new order or return alert modal is visible
     useEffect(() => {
-        if (newOrderAlert || newReturnAlert) {
+        if ((newOrderAlert && !orderAlertMinimized) || newReturnAlert) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = '';
@@ -514,7 +528,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
         return () => {
             document.body.style.overflow = '';
         };
-    }, [newOrderAlert, newReturnAlert]);
+    }, [newOrderAlert, newReturnAlert, orderAlertMinimized]);
 
     useEffect(() => {
         return () => {
@@ -722,7 +736,14 @@ const DashboardLayout = ({ children, navItems, title }) => {
         setOrderDetailsOpen(false);
         setOrderDetails(null);
         setOrderDetailsLoading(false);
+        setOrderAlertMinimized(false);
     }, [newOrderAlert?.orderId]);
+
+    // Minimize, then open the seller's Products page filtered to this item to verify stock.
+    const checkItemInProducts = (name) => {
+        setOrderAlertMinimized(true);
+        navigate(`/seller/products${name ? `?q=${encodeURIComponent(name)}` : ""}`);
+    };
 
     const toggleOrderDetails = async () => {
         const orderId = newOrderAlert?.orderId;
@@ -911,168 +932,281 @@ const DashboardLayout = ({ children, navItems, title }) => {
 
             {/* Global Order Alert Modal */}
             <AnimatePresence>
-                {newOrderAlert && (
+                {newOrderAlert && !orderAlertMinimized && (
                     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            initial={{ scale: 0.95, opacity: 0, y: 16 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto"
+                            exit={{ scale: 0.95, opacity: 0, y: 16 }}
+                            className="relative bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col overflow-hidden"
                         >
-                            <div className="flex flex-col items-center text-center">
-                                <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                                    <BellRing className="h-10 w-10 text-primary" />
+                            {/* Header */}
+                            <div className="px-5 pt-5 pb-4 bg-gradient-to-b from-primary/10 to-white border-b border-slate-100">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="relative shrink-0">
+                                            <span className="absolute inset-0 rounded-2xl bg-primary/30 animate-ping" />
+                                            <div className="relative h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30">
+                                                <BellRing className="h-6 w-6" />
+                                            </div>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h2 className="text-lg font-black text-slate-900 leading-tight">New Order Received</h2>
+                                            <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-lg bg-white border border-primary/20 text-primary text-xs font-bold font-mono truncate max-w-full">
+                                                #{newOrderAlert.orderId}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrderAlertMinimized(true)}
+                                        title="Minimize — keep using your panel, the order waits here"
+                                        aria-label="Minimize"
+                                        className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-500 bg-white/80 border border-slate-200 hover:text-slate-800 hover:bg-white transition-colors"
+                                    >
+                                        <Minimize2 className="h-3.5 w-3.5" />
+                                        Minimize
+                                    </button>
                                 </div>
 
-                                <h2 className="text-2xl font-black text-slate-900 mb-2">New Order Received!</h2>
-                                <p className="text-slate-600 font-medium mb-3">
-                                    You have a new order{" "}
-                                    <span className="text-primary font-bold font-mono">
-                                        #{newOrderAlert.orderId}
-                                    </span>
-                                </p>
+                                {/* Countdown — driven by the real server deadline */}
+                                <div className="mt-4">
+                                    <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                                        <span className={cn("flex items-center gap-1.5", timeLeft < 15 ? "text-rose-600" : "text-slate-600")}>
+                                            <Clock className={cn("h-3.5 w-3.5", timeLeft < 15 && "animate-pulse")} />
+                                            Accept within
+                                        </span>
+                                        <span className={cn("tabular-nums", timeLeft < 15 ? "text-rose-600" : "text-slate-900")}>
+                                            {formatAcceptCountdown(timeLeft)}
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                            className={cn(
+                                                "h-full rounded-full transition-[width] duration-1000 ease-linear",
+                                                timeLeft < 15 ? "bg-rose-500" : "bg-primary",
+                                            )}
+                                            style={{
+                                                width: `${acceptWindowTotalRef.current > 0 ? (timeLeft / acceptWindowTotalRef.current) * 100 : 0}%`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
 
-                                {/* Item Amount & Net Earning Breakdown */}
-                                <div className="grid grid-cols-2 gap-3 w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6">
-                                    <div className="text-left">
-                                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Item Amount</div>
-                                        <div className="text-lg font-black text-slate-900">
+                            {/* Scrollable body */}
+                            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                                {/* Item Amount & Net Earning */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Item Amount</p>
+                                        <p className="text-xl font-black text-slate-900 mt-0.5">
                                             ₹{formatAmount(newOrderAlert.itemAmount ?? newOrderAlert.paymentBreakdown?.productSubtotal ?? newOrderAlert.pricing?.subtotal ?? newOrderAlert.pricing?.total ?? newOrderAlert.total ?? 0)}
-                                        </div>
+                                        </p>
                                     </div>
-                                    <div className="text-left border-l border-slate-200 pl-4">
-                                        <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Net Earning</div>
-                                        <div className="text-lg font-black text-emerald-600">
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Net Earning</p>
+                                        <p className="text-xl font-black text-emerald-700 mt-0.5">
                                             ₹{formatAmount(newOrderAlert.netEarnings ?? newOrderAlert.paymentBreakdown?.sellerPayoutTotal ?? 0)}
-                                        </div>
+                                        </p>
                                     </div>
-                                </div>
-
-                                {/* Timer Bar — width from real server deadline */}
-                                <div className="w-full bg-slate-100 h-2 rounded-full mb-8 overflow-hidden">
-                                    <div
-                                        className={cn(
-                                            "h-full transition-[width] duration-1000 ease-linear",
-                                            timeLeft < 15 ? "bg-rose-500" : "bg-primary",
-                                        )}
-                                        style={{
-                                            width: `${acceptWindowTotalRef.current > 0 ? (timeLeft / acceptWindowTotalRef.current) * 100 : 0}%`,
-                                        }}
-                                    />
-                                </div>
-
-                                <div className="flex items-center gap-4 text-sm font-bold mb-8">
-                                    <Clock className={cn("h-4 w-4", timeLeft < 15 ? "text-rose-500 animate-pulse" : "text-slate-600")} />
-                                    <span className={timeLeft < 15 ? "text-rose-500" : "text-slate-600"}>
-                                        Accept within {formatAcceptCountdown(timeLeft)}
-                                    </span>
                                 </div>
 
                                 {/* View order details before accepting / declining */}
-                                <button
-                                    type="button"
-                                    onClick={toggleOrderDetails}
-                                    className="w-full mb-4 flex items-center justify-center gap-2 py-3 rounded-2xl border border-primary/30 bg-primary/5 text-primary font-bold hover:bg-primary/10 transition-colors"
-                                >
-                                    <Eye className="h-5 w-5" />
-                                    {orderDetailsOpen ? "Hide Order Details" : "View Order Details"}
-                                    <ChevronDown className={cn("h-4 w-4 transition-transform", orderDetailsOpen && "rotate-180")} />
-                                </button>
+                                <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={toggleOrderDetails}
+                                        aria-expanded={orderDetailsOpen}
+                                        className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white hover:bg-slate-50 transition-colors"
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                                            <Eye className="h-4 w-4 text-primary" />
+                                            {orderDetailsOpen ? "Hide Order Details" : "View Order Details"}
+                                        </span>
+                                        <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", orderDetailsOpen && "rotate-180")} />
+                                    </button>
 
-                                {orderDetailsOpen && (
-                                    <div className="w-full mb-6 text-left bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                        {orderDetailsLoading ? (
-                                            <div className="flex items-center justify-center gap-2 py-6 text-sm font-semibold text-slate-500">
-                                                <Loader2 className="h-4 w-4 animate-spin" /> Loading order details…
-                                            </div>
-                                        ) : (() => {
-                                            const d = orderDetails || {};
-                                            const items = Array.isArray(d.items) ? d.items : [];
-                                            const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-                                            const payMode = String(d.paymentMode || d.payment?.method || "").toUpperCase();
-                                            const addr = d.address || {};
-                                            return (
-                                                <>
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                                            Items ({items.length}) · Qty {totalQty}
-                                                        </span>
-                                                        {payMode && (
-                                                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700">
-                                                                {payMode === "COD" || payMode === "CASH" ? "Cash on Delivery" : "Paid Online"}
+                                    {orderDetailsOpen && (
+                                        <div className="border-t border-slate-100 bg-slate-50/60 p-3 text-left">
+                                            {orderDetailsLoading ? (
+                                                <div className="flex items-center justify-center gap-2 py-6 text-sm font-semibold text-slate-500">
+                                                    <Loader2 className="h-4 w-4 animate-spin" /> Loading order details…
+                                                </div>
+                                            ) : (() => {
+                                                const d = orderDetails || {};
+                                                const items = Array.isArray(d.items) ? d.items : [];
+                                                const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+                                                const payMode = String(d.paymentMode || d.payment?.method || "").toUpperCase();
+                                                const addr = d.address || {};
+                                                return (
+                                                    <>
+                                                        <div className="flex items-center justify-between mb-2.5 px-1">
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                                                Items ({items.length}) · Qty {totalQty}
                                                             </span>
-                                                        )}
-                                                    </div>
-
-                                                    {items.length === 0 ? (
-                                                        <p className="text-sm text-slate-500 py-2">No item details available for this order.</p>
-                                                    ) : (
-                                                        <ul className="space-y-2">
-                                                            {items.map((it, idx) => {
-                                                                const product = it.product && typeof it.product === "object" ? it.product : {};
-                                                                const name = it.name || product.name || "Item";
-                                                                const image = it.image || product.mainImage;
-                                                                const qty = Number(it.quantity) || 0;
-                                                                const price = Number(it.price) || 0;
-                                                                return (
-                                                                    <li key={`${product._id || it.product || name}-${it.variantSlot || ""}-${idx}`} className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 p-2.5">
-                                                                        {image ? (
-                                                                            <img src={image} alt={name} className="h-12 w-12 rounded-lg object-cover bg-slate-100 shrink-0" />
-                                                                        ) : (
-                                                                            <div className="h-12 w-12 rounded-lg bg-slate-100 shrink-0" />
-                                                                        )}
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="text-sm font-bold text-slate-900 truncate" title={name}>{name}</p>
-                                                                            {it.variantSlot && (
-                                                                                <p className="text-xs text-slate-500 truncate">{it.variantSlot}</p>
-                                                                            )}
-                                                                            <p className="text-xs text-slate-500">₹{price} × {qty}</p>
-                                                                        </div>
-                                                                        <div className="text-right shrink-0">
-                                                                            <p className="text-sm font-black text-slate-900">₹{formatAmount(price * qty)}</p>
-                                                                            <p className="text-[10px] font-bold text-slate-500">Qty {qty}</p>
-                                                                        </div>
-                                                                    </li>
-                                                                );
-                                                            })}
-                                                        </ul>
-                                                    )}
-
-                                                    {(addr.name || addr.address || addr.city) && (
-                                                        <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600">
-                                                            <span className="font-bold text-slate-700">Deliver to: </span>
-                                                            {[
-                                                                addr.name,
-                                                                addr.address,
-                                                                addr.city && !String(addr.address || "").includes(addr.city) ? addr.city : null,
-                                                            ].filter(Boolean).join(", ")}
+                                                            {payMode && (
+                                                                <span className={cn(
+                                                                    "text-[10px] font-black px-2 py-0.5 rounded-full border",
+                                                                    payMode === "COD" || payMode === "CASH"
+                                                                        ? "bg-amber-50 border-amber-200 text-amber-700"
+                                                                        : "bg-sky-50 border-sky-200 text-sky-700",
+                                                                )}>
+                                                                    {payMode === "COD" || payMode === "CASH" ? "Cash on Delivery" : "Paid Online"}
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                )}
 
-                                <div className="grid grid-cols-2 gap-4 w-full">
-                                    <button
-                                        onClick={() => handleDeclineOrder(newOrderAlert.orderId)}
-                                        className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors"
-                                    >
-                                        <X className="h-5 w-5" />
-                                        Decline
-                                    </button>
-                                    <button
-                                        onClick={() => handleAcceptOrder(newOrderAlert.orderId)}
-                                        className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-xl shadow-primary/20 transition-all active:scale-95"
-                                    >
-                                        <Check className="h-5 w-5" />
-                                        Accept
-                                    </button>
+                                                        {items.length === 0 ? (
+                                                            <p className="text-sm text-slate-500 py-2 px-1">No item details available for this order.</p>
+                                                        ) : (
+                                                            <ul className="space-y-2">
+                                                                {items.map((it, idx) => {
+                                                                    const product = it.product && typeof it.product === "object" ? it.product : {};
+                                                                    const name = it.name || product.name || "Item";
+                                                                    const image = it.image || product.mainImage;
+                                                                    const qty = Number(it.quantity) || 0;
+                                                                    const price = Number(it.price) || 0;
+                                                                    // Stock is reserved for this order at placement, so this is what's left after it.
+                                                                    const variant = Array.isArray(product.variants)
+                                                                        ? product.variants.find((v) => it.variantSlot && (v?.sku === it.variantSlot || v?.name === it.variantSlot))
+                                                                        : null;
+                                                                    const rawLeft = variant?.stock ?? product.stock;
+                                                                    const stockLeft = rawLeft == null || rawLeft === "" || !Number.isFinite(Number(rawLeft)) ? null : Math.max(0, Number(rawLeft));
+                                                                    const lowAt = Number(product.lowStockAlert) > 0 ? Number(product.lowStockAlert) : 5;
+                                                                    const stockBadge =
+                                                                        stockLeft == null
+                                                                            ? null
+                                                                            : stockLeft === 0
+                                                                              ? { text: "Last unit(s) — 0 left after this order", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" }
+                                                                              : stockLeft <= lowAt
+                                                                                ? { text: `Low stock — ${stockLeft} left after this order`, cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" }
+                                                                                : { text: `In stock — ${stockLeft} left after this order`, cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" };
+                                                                    return (
+                                                                        <li key={`${product._id || it.product || name}-${it.variantSlot || ""}-${idx}`} className="flex gap-3 bg-white rounded-xl border border-slate-100 p-2.5 shadow-sm">
+                                                                            {image ? (
+                                                                                <img src={image} alt={name} className="h-14 w-14 rounded-lg object-cover bg-slate-100 shrink-0" />
+                                                                            ) : (
+                                                                                <div className="h-14 w-14 rounded-lg bg-slate-100 shrink-0" />
+                                                                            )}
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-start justify-between gap-2">
+                                                                                    <p className="text-sm font-bold text-slate-900 truncate" title={name}>{name}</p>
+                                                                                    <p className="text-sm font-black text-slate-900 shrink-0">₹{formatAmount(price * qty)}</p>
+                                                                                </div>
+                                                                                <p className="text-xs text-slate-500 truncate">
+                                                                                    {it.variantSlot ? `${it.variantSlot} · ` : ""}₹{price} × {qty}
+                                                                                </p>
+                                                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                                                                                    {stockBadge && (
+                                                                                        <span className={cn("inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md border", stockBadge.cls)}>
+                                                                                            <span className={cn("h-1.5 w-1.5 rounded-full", stockBadge.dot)} />
+                                                                                            {stockBadge.text}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => checkItemInProducts(name)}
+                                                                                        className="inline-flex items-center gap-0.5 text-[11px] font-bold text-primary hover:underline"
+                                                                                    >
+                                                                                        Check in Products
+                                                                                        <ArrowUpRight className="h-3 w-3" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        )}
+
+                                                        {(addr.name || addr.address || addr.city) && (
+                                                            <div className="mt-3 flex items-start gap-2 rounded-xl bg-white border border-slate-100 px-3 py-2.5 text-xs text-slate-600">
+                                                                <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                                                                <span>
+                                                                    <span className="font-bold text-slate-700">Deliver to: </span>
+                                                                    {[
+                                                                        addr.name,
+                                                                        addr.address,
+                                                                        addr.city && !String(addr.address || "").includes(addr.city) ? addr.city : null,
+                                                                    ].filter(Boolean).join(", ")}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
+                            </div>
+
+                            {/* Actions — always visible */}
+                            <div className="px-5 py-4 border-t border-slate-100 bg-white grid grid-cols-[1fr_1.6fr] gap-3">
+                                <button
+                                    onClick={() => handleDeclineOrder(newOrderAlert.orderId)}
+                                    className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 font-bold hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors"
+                                >
+                                    <X className="h-5 w-5" />
+                                    Decline
+                                </button>
+                                <button
+                                    onClick={() => handleAcceptOrder(newOrderAlert.orderId)}
+                                    className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-lg shadow-primary/25 transition-all active:scale-95"
+                                >
+                                    <Check className="h-5 w-5" />
+                                    Accept Order
+                                </button>
                             </div>
                         </motion.div>
                     </div>
+                )}
+
+                {/* Minimized new-order card: panel stays usable, order can be reopened / actioned */}
+                {newOrderAlert && orderAlertMinimized && (
+                    <motion.div
+                        initial={{ y: 30, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 30, opacity: 0 }}
+                        className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-[998] w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl border border-primary/30 p-4"
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="h-9 w-9 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                                    <BellRing className="h-5 w-5 text-primary animate-pulse" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-black text-slate-900 truncate">New order #{newOrderAlert.orderId}</p>
+                                    <p className={cn("text-xs font-bold", timeLeft < 15 ? "text-rose-500" : "text-slate-500")}>
+                                        Accept within {formatAcceptCountdown(timeLeft)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setOrderAlertMinimized(false)}
+                                className="shrink-0 text-xs font-bold text-primary hover:underline"
+                            >
+                                Review
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-3">
+                            <button
+                                onClick={() => handleDeclineOrder(newOrderAlert.orderId)}
+                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                                Decline
+                            </button>
+                            <button
+                                onClick={() => handleAcceptOrder(newOrderAlert.orderId)}
+                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all active:scale-95"
+                            >
+                                <Check className="h-4 w-4" />
+                                Accept
+                            </button>
+                        </div>
+                    </motion.div>
                 )}
 
                 {/* Global Return Request Alert Modal */}

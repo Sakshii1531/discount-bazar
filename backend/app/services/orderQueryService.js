@@ -500,9 +500,15 @@ export async function getOrderWithAccess(orderId, userId, role) {
     throw svcErr("Order not found", 404);
   }
 
+  // Sellers also get live stock so they can check availability before accepting an order.
+  const itemProductFields =
+    String(role || "").toLowerCase() === "seller"
+      ? "name mainImage price salePrice unit variants weight pack stock lowStockAlert"
+      : "name mainImage price salePrice unit variants weight pack";
+
   let order = await Order.findOne(orderKey)
     .populate("customer", "name email phone")
-    .populate("items.product", "name mainImage price salePrice unit variants weight pack")
+    .populate("items.product", itemProductFields)
     .populate("returnItems.product", "name mainImage price salePrice unit variants weight pack")
     .populate("deliveryBoy", "name phone profileImage documents ratingAverage ratingCount vehicleType location")
     .populate("returnDeliveryBoy", "name phone profileImage documents ratingAverage ratingCount vehicleType")

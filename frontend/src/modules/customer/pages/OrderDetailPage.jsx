@@ -74,8 +74,8 @@ const hasValidLatLng = (location) =>
   Number.isFinite(location.lng);
 
 const DEFAULT_CITY_SPEED_KMPH = 24;
-const ROUTE_REFRESH_THRESHOLD_M = 150;
-const ROUTE_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+// Minimum gap between route requests from this screen (rider left the drawn route / no route yet)
+const ROUTE_REFETCH_MIN_INTERVAL_MS = 20 * 1000;
 
 const toRadians = (value) => (value * Math.PI) / 180;
 
@@ -177,7 +177,8 @@ const OrderDetailPage = () => {
     Number.isFinite(parsedReturnWindowMinutes) && parsedReturnWindowMinutes > 0
       ? parsedReturnWindowMinutes
       : 2;
-  const routeOriginRef = useRef(null);
+  // Progress reported by the map: { onRoute, remainingRatio } for the current route
+  const [routeProgress, setRouteProgress] = useState(null);
   const routeRequestRef = useRef({ phase: "", startedAt: 0 });
   const [returnCountdown, setReturnCountdown] = useState(null);
   const refreshRef = useRef({ inFlight: false, lastAt: 0, timer: null });
@@ -598,14 +599,17 @@ const OrderDetailPage = () => {
     order.paymentStatus !== "PAID" &&
     status !== "cancelled";
   const sellerLocation = coordsToLatLng(order?.seller?.location?.coordinates);
-  const routePhase = getTrackingRoutePhase(order);
-  const routeMatchesPhase =
-    routePhase === "pickup"
-      ? routePolyline?.phase
-        ? routePolyline.phase === routePhase
-        : !!routePolyline?.polyline
-      : routePolyline?.phase === routePhase;
+  // The server picks the leg from the order status; if its route already says
+  // "delivery" while this screen's copy of the order still looks like pickup, trust
+  // the server (phases only move forward) so line, pin and ETA stay consistent.
+  const orderRoutePhase = getTrackingRoutePhase(order);
+  const routePhase = routePolyline?.phase === "delivery" ? "delivery" : orderRoutePhase;
+  const routeMatchesPhase = Boolean(routePolyline?.polyline) && routePolyline?.phase === routePhase;
   const activeRoutePolyline = routeMatchesPhase ? routePolyline : null;
+  const remainingRatio =
+    activeRoutePolyline && routeProgress?.onRoute && Number.isFinite(routeProgress?.remainingRatio)
+      ? routeProgress.remainingRatio
+      : 1;
   const estimatedArrival = useMemo(() => {
     if (!order) {
       return {
@@ -625,11 +629,11 @@ const OrderDetailPage = () => {
       routePhase === "delivery" ? order?.address?.location : sellerLocation;
 
     let minutes = null;
-    const routeDurationSeconds = Number(activeRoutePolyline?.duration);
+    const routeDurationSeconds = Number(activeRoutePolyline?.duration) * remainingRatio;
     if (Number.isFinite(routeDurationSeconds) && routeDurationSeconds > 0) {
       minutes = routeDurationSeconds / 60;
     } else {
-      const routeDistanceMeters = Number(activeRoutePolyline?.distanceMeters);
+      const routeDistanceMeters = Number(activeRoutePolyline?.distanceMeters) * remainingRatio;
       minutes =
         estimateMinutesFromDistance(routeDistanceMeters) ??
         estimateMinutesFromDistance(distanceMeters(liveLocation, targetLocation));
@@ -640,9 +644,8 @@ const OrderDetailPage = () => {
     }
 
     const arrivalMs = clockTick + minutes * 60 * 1000;
-    const routeDistanceMeters = Number(
-      activeRoutePolyline?.distanceMeters ?? activeRoutePolyline?.distance,
-    );
+    const routeDistanceMeters =
+      Number(activeRoutePolyline?.distanceMeters ?? activeRoutePolyline?.distance) * remainingRatio;
     return {
       arrivalTimeText: formatArrivalTime(arrivalMs),
       arrivingInText: formatArrivingIn(minutes),
@@ -654,6 +657,7 @@ const OrderDetailPage = () => {
   }, [
     activeRoutePolyline?.distanceMeters,
     activeRoutePolyline?.duration,
+    remainingRatio,
     liveLocation,
     order,
     routePhase,
@@ -666,27 +670,15 @@ const OrderDetailPage = () => {
     if (!orderId || status === "delivered" || status === "cancelled") return;
     if (!hasValidLatLng(liveLocation)) return;
 
-    const currentOrigin = {
-      lat: liveLocation.lat,
-      lng: liveLocation.lng,
-    };
-    const originDrift =
-      routeOriginRef.current && hasValidLatLng(routeOriginRef.current)
-        ? distanceMeters(routeOriginRef.current, currentOrigin)
-        : null;
-    const routeIsFresh =
-      activeRoutePolyline?.polyline &&
-      originDrift !== null &&
-      originDrift < ROUTE_REFRESH_THRESHOLD_M &&
-      routePhase === activeRoutePolyline?.phase;
-
-    if (routeIsFresh) return;
+    // A route for the current leg that the rider is still on needs no request: the map
+    // trims it as the rider moves, and rider-side reroutes arrive via Firebase.
+    const routeIsUsable = Boolean(activeRoutePolyline?.polyline) && routeProgress?.onRoute !== false;
+    if (routeIsUsable) return;
 
     const now = Date.now();
     if (
       routeRequestRef.current.phase === routePhase &&
-      now - routeRequestRef.current.startedAt < ROUTE_REFRESH_INTERVAL_MS &&
-      (originDrift === null || originDrift < ROUTE_REFRESH_THRESHOLD_M)
+      now - routeRequestRef.current.startedAt < ROUTE_REFETCH_MIN_INTERVAL_MS
     ) {
       return;
     }
@@ -706,7 +698,7 @@ const OrderDetailPage = () => {
         const nextRoute = response.data?.result;
         if (nextRoute?.polyline) {
           setRoutePolyline(nextRoute);
-          routeOriginRef.current = currentOrigin;
+          setRouteProgress(null);
         }
       })
       .catch(() => { });
@@ -716,6 +708,7 @@ const OrderDetailPage = () => {
     };
   }, [
     activeRoutePolyline?.polyline,
+    routeProgress?.onRoute,
     liveLocation,
     orderId,
     routePhase,
@@ -1053,6 +1046,7 @@ const OrderDetailPage = () => {
               }
               routePhase={routePhase}
               routePolyline={activeRoutePolyline}
+              onRouteProgress={setRouteProgress}
               onOpenInMaps={handleOpenInMaps}
             />
           </motion.div>
@@ -1225,9 +1219,12 @@ const OrderDetailPage = () => {
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-xs font-bold text-orange-600 uppercase tracking-wider">Pickup Location</p>
               </div>
-              <h4 className="font-bold text-slate-900 text-base mb-1">Store Location</h4>
+              <h4 className="font-bold text-slate-900 text-base mb-1">
+                {order.seller?.shopName || order.seller?.name || "Store Location"}
+              </h4>
               <p className="text-sm text-slate-500 leading-relaxed">
-                {order.address?.address || "Address not available"}
+                {(typeof order.seller?.address === "string" ? order.seller.address : order.seller?.address?.address) ||
+                  "Address not available"}
               </p>
             </div>
             <button
