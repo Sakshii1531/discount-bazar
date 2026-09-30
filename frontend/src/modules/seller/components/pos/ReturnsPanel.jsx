@@ -19,6 +19,7 @@ import {
     HiOutlineShieldCheck,
     HiOutlineArchiveBox,
     HiOutlineClock,
+    HiOutlineArrowDownTray,
 } from "react-icons/hi2";
 import Button from "@shared/components/ui/Button";
 import Input from "@shared/components/ui/Input";
@@ -27,6 +28,7 @@ import { posApi } from "../../services/posApi";
 import SaleEditPanel from "./SaleEditPanel";
 import ReturnReceipt from "./ReturnReceipt";
 import { formatAmount } from "@shared/utils/currency";
+import { downloadPosReturnsReportPDF, downloadPosReturnSlipPDF, downloadPosBillPDF } from "@/lib/posPdfExport";
 
 const REFUND_METHODS = [
     { value: "CASH", label: "Cash", icon: HiOutlineBanknotes, desc: "Handed over cash" },
@@ -48,6 +50,30 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
 
     const [recentReturns, setRecentReturns] = useState([]);
     const [isLoadingLog, setIsLoadingLog] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
+
+    // Full returns report: pages through every return, not just the recent 10.
+    const handleDownloadReport = async () => {
+        setIsExporting(true);
+        try {
+            const all = [];
+            let page = 1;
+            let totalPages = 1;
+            do {
+                const res = await posApi.getReturns({ page, limit: 100 });
+                const result = res?.data?.result || {};
+                if (Array.isArray(result.items)) all.push(...result.items);
+                totalPages = result.totalPages || 1;
+                page += 1;
+            } while (page <= totalPages);
+            await downloadPosReturnsReportPDF({ returns: all, shopName });
+            toast.success("Returns report downloaded");
+        } catch {
+            toast.error("Failed to download returns report");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const loadRecentReturns = () => {
         setIsLoadingLog(true);
@@ -263,6 +289,32 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                     <span className="text-sm font-black text-slate-900">
                                         Grand Total: ₹{formatAmount(order.paymentBreakdown?.grandTotal)}
                                     </span>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            // The return lookup sends the bill's lines separately from the order.
+                                            downloadPosBillPDF({
+                                                order: {
+                                                    ...order,
+                                                    items: lines.map((l) => ({
+                                                        name: l.name,
+                                                        variantSlot: l.variantSlot,
+                                                        quantity: l.quantity,
+                                                        price: l.price,
+                                                    })),
+                                                },
+                                                shopName,
+                                                seller,
+                                                heading: "Bill Copy",
+                                            }).catch(() =>
+                                                toast.error("Failed to download bill"),
+                                            )
+                                        }
+                                        className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-primary"
+                                    >
+                                        <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
+                                        Download Bill PDF
+                                    </button>
                                 </div>
                             </div>
 
@@ -524,14 +576,26 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                             <HiOutlineClock className="h-4 w-4 text-slate-400" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-slate-700">Recent Returns</h2>
                         </div>
-                        <button
-                            type="button"
-                            onClick={loadRecentReturns}
-                            title="Refresh"
-                            className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
-                        >
-                            <HiOutlineArrowPath className={cn("h-3.5 w-3.5", isLoadingLog && "animate-spin")} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={handleDownloadReport}
+                                disabled={isExporting || recentReturns.length === 0}
+                                title="Download all returns as PDF"
+                                className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-primary disabled:opacity-40 p-1 rounded-md"
+                            >
+                                <HiOutlineArrowDownTray className={cn("h-3.5 w-3.5", isExporting && "animate-pulse")} />
+                                PDF
+                            </button>
+                            <button
+                                type="button"
+                                onClick={loadRecentReturns}
+                                title="Refresh"
+                                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                            >
+                                <HiOutlineArrowPath className={cn("h-3.5 w-3.5", isLoadingLog && "animate-spin")} />
+                            </button>
+                        </div>
                     </div>
 
                     {isLoadingLog ? (
@@ -579,7 +643,19 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                             .join(", ")}
                                     </p>
 
-                                    <div className="pt-1 border-t border-slate-200/60 flex items-center justify-end">
+                                    <div className="pt-1 border-t border-slate-200/60 flex items-center justify-end gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                downloadPosReturnSlipPDF({ ret, shopName, seller }).catch(() =>
+                                                    toast.error("Failed to download return slip"),
+                                                )
+                                            }
+                                            className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-emerald-700 transition-colors"
+                                        >
+                                            <HiOutlineArrowDownTray className="h-3 w-3" />
+                                            PDF
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => setSlip(ret)}

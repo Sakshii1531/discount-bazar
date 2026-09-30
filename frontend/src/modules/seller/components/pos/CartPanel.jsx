@@ -15,12 +15,18 @@ const CartPanel = ({
     taxValue = 0,
     onUpdateTax,
     taxAmount = 0,
+    isTaxInclusive = true,
+    onToggleTaxInclusive,
     totalWithTax,
     onHold,
     heldCount = 0,
     onShowHeld,
 }) => {
-    const finalTotal = totalWithTax != null ? totalWithTax : subtotal;
+    const finalTotal = totalWithTax != null ? totalWithTax : (isTaxInclusive ? subtotal : subtotal + taxAmount);
+    const taxableBase = Math.max(0, subtotal - taxAmount);
+    const halfTax = Math.round((taxAmount / 2) * 100) / 100;
+    const otherHalfTax = Math.round((taxAmount - halfTax) * 100) / 100;
+    const halfPercent = taxPercent > 0 ? Math.round((taxPercent / 2) * 100) / 100 : 0;
 
     return (
         <div className="flex flex-col h-full">
@@ -116,16 +122,38 @@ const CartPanel = ({
             </div>
 
             <div className="border-t border-slate-100 p-4 bg-white">
-                {/* Tax / GST Custom Entry */}
+                {/* GST / Tax Pricing Mode & Custom Tax */}
                 <div className="mb-3 space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700">Tax / GST</span>
-                        {taxAmount > 0 && (
-                            <span className="text-xs font-bold text-emerald-600">
-                                +₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                {taxMode === "PERCENT" && taxValue > 0 ? ` (${taxValue}%)` : ""}
-                            </span>
-                        )}
+                        <span className="text-xs font-bold text-slate-700">GST / Tax Mode</span>
+                        <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                            <button
+                                type="button"
+                                onClick={() => onToggleTaxInclusive && onToggleTaxInclusive(true)}
+                                className={cn(
+                                    "px-2 py-0.5 text-[10px] font-bold rounded-md transition-all",
+                                    isTaxInclusive
+                                        ? "bg-primary text-white shadow-xs"
+                                        : "text-slate-500 hover:text-slate-800",
+                                )}
+                                title="Prices include GST (Customer pays MRP)"
+                            >
+                                Inclusive
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onToggleTaxInclusive && onToggleTaxInclusive(false)}
+                                className={cn(
+                                    "px-2 py-0.5 text-[10px] font-bold rounded-md transition-all",
+                                    !isTaxInclusive
+                                        ? "bg-primary text-white shadow-xs"
+                                        : "text-slate-500 hover:text-slate-800",
+                                )}
+                                title="GST is added on top of product prices"
+                            >
+                                Exclusive
+                            </button>
+                        </div>
                     </div>
 
                     {/* Custom Input with % / ₹ Toggle */}
@@ -135,7 +163,7 @@ const CartPanel = ({
                                 type="number"
                                 min="0"
                                 step="any"
-                                placeholder={taxMode === "PERCENT" ? "Custom GST % (e.g. 18)" : "Custom GST ₹ (e.g. 50)"}
+                                placeholder={taxMode === "PERCENT" ? "Bill GST % (e.g. 5, 12, 18)" : "Bill GST ₹ (e.g. 50)"}
                                 value={taxValue === 0 ? "" : taxValue}
                                 onChange={(e) => {
                                     const raw = e.target.value;
@@ -156,7 +184,7 @@ const CartPanel = ({
                                     "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
                                     taxMode === "PERCENT"
                                         ? "bg-primary text-white shadow-xs"
-                                        : "text-slate-500 hover:text-slate-800"
+                                        : "text-slate-500 hover:text-slate-800",
                                 )}
                             >
                                 %
@@ -168,7 +196,7 @@ const CartPanel = ({
                                     "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
                                     taxMode === "AMOUNT"
                                         ? "bg-primary text-white shadow-xs"
-                                        : "text-slate-500 hover:text-slate-800"
+                                        : "text-slate-500 hover:text-slate-800",
                                 )}
                             >
                                 ₹
@@ -177,25 +205,65 @@ const CartPanel = ({
                     </div>
                 </div>
 
-                {taxAmount > 0 ? (
+                {isTaxInclusive ? (
                     <div className="space-y-1 mb-3 pt-1 border-t border-slate-100">
-                        <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                            <span>Subtotal</span>
-                            <span>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
-                            <span>Tax / GST {taxMode === "PERCENT" && taxValue > 0 ? `(${taxValue}%)` : ""}</span>
-                            <span className="text-emerald-600">+₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
+                        {taxAmount > 0 && (
+                            <>
+                                <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                                    <span>Taxable Value (Before GST)</span>
+                                    <span>₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-600 pl-2">
+                                    <span className="text-slate-500">CGST {halfPercent > 0 ? `(${halfPercent}%)` : ""}</span>
+                                    <span className="font-semibold text-slate-700">₹{halfTax.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-600 pl-2">
+                                    <span className="text-slate-500">SGST {halfPercent > 0 ? `(${halfPercent}%)` : ""}</span>
+                                    <span className="font-semibold text-slate-700">₹{otherHalfTax.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-slate-600 font-semibold pt-0.5 border-t border-dashed border-slate-100">
+                                    <span>Total Included GST {taxPercent > 0 ? `(${taxPercent}%)` : ""}</span>
+                                    <span className="text-emerald-600">₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            </>
+                        )}
                         <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                            <span className="text-sm font-bold text-slate-700">Total</span>
+                            <div>
+                                <span className="text-sm font-bold text-slate-700 block">Total Payable</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">(Incl. of GST)</span>
+                            </div>
                             <span className="text-xl font-black text-slate-900">₹{finalTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-slate-500">Total</span>
-                        <span className="text-xl font-black text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 mb-3 pt-1 border-t border-slate-100">
+                        <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                            <span>Subtotal (Excl. GST)</span>
+                            <span>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        {taxAmount > 0 && (
+                            <>
+                                <div className="flex items-center justify-between text-[11px] text-slate-600 pl-2">
+                                    <span className="text-slate-500">CGST {halfPercent > 0 ? `(${halfPercent}%)` : ""}</span>
+                                    <span className="font-semibold text-slate-700">+₹{halfTax.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-600 pl-2">
+                                    <span className="text-slate-500">SGST {halfPercent > 0 ? `(${halfPercent}%)` : ""}</span>
+                                    <span className="font-semibold text-slate-700">+₹{otherHalfTax.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-slate-600 font-semibold pt-0.5 border-t border-dashed border-slate-100">
+                                    <span>Total Tax / GST {taxMode === "PERCENT" && taxValue > 0 ? `(${taxValue}%)` : ""}</span>
+                                    <span className="text-emerald-600">+₹{(taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            </>
+                        )}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                            <div>
+                                <span className="text-sm font-bold text-slate-700 block">Total Payable</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">(Excl. of GST)</span>
+                            </div>
+                            <span className="text-xl font-black text-slate-900">₹{finalTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
                     </div>
                 )}
 

@@ -1,6 +1,8 @@
 import React from "react";
 import Button from "@shared/components/ui/Button";
-import { HiOutlineCheckCircle, HiOutlinePrinter } from "react-icons/hi2";
+import { HiOutlineCheckCircle, HiOutlinePrinter, HiOutlineArrowDownTray } from "react-icons/hi2";
+import { toast } from "sonner";
+import { downloadPosBillPDF } from "@/lib/posPdfExport";
 
 // Shared 80mm thermal print styles (also used by ReturnReceipt): only #pos-receipt prints.
 export const RECEIPT_PRINT_CSS = `
@@ -89,7 +91,12 @@ const ReceiptPrint = ({
     const subtotal = Number(breakdown.productSubtotal || breakdown.subtotal || lineItemsSubtotal);
     const taxTotal = Number(breakdown.taxTotal || 0);
     const discountTotal = Number(breakdown.discountTotal || breakdown.discount || 0);
-    const grandTotal = Number(breakdown.grandTotal || breakdown.total || Math.max(0, subtotal + taxTotal - discountTotal));
+    const isTaxInclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive : (breakdown.isTaxInclusive !== false);
+    const grandTotal = Number(
+        breakdown.grandTotal ||
+        breakdown.total ||
+        (isTaxInclusive ? Math.max(0, subtotal - discountTotal) : Math.max(0, subtotal + taxTotal - discountTotal))
+    );
     const amountPaid = order.posAmountPaid != null ? Number(order.posAmountPaid) : grandTotal;
 
     const isCredit = String(order.posPaymentMethod || "").toUpperCase() === "CREDIT";
@@ -98,20 +105,37 @@ const ReceiptPrint = ({
     const changeAmount = !isCredit && cashTendered != null && cashTendered > grandTotal ? cashTendered - grandTotal : 0;
     const splitPayments = Array.isArray(order.posPayments) ? order.posPayments : [];
 
-    // Prices are GST-inclusive; the bill discount is spread across lines before
+    // Bill discount is spread across lines before
     // splitting each rate into taxable value + CGST/SGST (intra-state counter sale).
-    const discountRatio = subtotal > 0 ? grandTotal / subtotal : 1;
+    const discountRatio = subtotal > 0 ? (isTaxInclusive ? grandTotal / subtotal : (subtotal - discountTotal) / subtotal) : 1;
     const gstByRate = new Map();
     lineItems.forEach((item) => {
         const rate = Number(item.gstPercent || 0);
         if (rate <= 0) return;
-        const value = Number(item.price || 0) * Number(item.quantity || item.qty || 1) * discountRatio;
-        const taxable = (value * 100) / (100 + rate);
-        const prev = gstByRate.get(rate) || { taxable: 0, tax: 0 };
-        gstByRate.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + (value - taxable) });
+        const lineTotal = Number(item.price || 0) * Number(item.quantity || item.qty || 1);
+        if (isTaxInclusive) {
+            const value = lineTotal * discountRatio;
+            const taxable = (value * 100) / (100 + rate);
+            const prev = gstByRate.get(rate) || { taxable: 0, tax: 0 };
+            gstByRate.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + (value - taxable) });
+        } else {
+            const taxable = lineTotal * discountRatio;
+            const tax = (taxable * rate) / 100;
+            const prev = gstByRate.get(rate) || { taxable: 0, tax: 0 };
+            gstByRate.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + tax });
+        }
     });
+
+    // Fallback: If individual lines did not record gstPercent, use the bill-level taxTotal/taxPercent
+    if (gstByRate.size === 0 && taxTotal > 0) {
+        const taxable = isTaxInclusive ? Math.max(0, (subtotal - discountTotal) - taxTotal) : Math.max(0, subtotal - discountTotal);
+        const rate = taxable > 0 ? Math.round(((taxTotal / taxable) * 100) * 10) / 10 : Number(breakdown.taxPercent || order.taxPercent || 0);
+        gstByRate.set(rate, { taxable, tax: taxTotal });
+    }
+
     const gstRows = Array.from(gstByRate.entries()).sort((a, b) => a[0] - b[0]);
     const gstTotal = gstRows.reduce((sum, [, r]) => sum + r.tax, 0);
+    const taxableTotal = gstRows.reduce((sum, [, r]) => sum + r.taxable, 0);
     const totalUnits = lineItems.reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0);
 
     const sellerInfo = seller || order.seller || {};
@@ -237,6 +261,11 @@ const ReceiptPrint = ({
                                                         {variant}
                                                     </div>
                                                 )}
+                                                {item.gstPercent > 0 && (
+                                                    <div className="text-[8.5px] text-emerald-700 font-medium">
+                                                        GST: {item.gstPercent}%
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="py-1 text-center font-semibold text-slate-800">
                                                 {qty}
@@ -260,14 +289,40 @@ const ReceiptPrint = ({
                                 <span>Total Qty: {totalUnits}</span>
                             </div>
                             <div className="flex justify-between text-slate-800">
-                                <span>Subtotal</span>
+                                <span>{isTaxInclusive ? "Subtotal (Gross)" : "Subtotal"}</span>
                                 <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
                             </div>
-                            {taxTotal > 0 && (
-                                <div className="flex justify-between text-slate-800 font-semibold">
-                                    <span>Tax / GST</span>
-                                    <span>+₹{taxTotal.toFixed(2)}</span>
-                                </div>
+                            {isTaxInclusive && (gstTotal > 0 || taxTotal > 0) && (
+                                <>
+                                    <div className="flex justify-between text-slate-600 text-[9.5px]">
+                                        <span>Taxable Value (Before GST)</span>
+                                        <span>₹{(taxableTotal || Math.max(0, subtotal - (gstTotal || taxTotal))).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                        <span className="text-slate-500">CGST Amount</span>
+                                        <span>₹{((gstTotal || taxTotal) / 2).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                        <span className="text-slate-500">SGST Amount</span>
+                                        <span>₹{((gstTotal || taxTotal) / 2).toFixed(2)}</span>
+                                    </div>
+                                </>
+                            )}
+                            {!isTaxInclusive && taxTotal > 0 && (
+                                <>
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                        <span className="text-slate-500">CGST Amount</span>
+                                        <span>+₹{(taxTotal / 2).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                        <span className="text-slate-500">SGST Amount</span>
+                                        <span>+₹{(taxTotal / 2).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-800 font-semibold">
+                                        <span>Total Tax / GST</span>
+                                        <span>+₹{taxTotal.toFixed(2)}</span>
+                                    </div>
+                                </>
                             )}
                             {discountTotal > 0 && (
                                 <div className="flex justify-between text-emerald-700 font-semibold">
@@ -282,24 +337,32 @@ const ReceiptPrint = ({
                             <span>TOTAL AMOUNT</span>
                             <span>₹{grandTotal.toFixed(2)}</span>
                         </div>
+                        {isTaxInclusive && (
+                            <p className="text-[9px] text-slate-500 font-semibold text-center -mt-1 mb-1.5">
+                                (Prices are inclusive of GST)
+                            </p>
+                        )}
 
                         {/* GST Summary */}
                         {(gstRows.length > 0 || taxTotal > 0) && (
                             <div className="border-b border-dashed border-slate-400 pb-1.5 mb-1.5 text-[9px] text-slate-700">
-                                <p className="font-bold uppercase text-slate-800 mb-0.5">
-                                    {gstRows.length > 0 ? "GST Summary (incl. in price)" : "Tax / GST Summary"}
-                                </p>
+                                <div className="flex justify-between items-center mb-0.5">
+                                    <p className="font-bold uppercase text-slate-800">
+                                        {gstRows.length > 0 ? (isTaxInclusive ? "GST Summary (incl. in price)" : "GST Summary") : "Tax / GST Summary"}
+                                    </p>
+                                    <span className="text-[8px] font-semibold text-slate-500">CGST + SGST</span>
+                                </div>
                                 {gstRows.length > 0 ? (
                                     <>
-                                        <div className="flex justify-between font-semibold text-slate-500">
+                                        <div className="flex justify-between font-semibold text-slate-500 pb-0.5 border-b border-dotted border-slate-300">
                                             <span className="w-10">Rate</span>
                                             <span className="flex-1 text-right">Taxable</span>
                                             <span className="w-14 text-right">CGST</span>
                                             <span className="w-14 text-right">SGST</span>
                                         </div>
                                         {gstRows.map(([rate, r]) => (
-                                            <div key={rate} className="flex justify-between">
-                                                <span className="w-10">{rate}%</span>
+                                            <div key={rate} className="flex justify-between py-0.5">
+                                                <span className="w-10 font-bold">{rate}%</span>
                                                 <span className="flex-1 text-right">₹{r.taxable.toFixed(2)}</span>
                                                 <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
                                                 <span className="w-14 text-right">₹{(r.tax / 2).toFixed(2)}</span>
@@ -312,8 +375,8 @@ const ReceiptPrint = ({
                                         <span className="font-semibold text-slate-900">₹{taxTotal.toFixed(2)}</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between font-bold text-slate-900 mt-0.5">
-                                    <span>Total Tax</span>
+                                <div className="flex justify-between font-bold text-slate-900 mt-0.5 pt-0.5 border-t border-dotted border-slate-300">
+                                    <span>Total Tax (CGST + SGST)</span>
                                     <span>₹{(gstTotal || taxTotal).toFixed(2)}</span>
                                 </div>
                             </div>
@@ -379,6 +442,21 @@ const ReceiptPrint = ({
                 <div className="flex gap-2 mt-4 print:hidden shrink-0">
                     <Button variant="secondary" className="flex-1" onClick={onClose}>
                         Close
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                            downloadPosBillPDF({
+                                order,
+                                shopName: storeTitle,
+                                seller: sellerInfo,
+                                heading: heading === "Sale Complete" ? "Tax Invoice" : heading,
+                            }).catch(() => toast.error("Failed to download bill"))
+                        }
+                    >
+                        <HiOutlineArrowDownTray className="h-4 w-4 mr-1.5" />
+                        PDF
                     </Button>
                     <Button className="flex-1" onClick={printAdapter}>
                         <HiOutlinePrinter className="h-4 w-4 mr-1.5" />

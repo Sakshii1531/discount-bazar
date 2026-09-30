@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { HiOutlineTrash } from "react-icons/hi2";
+import { HiOutlineTrash, HiOutlineArrowDownTray } from "react-icons/hi2";
 import { useAuth } from "@core/context/AuthContext";
 import Modal from "@shared/components/ui/Modal";
 import { useSellerOrders } from "../context/SellerOrdersContext";
@@ -19,6 +19,7 @@ import {
     OnlineOrdersPanel,
 } from "../components/pos";
 import { formatAmount } from "@shared/utils/currency";
+import { downloadPosHeldBillsPDF } from "@/lib/posPdfExport";
 
 const PACKING_WORKFLOW_STATUSES = [
     "SELLER_PENDING",
@@ -73,6 +74,21 @@ const PosTerminal = () => {
     const [isHeldOpen, setIsHeldOpen] = useState(false);
     const [taxMode, setTaxMode] = useState("PERCENT");
     const [taxValue, setTaxValue] = useState(0);
+    const [isTaxInclusive, setIsTaxInclusive] = useState(() => {
+        try {
+            const saved = localStorage.getItem("pos:tax_inclusive");
+            return saved !== null ? saved === "true" : true;
+        } catch {
+            return true;
+        }
+    });
+
+    const handleToggleTaxInclusive = useCallback((val) => {
+        setIsTaxInclusive(val);
+        try {
+            localStorage.setItem("pos:tax_inclusive", String(val));
+        } catch {}
+    }, []);
 
     const catalogRequestRef = useRef(0);
     // One idempotency key per attempted bill: a retry of the same payload after a
@@ -189,6 +205,7 @@ const PosTerminal = () => {
                     variantLabel: variant?.name || "",
                     name: product.name,
                     price,
+                    gstPercent: Number(product.gstPercent || 0),
                     quantity: 1,
                     maxStock: stock,
                 },
@@ -293,22 +310,51 @@ const PosTerminal = () => {
     );
 
     const taxAmount = useMemo(() => {
-        if (taxMode === "PERCENT") {
-            return Math.round(((subtotal * (Number(taxValue) || 0)) / 100) * 100) / 100;
+        if (isTaxInclusive) {
+            if (taxMode === "PERCENT") {
+                if (Number(taxValue) > 0) {
+                    const rate = Number(taxValue);
+                    const base = (subtotal * 100) / (100 + rate);
+                    return Math.round((subtotal - base) * 100) / 100;
+                }
+                return Math.round(
+                    cart.reduce((sum, l) => {
+                        const rate = Number(l.gstPercent || 0);
+                        if (rate <= 0) return sum;
+                        const lineTotal = l.price * l.quantity;
+                        const base = (lineTotal * 100) / (100 + rate);
+                        return sum + (lineTotal - base);
+                    }, 0) * 100,
+                ) / 100;
+            }
+            return Math.min(subtotal, Math.round((Number(taxValue) || 0) * 100) / 100);
+        } else {
+            if (taxMode === "PERCENT") {
+                if (Number(taxValue) > 0) {
+                    return Math.round(((subtotal * (Number(taxValue) || 0)) / 100) * 100) / 100;
+                }
+                return Math.round(
+                    cart.reduce((sum, l) => {
+                        const rate = Number(l.gstPercent || 0);
+                        return sum + (rate > 0 ? (l.price * l.quantity * rate) / 100 : 0);
+                    }, 0) * 100,
+                ) / 100;
+            }
+            return Math.round((Number(taxValue) || 0) * 100) / 100;
         }
-        return Math.round((Number(taxValue) || 0) * 100) / 100;
-    }, [subtotal, taxMode, taxValue]);
+    }, [cart, subtotal, taxMode, taxValue, isTaxInclusive]);
 
     const taxPercent = useMemo(() => {
-        if (taxMode === "PERCENT") {
-            return Number(taxValue) || 0;
+        if (taxMode === "PERCENT" && Number(taxValue) > 0) {
+            return Number(taxValue);
         }
-        return subtotal > 0 ? Math.round(((taxAmount / subtotal) * 100) * 100) / 100 : 0;
-    }, [subtotal, taxMode, taxValue, taxAmount]);
+        const base = isTaxInclusive ? Math.max(0, subtotal - taxAmount) : subtotal;
+        return base > 0 ? Math.round(((taxAmount / base) * 100) * 100) / 100 : 0;
+    }, [subtotal, taxMode, taxValue, taxAmount, isTaxInclusive]);
 
     const totalWithTax = useMemo(
-        () => Math.round((subtotal + taxAmount) * 100) / 100,
-        [subtotal, taxAmount],
+        () => (isTaxInclusive ? Math.round(subtotal * 100) / 100 : Math.round((subtotal + taxAmount) * 100) / 100),
+        [subtotal, taxAmount, isTaxInclusive],
     );
 
     const handleUpdateTax = useCallback((value, mode = "PERCENT") => {
@@ -323,6 +369,7 @@ const PosTerminal = () => {
                 quantity: l.quantity,
                 price: l.price,
                 variantSku: l.variantSku || undefined,
+                gstPercent: l.gstPercent !== undefined ? l.gstPercent : undefined,
             })),
         [cart],
     );
@@ -341,6 +388,7 @@ const PosTerminal = () => {
                     taxAmount,
                     taxMode,
                     taxValue,
+                    isTaxInclusive,
                 },
                 ...list,
             ];
@@ -350,7 +398,7 @@ const PosTerminal = () => {
             setTaxMode("PERCENT");
             return next;
         },
-        [cart, totalWithTax, taxPercent, taxAmount, taxMode, taxValue, heldBills, saveHeld],
+        [cart, totalWithTax, taxPercent, taxAmount, taxMode, taxValue, isTaxInclusive, heldBills, saveHeld],
     );
 
     const handleHold = () => {
@@ -365,6 +413,9 @@ const PosTerminal = () => {
         setCart(bill.cart || []);
         setTaxMode(bill.taxMode || "PERCENT");
         setTaxValue(bill.taxValue !== undefined ? Number(bill.taxValue) : Number(bill.taxPercent) || 0);
+        if (bill.isTaxInclusive !== undefined) {
+            setIsTaxInclusive(bill.isTaxInclusive);
+        }
         setIsHeldOpen(false);
     };
 
@@ -398,6 +449,7 @@ const PosTerminal = () => {
             posPayments,
             taxPercent: resolvedTaxPercent > 0 ? resolvedTaxPercent : undefined,
             taxTotal: resolvedTaxTotal > 0 ? resolvedTaxTotal : undefined,
+            isTaxInclusive,
         };
         const signature = JSON.stringify(payload);
         if (!pendingSaleRef.current || pendingSaleRef.current.signature !== signature) {
@@ -497,6 +549,8 @@ const PosTerminal = () => {
                             taxValue={taxValue}
                             onUpdateTax={handleUpdateTax}
                             taxAmount={taxAmount}
+                            isTaxInclusive={isTaxInclusive}
+                            onToggleTaxInclusive={handleToggleTaxInclusive}
                             totalWithTax={totalWithTax}
                             onHold={handleHold}
                             heldCount={heldBills.length}
@@ -505,7 +559,7 @@ const PosTerminal = () => {
                     </div>
                 </div>
             ) : (
-                <OnlineOrdersPanel orders={packingQueue} onChanged={refreshOrders} />
+                <OnlineOrdersPanel orders={packingQueue} onChanged={refreshOrders} shopName={user?.shopName || user?.name} />
             )}
 
             <VariantPickerModal
@@ -521,6 +575,7 @@ const PosTerminal = () => {
                 subtotal={subtotal}
                 taxPercent={taxPercent}
                 taxTotal={taxAmount}
+                isTaxInclusive={isTaxInclusive}
                 items={saleItems}
                 onConfirm={handleConfirmSale}
                 isSubmitting={isSubmitting}
@@ -531,6 +586,21 @@ const PosTerminal = () => {
                     <p className="text-sm text-slate-400 text-center py-6">No held bills</p>
                 ) : (
                     <div className="space-y-2">
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    downloadPosHeldBillsPDF({
+                                        bills: heldBills,
+                                        shopName: user?.shopName || user?.name,
+                                    }).catch(() => toast.error("Failed to download held bills"))
+                                }
+                                className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-primary"
+                            >
+                                <HiOutlineArrowDownTray className="h-4 w-4" />
+                                Download PDF
+                            </button>
+                        </div>
                         {heldBills.map((bill) => (
                             <div key={bill.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
                                 <div className="min-w-0 flex-1">

@@ -50,6 +50,7 @@ const CheckoutModal = ({
     subtotal,
     taxPercent = 0,
     taxTotal = 0,
+    isTaxInclusive = true,
     items = [],
     onConfirm,
     isSubmitting,
@@ -141,7 +142,7 @@ const CheckoutModal = ({
     const couponDiscount = appliedCoupon?.couponDiscount || 0;
     const manualDiscount = Math.max(Number(discount) || 0, 0);
     const activeTaxTotal = customTax === "" ? Number(taxTotal) || 0 : Math.max(0, Number(customTax) || 0);
-    const baseTotal = round2(subtotal + activeTaxTotal);
+    const baseTotal = isTaxInclusive ? round2(subtotal) : round2(subtotal + activeTaxTotal);
     const discountValue = Math.min(round2(couponDiscount + manualDiscount), baseTotal);
     const payable = round2(baseTotal - discountValue);
 
@@ -191,6 +192,7 @@ const CheckoutModal = ({
                 couponCode: typedCoupon,
                 taxPercent: subtotal > 0 ? round2((activeTaxTotal / subtotal) * 100) : undefined,
                 taxTotal: activeTaxTotal || undefined,
+                isTaxInclusive,
             });
             const data = res?.data?.result;
             setAppliedCoupon({ code: typedCoupon, couponDiscount: Number(data?.couponDiscount || 0) });
@@ -217,6 +219,7 @@ const CheckoutModal = ({
                 amountPaid: round2(Math.min(Math.max(0, tendered), payable)),
                 taxPercent: activeTaxPercent,
                 taxTotal: activeTaxTotal,
+                isTaxInclusive,
             });
             return;
         }
@@ -234,6 +237,7 @@ const CheckoutModal = ({
             posPayments: paymentMethod === "SPLIT" ? splitLines : undefined,
             taxPercent: activeTaxPercent,
             taxTotal: activeTaxTotal,
+            isTaxInclusive,
         });
     };
 
@@ -257,7 +261,9 @@ const CheckoutModal = ({
                             <span className="text-slate-300">Subtotal: {inr(subtotal)}</span>
                             {activeTaxTotal > 0 && (
                                 <span className="text-amber-300 font-bold">
-                                    +{inr(activeTaxTotal)} (GST)
+                                    {isTaxInclusive
+                                        ? `(incl. ${inr(activeTaxTotal)} GST — CGST: ${inr(activeTaxTotal / 2)} + SGST: ${inr(activeTaxTotal / 2)})`
+                                        : `+${inr(activeTaxTotal)} GST (CGST: ${inr(activeTaxTotal / 2)} + SGST: ${inr(activeTaxTotal / 2)})`}
                                 </span>
                             )}
                             {discountValue > 0 && (

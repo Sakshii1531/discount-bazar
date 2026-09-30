@@ -193,6 +193,11 @@ const orderSchema = new mongoose.Schema(
       name: { type: String, trim: true },
       phone: { type: String, trim: true },
     },
+    // Flag indicating if POS prices were GST inclusive (MRP style) or exclusive
+    isTaxInclusive: {
+      type: Boolean,
+      default: true,
+    },
     stockReservation: {
       status: {
         type: String,
@@ -302,6 +307,7 @@ const orderSchema = new mongoose.Schema(
       tipTotal: { type: Number, default: 0 },
       discountTotal: { type: Number, default: 0 },
       taxTotal: { type: Number, default: 0 },
+      isTaxInclusive: { type: Boolean, default: true },
       grandTotal: { type: Number, default: 0 },
       sellerPayoutTotal: { type: Number, default: 0 },
       adminProductCommissionTotal: { type: Number, default: 0 },

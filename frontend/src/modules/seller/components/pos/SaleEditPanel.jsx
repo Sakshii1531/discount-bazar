@@ -109,6 +109,7 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
                 amountPaid: method === "CREDIT" ? Number(amountPaid) || 0 : undefined,
                 posPayments: method === "SPLIT" ? splitLines : undefined,
                 discount: Number(discount) || 0,
+                isTaxInclusive: order.isTaxInclusive !== undefined ? order.isTaxInclusive : (order.paymentBreakdown?.isTaxInclusive !== false),
                 reason: reason.trim() || "Bill correction",
             });
             toast.success("Bill updated");

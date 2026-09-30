@@ -1,6 +1,8 @@
 import React from "react";
 import Button from "@shared/components/ui/Button";
-import { HiOutlineArrowUturnLeft, HiOutlinePrinter } from "react-icons/hi2";
+import { HiOutlineArrowUturnLeft, HiOutlinePrinter, HiOutlineArrowDownTray } from "react-icons/hi2";
+import { toast } from "sonner";
+import { downloadPosReturnSlipPDF } from "@/lib/posPdfExport";
 import { RECEIPT_PRINT_CSS } from "./ReceiptPrint";
 
 const REFUND_LABELS = { CASH: "Cash", CARD: "Card", QR: "QR / UPI", CREDIT: "Adjusted to credit" };
@@ -101,6 +103,18 @@ const ReturnReceipt = ({ ret, shopName, seller = {}, onClose, printAdapter = () 
                 <div className="flex gap-2 mt-4 print:hidden shrink-0">
                     <Button variant="secondary" className="flex-1" onClick={onClose}>
                         Close
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                            downloadPosReturnSlipPDF({ ret, shopName: storeTitle, seller }).catch(() =>
+                                toast.error("Failed to download return slip"),
+                            )
+                        }
+                    >
+                        <HiOutlineArrowDownTray className="h-4 w-4 mr-1.5" />
+                        PDF
                     </Button>
                     <Button className="flex-1" onClick={printAdapter}>
                         <HiOutlinePrinter className="h-4 w-4 mr-1.5" />

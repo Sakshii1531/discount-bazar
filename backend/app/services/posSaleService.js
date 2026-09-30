@@ -149,6 +149,7 @@ function buildPosBreakdown({
   discountTotal = 0,
   taxPercent = 0,
   taxTotal = 0,
+  isTaxInclusive = true,
 }) {
   let productSubtotal = 0;
   let sellerPayoutTotal = 0;
@@ -178,19 +179,46 @@ function buildPosBreakdown({
     };
   });
 
-  // Calculate taxTotal: if taxTotal is explicitly passed, use that; otherwise calculate from taxPercent or line items
-  const computedTax = taxTotal > 0
-    ? roundCurrency(taxTotal)
-    : taxPercent > 0
-      ? roundCurrency((productSubtotal * taxPercent) / 100)
-      : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+  // Calculate taxTotal:
+  // When isTaxInclusive = true, prices already contain GST. Back-calculate tax from prices.
+  // When isTaxInclusive = false, tax is added on top of productSubtotal.
+  let computedTax = 0;
+  if (isTaxInclusive) {
+    if (taxTotal > 0) {
+      computedTax = roundCurrency(taxTotal);
+    } else if (taxPercent > 0) {
+      const base = (productSubtotal * 100) / (100 + taxPercent);
+      computedTax = roundCurrency(productSubtotal - base);
+    } else {
+      computedTax = roundCurrency(
+        items.reduce((sum, item) => {
+          const rate = Number(item.gstPercent || 0);
+          if (rate <= 0) return sum;
+          const lineTotal = item.price * item.quantity;
+          const base = (lineTotal * 100) / (100 + rate);
+          return sum + (lineTotal - base);
+        }, 0),
+      );
+    }
+  } else {
+    computedTax = taxTotal > 0
+      ? roundCurrency(taxTotal)
+      : taxPercent > 0
+        ? roundCurrency((productSubtotal * taxPercent) / 100)
+        : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+  }
 
   // Coupon discount (when Settings.posCouponsEnabled is on) reduces what the
   // walk-in customer pays and what the seller is paid out — the platform
   // does not absorb it (mirrors regular checkout's per-seller discount split).
   const normalizedDiscount = Math.min(roundCurrency(discountTotal || 0), productSubtotal);
-  const grandTotal = roundCurrency(productSubtotal + computedTax - normalizedDiscount);
-  sellerPayoutTotal = roundCurrency(Math.max(sellerPayoutTotal + computedTax - normalizedDiscount, 0));
+  const grandTotal = isTaxInclusive
+    ? roundCurrency(Math.max(0, productSubtotal - normalizedDiscount))
+    : roundCurrency(Math.max(0, productSubtotal + computedTax - normalizedDiscount));
+
+  sellerPayoutTotal = isTaxInclusive
+    ? roundCurrency(Math.max(sellerPayoutTotal - normalizedDiscount, 0))
+    : roundCurrency(Math.max(sellerPayoutTotal + computedTax - normalizedDiscount, 0));
 
   return {
     currency: CURRENCY,
@@ -200,6 +228,7 @@ function buildPosBreakdown({
     tipTotal: 0,
     discountTotal: normalizedDiscount,
     taxTotal: computedTax,
+    isTaxInclusive,
     grandTotal,
     sellerPayoutTotal,
     adminProductCommissionTotal,
@@ -278,19 +307,46 @@ export async function previewPosSale({ sellerId, payload }) {
     couponDiscount = roundCurrency(result?.discountAmount || 0);
   }
 
+  const isTaxInclusive = payload.isTaxInclusive !== false;
   const discountTotal = Math.min(roundCurrency(couponDiscount + Number(payload.discount || 0)), subtotal);
-  const computedTax = payload.taxTotal > 0
-    ? roundCurrency(payload.taxTotal)
-    : payload.taxPercent > 0
-      ? roundCurrency((subtotal * payload.taxPercent) / 100)
-      : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+  
+  let computedTax = 0;
+  if (isTaxInclusive) {
+    if (payload.taxTotal > 0) {
+      computedTax = roundCurrency(payload.taxTotal);
+    } else if (payload.taxPercent > 0) {
+      const base = (subtotal * 100) / (100 + payload.taxPercent);
+      computedTax = roundCurrency(subtotal - base);
+    } else {
+      computedTax = roundCurrency(
+        items.reduce((sum, item) => {
+          const rate = Number(item.gstPercent || 0);
+          if (rate <= 0) return sum;
+          const lineTotal = item.price * item.quantity;
+          const base = (lineTotal * 100) / (100 + rate);
+          return sum + (lineTotal - base);
+        }, 0),
+      );
+    }
+  } else {
+    computedTax = payload.taxTotal > 0
+      ? roundCurrency(payload.taxTotal)
+      : payload.taxPercent > 0
+        ? roundCurrency((subtotal * payload.taxPercent) / 100)
+        : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
+  }
+
+  const grandTotal = isTaxInclusive
+    ? roundCurrency(Math.max(0, subtotal - discountTotal))
+    : roundCurrency(Math.max(0, subtotal + computedTax - discountTotal));
 
   return {
     subtotal,
     taxTotal: computedTax,
+    isTaxInclusive,
     couponDiscount,
     discountTotal,
-    grandTotal: roundCurrency(subtotal + computedTax - discountTotal),
+    grandTotal,
   };
 }
 
@@ -404,6 +460,8 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
       });
     }
 
+    const isTaxInclusive = payload.isTaxInclusive !== false;
+
     const breakdown = buildPosBreakdown({
       items,
       posPaymentMethod: payload.posPaymentMethod,
@@ -412,6 +470,7 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
       discountTotal: (discountResult?.discountAmount || 0) + Number(payload.discount || 0),
       taxPercent: Number(payload.taxPercent || 0),
       taxTotal: Number(payload.taxTotal || 0),
+      isTaxInclusive,
     });
 
     const grandTotal = breakdown.grandTotal;
@@ -438,6 +497,8 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
       posPayments: pay.posPayments,
       posCashTendered: pay.posCashTendered,
       walkInCustomer: payload.walkInCustomer || undefined,
+      isTaxInclusive,
+      paymentBreakdown: breakdown,
       coupon: discountResult?.coupon?._id || null,
       ...(discountResult?.couponSnapshot ? { couponSnapshot: discountResult.couponSnapshot } : {}),
       paymentMode: "COD",

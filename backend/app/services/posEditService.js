@@ -98,14 +98,39 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
 
       // --- totals ---
       const pb = order.paymentBreakdown?.toObject ? order.paymentBreakdown.toObject() : { ...order.paymentBreakdown };
+      const isTaxInclusive = payload.isTaxInclusive !== undefined ? payload.isTaxInclusive : (order.isTaxInclusive !== false);
       const subtotal = roundCurrency(newItems.reduce((s, i) => s + i.price * i.quantity, 0));
       const discount = Math.min(roundCurrency(payload.discount ?? pb.discountTotal ?? 0), subtotal);
-      const computedTax = payload.taxTotal != null
-        ? roundCurrency(payload.taxTotal)
-        : payload.taxPercent != null
-          ? roundCurrency((subtotal * payload.taxPercent) / 100)
-          : roundCurrency(pb.taxTotal || 0);
-      const grand = roundCurrency(subtotal + computedTax - discount);
+      
+      let computedTax = 0;
+      if (isTaxInclusive) {
+        if (payload.taxTotal != null) {
+          computedTax = roundCurrency(payload.taxTotal);
+        } else if (payload.taxPercent != null) {
+          const base = (subtotal * 100) / (100 + payload.taxPercent);
+          computedTax = roundCurrency(subtotal - base);
+        } else {
+          computedTax = roundCurrency(
+            newItems.reduce((sum, item) => {
+              const rate = Number(item.gstPercent || 0);
+              if (rate <= 0) return sum;
+              const lineTotal = item.price * item.quantity;
+              const base = (lineTotal * 100) / (100 + rate);
+              return sum + (lineTotal - base);
+            }, 0),
+          );
+        }
+      } else {
+        computedTax = payload.taxTotal != null
+          ? roundCurrency(payload.taxTotal)
+          : payload.taxPercent != null
+            ? roundCurrency((subtotal * payload.taxPercent) / 100)
+            : roundCurrency(pb.taxTotal || 0);
+      }
+
+      const grand = isTaxInclusive
+        ? roundCurrency(Math.max(0, subtotal - discount))
+        : roundCurrency(Math.max(0, subtotal + computedTax - discount));
       const oldGrand = pb.grandTotal || 0;
       const payoutRatio = oldGrand > 0 ? (pb.sellerPayoutTotal || 0) / oldGrand : 1;
 
@@ -136,11 +161,13 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       order.paymentStatus = pay.paymentStatus;
       order.payment = { ...(order.payment?.toObject ? order.payment.toObject() : order.payment || {}), ...pay.payment };
       order.posCustomer = customerId || undefined;
+      order.isTaxInclusive = isTaxInclusive;
       freezeFinancialSnapshot(order, {
         ...pb,
         productSubtotal: subtotal,
         discountTotal: discount,
         taxTotal: computedTax,
+        isTaxInclusive,
         grandTotal: grand,
         sellerPayoutTotal: roundCurrency(grand * payoutRatio),
         codCollectedAmount: pay.codCollectedAmount,

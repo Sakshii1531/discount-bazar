@@ -9,17 +9,21 @@ import {
     HiOutlineCheckCircle,
     HiOutlineArchiveBox,
     HiOutlineUser,
+    HiOutlineArrowDownTray,
 } from "react-icons/hi2";
 import Button from "@shared/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { sellerApi } from "../../services/sellerApi";
 import { formatAmount } from "@shared/utils/currency";
+import { downloadPosOnlineOrdersPDF } from "@/lib/posPdfExport";
 
 /**
  * Clean & minimal online orders queue for POS counter.
  * Shows customer app orders awaiting packing or delivery handover.
  */
-const OnlineOrdersPanel = ({ orders = [], onChanged }) => {
+const FILTER_LABELS = { all: "All", needs_packing: "To Pack", packed: "Packed" };
+
+const OnlineOrdersPanel = ({ orders = [], onChanged, shopName }) => {
     const navigate = useNavigate();
     const [busyId, setBusyId] = useState(null);
     const [filter, setFilter] = useState("all");
@@ -101,8 +105,9 @@ const OnlineOrdersPanel = ({ orders = [], onChanged }) => {
                     </p>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                 {/* Minimal Segmented Filter Tabs */}
-                <div className="flex items-center bg-slate-100/90 p-1 rounded-xl self-start sm:self-auto border border-slate-200/60 text-xs">
+                <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/60 text-xs">
                     <button
                         type="button"
                         onClick={() => setFilter("all")}
@@ -139,6 +144,23 @@ const OnlineOrdersPanel = ({ orders = [], onChanged }) => {
                     >
                         Packed ({packedCount})
                     </button>
+                </div>
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={filteredOrders.length === 0}
+                    onClick={() =>
+                        downloadPosOnlineOrdersPDF({
+                            orders: filteredOrders,
+                            filterLabel: FILTER_LABELS[filter],
+                            shopName,
+                        }).catch(() => toast.error("Failed to download orders"))
+                    }
+                    className="text-xs font-semibold"
+                >
+                    <HiOutlineArrowDownTray className="h-4 w-4 mr-1.5" />
+                    Download PDF
+                </Button>
                 </div>
             </div>
 

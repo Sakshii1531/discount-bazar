@@ -41,6 +41,7 @@ export const createPosSaleSchema = Joi.object({
   discount: Joi.number().min(0).optional(),
   taxPercent: Joi.number().min(0).max(100).optional(),
   taxTotal: Joi.number().min(0).optional(),
+  isTaxInclusive: Joi.boolean().optional(),
   walkInCustomer: Joi.object({
     name: trimmedString.max(100).allow("").optional(),
     phone: trimmedString.max(20).allow("").optional(),
@@ -55,6 +56,7 @@ export const previewPosSaleSchema = Joi.object({
   discount: Joi.number().min(0).optional(),
   taxPercent: Joi.number().min(0).max(100).optional(),
   taxTotal: Joi.number().min(0).optional(),
+  isTaxInclusive: Joi.boolean().optional(),
   couponCode: trimmedString.max(50).allow("").optional(),
 });
 
@@ -67,6 +69,7 @@ export const editPosSaleSchema = Joi.object({
   discount: Joi.number().min(0).optional(),
   taxPercent: Joi.number().min(0).max(100).optional(),
   taxTotal: Joi.number().min(0).optional(),
+  isTaxInclusive: Joi.boolean().optional(),
   reason: trimmedString.max(200).allow("").optional(),
 });
 
