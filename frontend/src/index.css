@@ -85,6 +85,17 @@ html.modal-open body {
   touch-action: none !important;
 }
 
+/* Background scroll lock while any modal overlay is open — toggled by ModalScrollLock.
+   Keeps the scroll position and scrollbar space, so the page behind does not jump. */
+html.scroll-locked,
+html.scroll-locked body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+html.scroll-locked {
+  scrollbar-gutter: stable;
+}
+
 
 /* Same typeface everywhere: third-party UI that ships its own font stack
    (sonner toasts, Google Maps info windows / controls) uses the app font too.

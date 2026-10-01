@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { businessApi } from "../services/businessApi";
 import { posApi } from "../services/posApi";
 import { sellerApi } from "../services/sellerApi";
+import PurchaseProductSearch from "../components/business/PurchaseProductSearch";
 import { formatPriceInteger } from "@shared/utils/currency";
 import {
     HiOutlineSquares2X2,
@@ -611,13 +612,16 @@ const DashboardTab = ({ onNavigateTab }) => {
 };
 
 /* ---------- Purchases ---------- */
-const emptyLine = { productId: "", variantSku: "", overallStock: "", quantity: 1, cost: "", gstPercent: 0, purchaseGstType: "EXCLUSIVE" };
+const emptyLine = { productId: "", variantSku: "", quantity: 1, cost: "", gstPercent: 0, purchaseGstType: "EXCLUSIVE" };
 
 const PurchasesTab = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [suppliers, setSuppliers] = useState([]);
     const [products, setProducts] = useState([]);
+    // Latest product list for setLine (also holds products picked from server search before state updates)
+    const productsRef = useRef(products);
+    productsRef.current = products;
     const [bills, setBills] = useState([]);
     const [form, setForm] = useState({ supplierId: "", billNo: "", amountPaid: "", paymentMethod: "CASH" });
     const [lines, setLines] = useState([{ ...emptyLine }]);
@@ -669,6 +673,8 @@ const PurchasesTab = () => {
             if (rawDraft) {
                 const parsed = JSON.parse(rawDraft);
                 if (parsed.form) setForm((f) => ({ ...f, ...parsed.form }));
+                // Stay in edit mode if the user left to add a product while editing a bill
+                if (parsed.editingId) setEditingId(parsed.editingId);
                 if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
                     draftLines = parsed.lines;
                 }
@@ -717,9 +723,6 @@ const PurchasesTab = () => {
                             ...newLines[idx],
                             productId: createdId,
                             variantSku: inwardItems[0].variantSku || "",
-                            overallStock: inwardItems[0].overallStock !== undefined && inwardItems[0].overallStock !== ""
-                                ? inwardItems[0].overallStock
-                                : (prod?.variants?.find((x) => x.sku === inwardItems[0].variantSku)?.stock ?? prod?.stock ?? 0),
                             quantity: inwardItems[0].quantity || 1,
                             cost: inwardItems[0].cost !== "" && inwardItems[0].cost !== undefined ? inwardItems[0].cost : "",
                             gstPercent: inwardItems[0].gstPercent !== "" && inwardItems[0].gstPercent !== undefined ? inwardItems[0].gstPercent : 0,
@@ -729,9 +732,6 @@ const PurchasesTab = () => {
                             const extraLines = inwardItems.slice(1).map((item) => ({
                                 productId: createdId,
                                 variantSku: item.variantSku || "",
-                                overallStock: item.overallStock !== undefined && item.overallStock !== ""
-                                    ? item.overallStock
-                                    : (prod?.variants?.find((x) => x.sku === item.variantSku)?.stock ?? prod?.stock ?? 0),
                                 quantity: item.quantity || 1,
                                 cost: item.cost !== "" && item.cost !== undefined ? item.cost : "",
                                 gstPercent: item.gstPercent !== "" && item.gstPercent !== undefined ? item.gstPercent : 0,
@@ -746,8 +746,6 @@ const PurchasesTab = () => {
                     const selectedVariantSku = firstVar?.sku || "";
                     const autoCost = firstVar?.purchaseCost ?? prod?.purchaseCost ?? "";
                     const autoGst = prod?.gstPercent ?? 0;
-                    const autoQty = firstVar?.stock ?? prod?.stock ?? 1;
-                    const autoOverall = firstVar?.stock ?? prod?.stock ?? 0;
 
                     return baseLines.map((line, i) => {
                         if (i !== idx) return line;
@@ -755,11 +753,10 @@ const PurchasesTab = () => {
                             ...line,
                             productId: createdId,
                             variantSku: selectedVariantSku,
-                            overallStock: autoOverall,
                             cost: autoCost !== "" && autoCost !== undefined ? autoCost : line.cost,
                             gstPercent: autoGst !== "" && autoGst !== undefined ? autoGst : line.gstPercent,
                             purchaseGstType: prod?.purchaseGstType || "EXCLUSIVE",
-                            quantity: Number(autoQty) > 0 ? autoQty : (line.quantity || 1),
+                            quantity: line.quantity || 1,
                         };
                     });
                 });
@@ -821,7 +818,7 @@ const PurchasesTab = () => {
         try {
             sessionStorage.setItem(
                 "seller_purchases_draft",
-                JSON.stringify({ form, lines, targetLineIndex: lineIdx })
+                JSON.stringify({ form, lines, targetLineIndex: lineIdx, editingId })
             );
         } catch (e) {}
         navigate("/seller/products/add?returnTo=/seller/business/purchases", {
@@ -886,9 +883,9 @@ const PurchasesTab = () => {
             const createdId = created?._id || created?.id || updated.find((p) => p.name === trimmedName)?._id;
 
             if (targetLineIndex != null) {
-                setLine(targetLineIndex, { productId: createdId, variantSku: sku, overallStock: 0 });
+                setLine(targetLineIndex, { productId: createdId, variantSku: sku });
             } else {
-                setLines((prev) => [...prev, { ...emptyLine, productId: createdId, variantSku: sku, overallStock: 0 }]);
+                setLines((prev) => [...prev, { ...emptyLine, productId: createdId, variantSku: sku }]);
             }
 
             toast.success(`"${trimmedName}" created and added to bill!`);
@@ -900,60 +897,70 @@ const PurchasesTab = () => {
         }
     };
 
-    const total = useMemo(
-        () => lines.reduce((s, l) => {
-            const qty = Number(l.overallStock !== "" && l.overallStock !== undefined ? l.overallStock : l.quantity) || 0;
+    // Same per-line math and paise rounding as the server's priceItems(), so the footer matches the saved bill
+    const billTotals = useMemo(() => {
+        const r2 = (n) => Math.round(n * 100) / 100;
+        let subtotal = 0;
+        let gstTotal = 0;
+        lines.forEach((l) => {
+            const qty = Number(l.quantity) || 0;
             const cost = Number(l.cost) || 0;
             const gst = Number(l.gstPercent) || 0;
             const isInclusive = String(l.purchaseGstType || "").toUpperCase() === "INCLUSIVE";
+            let base, gstAmt;
             if (isInclusive) {
-                return s + (qty * cost);
+                const lineTotal = r2(qty * cost);
+                base = r2(lineTotal / (1 + gst / 100));
+                gstAmt = r2(lineTotal - base);
+            } else {
+                base = r2(qty * cost);
+                gstAmt = r2((base * gst) / 100);
             }
-            return s + (qty * cost * (1 + gst / 100));
-        }, 0),
-        [lines],
-    );
+            subtotal += base;
+            gstTotal += gstAmt;
+        });
+        subtotal = r2(subtotal);
+        gstTotal = r2(gstTotal);
+        return { subtotal, gstTotal, total: r2(subtotal + gstTotal) };
+    }, [lines]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => {
         if (idx !== i) return l;
         const next = { ...l, ...patch };
         if (patch.productId) {
-            const p = products.find((x) => x._id === patch.productId);
-            next.variantSku = p?.variants?.length === 1 ? p.variants[0].sku : "";
+            const p = productsRef.current.find((x) => x._id === patch.productId);
+            next.variantSku = patch.variantSku || (p?.variants?.length === 1 ? p.variants[0].sku : "");
             if (p) {
                 const singleVar = p.variants?.length === 1 ? p.variants[0] : null;
-                const initStock = singleVar ? (singleVar.stock ?? p.stock ?? 0) : (p.stock ?? 0);
-                next.overallStock = initStock;
-                next.quantity = initStock > 0 ? initStock : 1;
+                // Quantity is units purchased on this bill, not the product's current stock
+                next.quantity = patch.quantity ?? 1;
                 next.cost = p.purchaseCost ?? next.cost;
                 next.gstPercent = p.gstPercent ?? 0;
                 next.purchaseGstType = p.purchaseGstType || "EXCLUSIVE";
                 if (singleVar && singleVar.purchaseCost !== undefined && singleVar.purchaseCost !== "") {
                     next.cost = singleVar.purchaseCost;
                 }
-            } else {
-                next.overallStock = "";
             }
         }
         if (patch.variantSku) {
-            const p = products.find((x) => x._id === next.productId);
+            const p = productsRef.current.find((x) => x._id === next.productId);
             const v = p?.variants?.find((x) => x.sku === patch.variantSku);
-            if (v) {
-                const vStock = v.stock ?? p?.stock ?? 0;
-                next.overallStock = vStock;
-                next.quantity = vStock > 0 ? vStock : 1;
-                if (v.purchaseCost !== undefined && v.purchaseCost !== "") next.cost = v.purchaseCost;
-            } else if (p) {
-                next.overallStock = p.stock ?? 0;
-                next.quantity = p.stock > 0 ? p.stock : 1;
-            }
+            if (v && v.purchaseCost !== undefined && v.purchaseCost !== "") next.cost = v.purchaseCost;
             if (p?.purchaseGstType) next.purchaseGstType = p.purchaseGstType;
-        }
-        if (patch.overallStock !== undefined && patch.quantity === undefined) {
-            next.quantity = patch.overallStock;
         }
         return next;
     }));
+
+    // Product picked via search / barcode scan. A product found by server search may not be
+    // in the loaded list yet, so add it first; a scanned variant barcode also selects that variant.
+    const selectLineProduct = (i, product, variantSku = "") => {
+        if (!product?._id) return;
+        if (!productsRef.current.some((x) => x._id === product._id)) {
+            productsRef.current = [...productsRef.current, product];
+            setProducts((prev) => (prev.some((x) => x._id === product._id) ? prev : [...prev, product]));
+        }
+        setLine(i, { productId: product._id, ...(variantSku ? { variantSku } : {}) });
+    };
 
     const payload = (confirm) => ({
         supplierId: form.supplierId,
@@ -964,7 +971,7 @@ const PurchasesTab = () => {
         items: lines.filter((l) => l.productId).map((l) => ({
             productId: l.productId,
             variantSku: l.variantSku || "",
-            quantity: Number(l.overallStock !== "" && l.overallStock !== undefined ? l.overallStock : l.quantity) || 1,
+            quantity: Number(l.quantity) || 1,
             cost: Number(l.cost),
             gstPercent: Number(l.gstPercent) || 0,
             purchaseGstType: l.purchaseGstType || "EXCLUSIVE",
@@ -1005,13 +1012,9 @@ const PurchasesTab = () => {
         setEditingId(b._id);
         setForm({ supplierId: b.supplier?._id || b.supplier, billNo: b.billNo, amountPaid: b.amountPaid, paymentMethod: b.paymentMethod || "CASH" });
         setLines(b.items.map((i) => {
-            const prod = products.find((x) => x._id === (i.product?._id || i.product));
-            const v = prod?.variants?.find((x) => x.sku === i.variantSku);
-            const ovStock = v?.stock ?? prod?.stock ?? "";
             return {
                 productId: i.product?._id || i.product,
                 variantSku: i.variantSku || "",
-                overallStock: ovStock,
                 quantity: i.quantity,
                 cost: i.cost,
                 gstPercent: i.gstPercent,
@@ -1102,7 +1105,7 @@ const PurchasesTab = () => {
                     <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
                         <span>1. Product Name *</span>
                         <span>2. Variant / Unit</span>
-                        <span>3. Overall Stock *</span>
+                        <span>3. Purchase Qty *</span>
                         <span>4. Purchase Cost (₹) *</span>
                         <span>5. GST %</span>
                         <span className="w-8"></span>
@@ -1112,12 +1115,10 @@ const PurchasesTab = () => {
                         const prod = products.find((x) => x._id === l.productId);
                         const hasVariants = prod?.variants?.length > 0;
                         const currentVariant = hasVariants ? prod.variants.find((v) => v.sku === l.variantSku) : null;
-                        const dynamicStock = currentVariant
-                            ? (currentVariant.stock ?? 0)
-                            : (prod?.stock ?? 0);
-                        const displayOverallStock = l.overallStock !== "" && l.overallStock !== undefined
-                            ? l.overallStock
-                            : (prod ? dynamicStock : "");
+                        // Current stock, shown for reference only (not sent with the bill)
+                        const currentStock = prod
+                            ? (currentVariant ? (currentVariant.stock ?? 0) : hasVariants ? null : (prod.stock ?? 0))
+                            : null;
 
                         return (
                             <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
@@ -1133,14 +1134,14 @@ const PurchasesTab = () => {
                                         </button>
                                     </div>
                                     <div className="flex items-center gap-1.5">
-                                        <select
-                                            className={inputCls}
-                                            value={l.productId}
-                                            onChange={(e) => setLine(i, { productId: e.target.value })}
-                                        >
-                                            <option value="">— Select product —</option>
-                                            {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
-                                        </select>
+                                        <PurchaseProductSearch
+                                            products={products}
+                                            selectedProduct={prod}
+                                            selectedVariantSku={l.variantSku}
+                                            inputClassName={inputCls}
+                                            onSelect={(p, variantSku) => selectLineProduct(i, p, variantSku)}
+                                            onClear={() => setLine(i, { productId: "", variantSku: "", quantity: 1, cost: "" })}
+                                        />
                                         <button
                                             type="button"
                                             onClick={() => openQuickAddProduct(i)}
@@ -1165,17 +1166,22 @@ const PurchasesTab = () => {
                                         </select>
                                     )}
                                 </div>
-                                <div>
-                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Overall Stock *</label>
+                                <div className="relative">
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Purchase Qty *</label>
                                     <input
                                         className={inputCls}
                                         type="number"
-                                        min="0"
-                                        placeholder="0"
-                                        value={displayOverallStock}
-                                        onChange={(e) => setLine(i, { overallStock: e.target.value, quantity: e.target.value })}
-                                        title="Overall stock quantity"
+                                        min="1"
+                                        placeholder="Qty purchased"
+                                        value={l.quantity}
+                                        onChange={(e) => setLine(i, { quantity: e.target.value })}
+                                        title="Quantity purchased on this bill"
                                     />
+                                    {currentStock !== null && (
+                                        <span className="absolute left-1 top-full mt-0.5 text-[10px] font-medium text-slate-400 whitespace-nowrap">
+                                            In stock: {currentStock}
+                                        </span>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Purchase Cost (₹) *</label>
@@ -1187,14 +1193,16 @@ const PurchasesTab = () => {
                                         <button
                                             type="button"
                                             onClick={() => setLine(i, { purchaseGstType: l.purchaseGstType === "INCLUSIVE" ? "EXCLUSIVE" : "INCLUSIVE" })}
-                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors whitespace-nowrap ${
                                                 l.purchaseGstType === "INCLUSIVE"
                                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                                     : "bg-slate-200 text-slate-700 hover:bg-slate-300"
                                             }`}
-                                            title="Click to toggle Inclusive / Exclusive GST"
+                                            title={l.purchaseGstType === "INCLUSIVE"
+                                                ? "Purchase cost already includes GST. Click to switch to: cost excludes GST (GST added on top)"
+                                                : "Purchase cost excludes GST, so GST is added on top. Click to switch to: cost includes GST"}
                                         >
-                                            {l.purchaseGstType === "INCLUSIVE" ? "Incl." : "Excl."}
+                                            {l.purchaseGstType === "INCLUSIVE" ? "Cost incl. GST ⇄" : "Cost excl. GST ⇄"}
                                         </button>
                                     </div>
                                     <input className={inputCls} type="number" min="0" placeholder="GST % (e.g. 0)" value={l.gstPercent} onChange={(e) => setLine(i, { gstPercent: e.target.value })} />
@@ -1221,9 +1229,19 @@ const PurchasesTab = () => {
                     >
                         <HiOutlinePlus className="h-4 w-4" /> Add New Product
                     </button>
-                    <div className="ml-auto text-right">
-                        <span className="text-xs text-slate-500 font-medium mr-2">Total (incl. GST):</span>
-                        <span className="text-base font-black text-slate-900">{inr(total)}</span>
+                    <div className="ml-auto min-w-[220px] space-y-1 text-right">
+                        <div className="flex items-center justify-between gap-6 text-xs">
+                            <span className="text-slate-500 font-medium">Subtotal (taxable value):</span>
+                            <span className="font-semibold text-slate-700">{inrExact(billTotals.subtotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-6 text-xs">
+                            <span className="text-slate-500 font-medium">GST:</span>
+                            <span className="font-semibold text-slate-700">{inrExact(billTotals.gstTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-6 pt-1 border-t border-slate-200">
+                            <span className="text-xs text-slate-500 font-medium">Total (incl. GST):</span>
+                            <span className="text-base font-black text-slate-900">{inrExact(billTotals.total)}</span>
+                        </div>
                     </div>
                 </div>
 

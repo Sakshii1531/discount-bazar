@@ -9,6 +9,7 @@ import { ToastProvider } from './shared/components/ui/Toast';
 import Loader from './shared/components/ui/Loader';
 import ErrorBoundary from './shared/components/ErrorBoundary';
 import LenisScroll from './shared/components/LenisScroll';
+import ModalScrollLock from './shared/components/ModalScrollLock';
 import OfflineDetector from './shared/components/OfflineDetector';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
                         <SupportUnreadProvider>
                             <PendingReviewProvider>
                                 <OfflineDetector />
+                                <ModalScrollLock />
                                 <Suspense fallback={<Loader fullScreen />}>
                                     <LenisScroll />
                                     <AppRouter />
