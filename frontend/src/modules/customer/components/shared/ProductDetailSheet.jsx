@@ -242,6 +242,26 @@ const ProductDetailSheet = () => {
     };
 
     const variantKey = String(selectedVariant?.sku || selectedVariant?.name || "").trim();
+
+    // Price shown for the currently selected variant (same rule as CartContext pricing)
+    const { displayPrice, displayOriginalPrice } = (() => {
+        const basePrice = Number(selectedProduct?.price || 0);
+        const baseOriginal = Number(selectedProduct?.originalPrice || 0);
+        if (!selectedVariant) {
+            return { displayPrice: basePrice, displayOriginalPrice: baseOriginal };
+        }
+        const variantMrp = Number(selectedVariant.price || 0) || basePrice;
+        const variantSale = Number(selectedVariant.salePrice || 0);
+        if (variantSale > 0 && variantSale < variantMrp) {
+            return { displayPrice: variantSale, displayOriginalPrice: variantMrp };
+        }
+        return { displayPrice: variantMrp, displayOriginalPrice: variantMrp };
+    })();
+    const hasDisplayDiscount = displayOriginalPrice > displayPrice;
+    const displayDiscountPercent = hasDisplayDiscount
+        ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
+        : 0;
+
     const cartItem = selectedProduct
         ? cart.find(
             (item) =>
@@ -447,14 +467,14 @@ const ProductDetailSheet = () => {
                                         </motion.button>
 
                                         {/* Discount Badge (center) */}
-                                        {(selectedProduct.originalPrice > selectedProduct.price) && (
+                                        {hasDisplayDiscount && (
                                             <motion.div
                                                 initial={{ scale: 0, rotate: -10 }}
                                                 animate={{ scale: 1, rotate: 0 }}
                                                 transition={{ type: 'spring', delay: 0.2 }}
                                                 className="bg-gradient-to-r from-primary to-[var(--brand-400)] text-white text-[10px] font-[800] px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-md shadow-brand-200/40"
                                             >
-                                                {Math.round(((selectedProduct.originalPrice - selectedProduct.price) / selectedProduct.originalPrice) * 100)}% OFF
+                                                {displayDiscountPercent}% OFF
                                             </motion.div>
                                         )}
 
@@ -547,14 +567,14 @@ const ProductDetailSheet = () => {
                                                 <Clock size={12} strokeWidth={2.5} className="text-primary" />
                                                 {selectedProduct.deliveryTime || currentLocation?.time || '10-15 MINS'}
                                             </motion.div>
-                                            {selectedProduct.originalPrice > selectedProduct.price && (
+                                            {hasDisplayDiscount && (
                                                 <motion.div
                                                     initial={{ opacity: 0, x: -10 }}
                                                     animate={{ opacity: 1, x: 0 }}
                                                     transition={{ delay: 0.15 }}
                                                     className="text-[10px] font-[700] text-primary bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-200/50 uppercase tracking-wider"
                                                 >
-                                                    💰 Save ₹{selectedProduct.originalPrice - selectedProduct.price}
+                                                    💰 Save ₹{displayOriginalPrice - displayPrice}
                                                 </motion.div>
                                             )}
                                             <motion.div
@@ -599,15 +619,15 @@ const ProductDetailSheet = () => {
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-baseline gap-2">
                                                         <span className="text-[28px] lg:text-[32px] font-[800] text-primary tracking-tight leading-none">
-                                                            ₹{selectedProduct.price}
+                                                            ₹{displayPrice}
                                                         </span>
-                                                        {selectedProduct.originalPrice > selectedProduct.price && (
-                                                            <span className="text-[14px] text-gray-400 line-through font-[600]">₹{selectedProduct.originalPrice}</span>
+                                                        {hasDisplayDiscount && (
+                                                            <span className="text-[14px] text-gray-400 line-through font-[600]">₹{displayOriginalPrice}</span>
                                                         )}
                                                     </div>
-                                                    {selectedProduct.originalPrice > selectedProduct.price && (
+                                                    {hasDisplayDiscount && (
                                                         <span className="inline-flex w-fit items-center text-[10px] font-[800] text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
-                                                            {Math.round(((selectedProduct.originalPrice - selectedProduct.price) / selectedProduct.originalPrice) * 100)}% off
+                                                            {displayDiscountPercent}% off
                                                         </span>
                                                     )}
                                                 </div>
@@ -1150,21 +1170,18 @@ const ProductDetailSheet = () => {
                             <div className="flex flex-col gap-3">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex flex-col min-w-[80px]">
-                                        {((selectedVariant?.salePrice && selectedVariant.salePrice < selectedVariant.price) || 
-                                           (!selectedVariant && selectedProduct.originalPrice > selectedProduct.price)) && (
+                                        {hasDisplayDiscount && (
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium text-gray-400 line-through decoration-gray-400/50">
-                                                    ₹{selectedVariant?.price || selectedProduct.originalPrice}
+                                                    ₹{displayOriginalPrice}
                                                 </span>
                                                 <span className="bg-red-50 text-red-500 text-[10px] font-black px-1.5 py-0.5 rounded leading-none">
-                                                    {selectedVariant
-                                                        ? Math.round(((selectedVariant.price - selectedVariant.salePrice) / selectedVariant.price) * 100)
-                                                        : Math.round(((selectedProduct.originalPrice - selectedProduct.price) / selectedProduct.originalPrice) * 100)}% OFF
+                                                    {displayDiscountPercent}% OFF
                                                 </span>
                                             </div>
                                         )}
                                         <div className="text-2xl font-black text-[#1A1A1A] leading-none mt-1">
-                                            ₹{selectedVariant?.salePrice || selectedVariant?.price || selectedProduct.price}
+                                            ₹{displayPrice}
                                         </div>
                                     </div>
 

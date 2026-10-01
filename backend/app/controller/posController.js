@@ -38,7 +38,7 @@ export const getPosCatalog = async (req, res) => {
     }
 
     const products = await Product.find({ $and: conditions })
-      .select("name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants")
+      .select("name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants purchaseCost purchaseGstType")
       .populate("categoryId", "name")
       .sort({ name: 1 })
       .limit(500)

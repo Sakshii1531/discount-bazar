@@ -357,11 +357,19 @@ export async function hydrateOrderItems(
     }
 
     const quantity = normalizeLineQuantity(item.quantity);
-    const serverUnitPrice = normalizeLinePrice(
-      resolvedVariant
-        ? resolvedVariant.salePrice || resolvedVariant.price || product.salePrice || product.price
-        : product.salePrice || product.price,
-    );
+    let serverUnitPrice;
+    if (resolvedVariant) {
+      // Selected variant's own price: sale price only when it is a real discount on its MRP
+      const variantMrp = Number(resolvedVariant.price || 0);
+      const variantSale = Number(resolvedVariant.salePrice || 0);
+      serverUnitPrice = normalizeLinePrice(
+        variantSale > 0 && (!variantMrp || variantSale < variantMrp)
+          ? variantSale
+          : variantMrp || product.salePrice || product.price,
+      );
+    } else {
+      serverUnitPrice = normalizeLinePrice(product.salePrice || product.price);
+    }
     const inferredUnitPrice = enforceServerPricing
       ? serverUnitPrice
       : normalizeLinePrice(item.price) || serverUnitPrice;

@@ -16,6 +16,7 @@ const purchaseReturnSchema = new mongoose.Schema(
         quantity: { type: Number, required: true, min: 1 },
         cost: { type: Number, required: true, min: 0 },
         gstPercent: { type: Number, default: 0 },
+        purchaseGstType: { type: String, enum: ["INCLUSIVE", "EXCLUSIVE"], default: "EXCLUSIVE" },
         lineTotal: { type: Number, default: 0 },
       },
     ],

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -611,7 +611,7 @@ const DashboardTab = ({ onNavigateTab }) => {
 };
 
 /* ---------- Purchases ---------- */
-const emptyLine = { productId: "", variantSku: "", quantity: 1, cost: "", gstPercent: 0 };
+const emptyLine = { productId: "", variantSku: "", overallStock: "", quantity: 1, cost: "", gstPercent: 0, purchaseGstType: "EXCLUSIVE" };
 
 const PurchasesTab = () => {
     const navigate = useNavigate();
@@ -653,44 +653,125 @@ const PurchasesTab = () => {
         return `${prefix}-${String(index).padStart(3, "0")}`;
     };
 
-    // Restore draft if returning from Add Product page
+    const processedCreatedProductIdRef = useRef(null);
+
+    const load = useCallback(() => {
+        businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
+        businessApi.listSuppliers().then((r) => setSuppliers(unwrap(r) || []));
+    }, []);
+
+    // Restore draft and process incoming created product
     useEffect(() => {
+        let draftLines = null;
+        let draftTargetIndex = null;
         try {
             const rawDraft = sessionStorage.getItem("seller_purchases_draft");
             if (rawDraft) {
                 const parsed = JSON.parse(rawDraft);
                 if (parsed.form) setForm((f) => ({ ...f, ...parsed.form }));
                 if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
-                    setLines(parsed.lines);
+                    draftLines = parsed.lines;
                 }
                 if (parsed.targetLineIndex !== undefined && parsed.targetLineIndex !== null) {
+                    draftTargetIndex = parsed.targetLineIndex;
                     setTargetLineIndex(parsed.targetLineIndex);
                 }
                 sessionStorage.removeItem("seller_purchases_draft");
             }
         } catch (e) {}
-    }, []);
 
-    const load = useCallback(() => {
-        businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
-        businessApi.listSuppliers().then((r) => setSuppliers(unwrap(r) || []));
-    }, []);
-    useEffect(() => {
         load();
+
+        const createdId = location.state?.createdProductId;
+        const createdProd = location.state?.createdProduct;
+        const inwardItems = location.state?.inwardItems;
+        const targetIdx = location.state?.targetLineIndex ?? draftTargetIndex;
+
+        const isAlreadyProcessed = Boolean(createdId && processedCreatedProductIdRef.current === createdId);
+        if (createdId && !isAlreadyProcessed) {
+            processedCreatedProductIdRef.current = createdId;
+            try {
+                window.history.replaceState({}, document.title);
+            } catch (e) {}
+        }
+
         posApi.getCatalog({}).then((r) => {
             const list = unwrap(r) || [];
-            setProducts(list);
-            const createdId = location.state?.createdProductId;
-            if (createdId) {
-                const targetIdx = location.state?.targetLineIndex;
-                setLines((prevLines) => {
-                    const idx = targetIdx !== undefined && targetIdx !== null && targetIdx < prevLines.length
+            let updatedList = list;
+            if (createdProd && !list.some((x) => x._id === createdProd._id)) {
+                updatedList = [createdProd, ...list];
+            }
+            setProducts(updatedList);
+
+            if (createdId && !isAlreadyProcessed) {
+                const prod = updatedList.find((x) => x._id === createdId) || createdProd;
+                setLines((currentLines) => {
+                    const baseLines = draftLines && draftLines.length > 0 ? draftLines : currentLines;
+                    const idx = targetIdx !== undefined && targetIdx !== null && targetIdx < baseLines.length
                         ? targetIdx
                         : 0;
-                    return prevLines.map((line, i) => i === idx ? { ...line, productId: createdId } : line);
+
+                    if (Array.isArray(inwardItems) && inwardItems.length > 0) {
+                        const newLines = [...baseLines];
+                        newLines[idx] = {
+                            ...newLines[idx],
+                            productId: createdId,
+                            variantSku: inwardItems[0].variantSku || "",
+                            overallStock: inwardItems[0].overallStock !== undefined && inwardItems[0].overallStock !== ""
+                                ? inwardItems[0].overallStock
+                                : (prod?.variants?.find((x) => x.sku === inwardItems[0].variantSku)?.stock ?? prod?.stock ?? 0),
+                            quantity: inwardItems[0].quantity || 1,
+                            cost: inwardItems[0].cost !== "" && inwardItems[0].cost !== undefined ? inwardItems[0].cost : "",
+                            gstPercent: inwardItems[0].gstPercent !== "" && inwardItems[0].gstPercent !== undefined ? inwardItems[0].gstPercent : 0,
+                            purchaseGstType: inwardItems[0].purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
+                        };
+                        if (inwardItems.length > 1) {
+                            const extraLines = inwardItems.slice(1).map((item) => ({
+                                productId: createdId,
+                                variantSku: item.variantSku || "",
+                                overallStock: item.overallStock !== undefined && item.overallStock !== ""
+                                    ? item.overallStock
+                                    : (prod?.variants?.find((x) => x.sku === item.variantSku)?.stock ?? prod?.stock ?? 0),
+                                quantity: item.quantity || 1,
+                                cost: item.cost !== "" && item.cost !== undefined ? item.cost : "",
+                                gstPercent: item.gstPercent !== "" && item.gstPercent !== undefined ? item.gstPercent : 0,
+                                purchaseGstType: item.purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
+                            }));
+                            newLines.splice(idx + 1, 0, ...extraLines);
+                        }
+                        return newLines;
+                    }
+
+                    const firstVar = prod?.variants?.[0];
+                    const selectedVariantSku = firstVar?.sku || "";
+                    const autoCost = firstVar?.purchaseCost ?? prod?.purchaseCost ?? "";
+                    const autoGst = prod?.gstPercent ?? 0;
+                    const autoQty = firstVar?.stock ?? prod?.stock ?? 1;
+                    const autoOverall = firstVar?.stock ?? prod?.stock ?? 0;
+
+                    return baseLines.map((line, i) => {
+                        if (i !== idx) return line;
+                        return {
+                            ...line,
+                            productId: createdId,
+                            variantSku: selectedVariantSku,
+                            overallStock: autoOverall,
+                            cost: autoCost !== "" && autoCost !== undefined ? autoCost : line.cost,
+                            gstPercent: autoGst !== "" && autoGst !== undefined ? autoGst : line.gstPercent,
+                            purchaseGstType: prod?.purchaseGstType || "EXCLUSIVE",
+                            quantity: Number(autoQty) > 0 ? autoQty : (line.quantity || 1),
+                        };
+                    });
                 });
+            } else if (draftLines && draftLines.length > 0 && !isAlreadyProcessed) {
+                setLines(draftLines);
+            }
+        }).catch(() => {
+            if (draftLines && draftLines.length > 0 && !isAlreadyProcessed) {
+                setLines(draftLines);
             }
         });
+
         sellerApi.getCategoryTree().then((r) => {
             const cats = r.data?.results || r.data?.result || [];
             setDbCategories(cats);
@@ -805,9 +886,9 @@ const PurchasesTab = () => {
             const createdId = created?._id || created?.id || updated.find((p) => p.name === trimmedName)?._id;
 
             if (targetLineIndex != null) {
-                setLine(targetLineIndex, { productId: createdId, variantSku: sku });
+                setLine(targetLineIndex, { productId: createdId, variantSku: sku, overallStock: 0 });
             } else {
-                setLines((prev) => [...prev, { ...emptyLine, productId: createdId, variantSku: sku }]);
+                setLines((prev) => [...prev, { ...emptyLine, productId: createdId, variantSku: sku, overallStock: 0 }]);
             }
 
             toast.success(`"${trimmedName}" created and added to bill!`);
@@ -820,7 +901,16 @@ const PurchasesTab = () => {
     };
 
     const total = useMemo(
-        () => lines.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.cost) || 0) * (1 + (Number(l.gstPercent) || 0) / 100), 0),
+        () => lines.reduce((s, l) => {
+            const qty = Number(l.overallStock !== "" && l.overallStock !== undefined ? l.overallStock : l.quantity) || 0;
+            const cost = Number(l.cost) || 0;
+            const gst = Number(l.gstPercent) || 0;
+            const isInclusive = String(l.purchaseGstType || "").toUpperCase() === "INCLUSIVE";
+            if (isInclusive) {
+                return s + (qty * cost);
+            }
+            return s + (qty * cost * (1 + gst / 100));
+        }, 0),
         [lines],
     );
 
@@ -830,11 +920,37 @@ const PurchasesTab = () => {
         if (patch.productId) {
             const p = products.find((x) => x._id === patch.productId);
             next.variantSku = p?.variants?.length === 1 ? p.variants[0].sku : "";
-            if (p) { next.cost = p.purchaseCost || next.cost; next.gstPercent = p.gstPercent || 0; }
+            if (p) {
+                const singleVar = p.variants?.length === 1 ? p.variants[0] : null;
+                const initStock = singleVar ? (singleVar.stock ?? p.stock ?? 0) : (p.stock ?? 0);
+                next.overallStock = initStock;
+                next.quantity = initStock > 0 ? initStock : 1;
+                next.cost = p.purchaseCost ?? next.cost;
+                next.gstPercent = p.gstPercent ?? 0;
+                next.purchaseGstType = p.purchaseGstType || "EXCLUSIVE";
+                if (singleVar && singleVar.purchaseCost !== undefined && singleVar.purchaseCost !== "") {
+                    next.cost = singleVar.purchaseCost;
+                }
+            } else {
+                next.overallStock = "";
+            }
         }
         if (patch.variantSku) {
-            const v = products.find((x) => x._id === next.productId)?.variants?.find((x) => x.sku === patch.variantSku);
-            if (v?.purchaseCost) next.cost = v.purchaseCost;
+            const p = products.find((x) => x._id === next.productId);
+            const v = p?.variants?.find((x) => x.sku === patch.variantSku);
+            if (v) {
+                const vStock = v.stock ?? p?.stock ?? 0;
+                next.overallStock = vStock;
+                next.quantity = vStock > 0 ? vStock : 1;
+                if (v.purchaseCost !== undefined && v.purchaseCost !== "") next.cost = v.purchaseCost;
+            } else if (p) {
+                next.overallStock = p.stock ?? 0;
+                next.quantity = p.stock > 0 ? p.stock : 1;
+            }
+            if (p?.purchaseGstType) next.purchaseGstType = p.purchaseGstType;
+        }
+        if (patch.overallStock !== undefined && patch.quantity === undefined) {
+            next.quantity = patch.overallStock;
         }
         return next;
     }));
@@ -846,7 +962,12 @@ const PurchasesTab = () => {
         paymentMethod: form.paymentMethod,
         confirm,
         items: lines.filter((l) => l.productId).map((l) => ({
-            productId: l.productId, variantSku: l.variantSku || "", quantity: Number(l.quantity), cost: Number(l.cost), gstPercent: Number(l.gstPercent) || 0,
+            productId: l.productId,
+            variantSku: l.variantSku || "",
+            quantity: Number(l.overallStock !== "" && l.overallStock !== undefined ? l.overallStock : l.quantity) || 1,
+            cost: Number(l.cost),
+            gstPercent: Number(l.gstPercent) || 0,
+            purchaseGstType: l.purchaseGstType || "EXCLUSIVE",
         })),
     });
 
@@ -857,6 +978,15 @@ const PurchasesTab = () => {
     };
 
     const save = async (confirm) => {
+        if (!form.supplierId) {
+            toast.error("Please select a supplier before saving the bill");
+            return;
+        }
+        const validItems = lines.filter((l) => l.productId);
+        if (validItems.length === 0) {
+            toast.error("Please add at least one product to the bill");
+            return;
+        }
         setBusy(true);
         try {
             if (editingId) await businessApi.updatePurchase(editingId, payload(false));
@@ -874,7 +1004,20 @@ const PurchasesTab = () => {
     const edit = (b) => {
         setEditingId(b._id);
         setForm({ supplierId: b.supplier?._id || b.supplier, billNo: b.billNo, amountPaid: b.amountPaid, paymentMethod: b.paymentMethod || "CASH" });
-        setLines(b.items.map((i) => ({ productId: i.product, variantSku: i.variantSku || "", quantity: i.quantity, cost: i.cost, gstPercent: i.gstPercent })));
+        setLines(b.items.map((i) => {
+            const prod = products.find((x) => x._id === (i.product?._id || i.product));
+            const v = prod?.variants?.find((x) => x.sku === i.variantSku);
+            const ovStock = v?.stock ?? prod?.stock ?? "";
+            return {
+                productId: i.product?._id || i.product,
+                variantSku: i.variantSku || "",
+                overallStock: ovStock,
+                quantity: i.quantity,
+                cost: i.cost,
+                gstPercent: i.gstPercent,
+                purchaseGstType: i.purchaseGstType || "EXCLUSIVE",
+            };
+        }));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
@@ -950,7 +1093,7 @@ const PurchasesTab = () => {
                         <div className="p-3 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-start gap-2">
                             <HiOutlineExclamationTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                             <p className="text-[11px] text-amber-800 leading-relaxed">
-                                Select a supplier first (or add a new one) to add or select products for this bill.
+                                Please select a supplier above before saving or confirming this purchase bill.
                             </p>
                         </div>
                     )}
@@ -959,7 +1102,7 @@ const PurchasesTab = () => {
                     <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
                         <span>1. Product Name *</span>
                         <span>2. Variant / Unit</span>
-                        <span>3. Stock Qty (Piece/Kg) *</span>
+                        <span>3. Overall Stock *</span>
                         <span>4. Purchase Cost (₹) *</span>
                         <span>5. GST %</span>
                         <span className="w-8"></span>
@@ -968,6 +1111,14 @@ const PurchasesTab = () => {
                     {lines.map((l, i) => {
                         const prod = products.find((x) => x._id === l.productId);
                         const hasVariants = prod?.variants?.length > 0;
+                        const currentVariant = hasVariants ? prod.variants.find((v) => v.sku === l.variantSku) : null;
+                        const dynamicStock = currentVariant
+                            ? (currentVariant.stock ?? 0)
+                            : (prod?.stock ?? 0);
+                        const displayOverallStock = l.overallStock !== "" && l.overallStock !== undefined
+                            ? l.overallStock
+                            : (prod ? dynamicStock : "");
+
                         return (
                             <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
                                 <div className="col-span-2 md:col-span-1">
@@ -983,13 +1134,11 @@ const PurchasesTab = () => {
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <select
-                                            className={cn(inputCls, !hasSupplier && "bg-slate-100 text-slate-400 cursor-not-allowed")}
-                                            disabled={!hasSupplier}
-                                            title={!hasSupplier ? "Select a supplier first" : undefined}
+                                            className={inputCls}
                                             value={l.productId}
                                             onChange={(e) => setLine(i, { productId: e.target.value })}
                                         >
-                                            <option value="">{hasSupplier ? "— Select product —" : "— Select supplier first —"}</option>
+                                            <option value="">— Select product —</option>
                                             {products.map((p) => <option key={p._id} value={p._id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ""}</option>)}
                                         </select>
                                         <button
@@ -1006,7 +1155,7 @@ const PurchasesTab = () => {
                                 <div className="col-span-2 md:col-span-1">
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Variant / Unit</label>
                                     {hasVariants ? (
-                                        <select className={inputCls} disabled={!hasSupplier} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
+                                        <select className={inputCls} value={l.variantSku} onChange={(e) => setLine(i, { variantSku: e.target.value })}>
                                             <option value="">— Choose variant —</option>
                                             {prod.variants.map((v) => <option key={v.sku} value={v.sku}>{v.name || v.sku}</option>)}
                                         </select>
@@ -1017,15 +1166,37 @@ const PurchasesTab = () => {
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Stock Qty *</label>
-                                    <input className={inputCls} type="number" min="1" placeholder="Stock Qty (e.g. 50)" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} title="Stock quantity received" />
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Overall Stock *</label>
+                                    <input
+                                        className={inputCls}
+                                        type="number"
+                                        min="0"
+                                        placeholder="0"
+                                        value={displayOverallStock}
+                                        onChange={(e) => setLine(i, { overallStock: e.target.value, quantity: e.target.value })}
+                                        title="Overall stock quantity"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Purchase Cost (₹) *</label>
                                     <input className={inputCls} type="number" min="0" step="0.01" placeholder="Cost Price ₹ (per unit)" value={l.cost} onChange={(e) => setLine(i, { cost: e.target.value })} title="Cost price per unit" />
                                 </div>
                                 <div>
-                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">GST %</label>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-[10px] font-bold text-slate-600">GST %</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLine(i, { purchaseGstType: l.purchaseGstType === "INCLUSIVE" ? "EXCLUSIVE" : "INCLUSIVE" })}
+                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                                l.purchaseGstType === "INCLUSIVE"
+                                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                                    : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                            }`}
+                                            title="Click to toggle Inclusive / Exclusive GST"
+                                        >
+                                            {l.purchaseGstType === "INCLUSIVE" ? "Incl." : "Excl."}
+                                        </button>
+                                    </div>
                                     <input className={inputCls} type="number" min="0" placeholder="GST % (e.g. 0)" value={l.gstPercent} onChange={(e) => setLine(i, { gstPercent: e.target.value })} />
                                 </div>
                                 <div className="flex justify-end">
@@ -1039,7 +1210,7 @@ const PurchasesTab = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button type="button" className={`${ghostBtn} disabled:opacity-40 disabled:pointer-events-none`} disabled={!hasSupplier} title={!hasSupplier ? "Select a supplier first" : undefined} onClick={() => setLines((ls) => [...ls, { ...emptyLine }])}>
+                    <button type="button" className={ghostBtn} onClick={() => setLines((ls) => [...ls, { ...emptyLine }])}>
                         <HiOutlinePlus className="h-4 w-4" /> Add Line Item
                     </button>
                     <button
@@ -1267,9 +1438,11 @@ const PurchasesTab = () => {
                                                 </td>
                                                 <td className="py-2.5 px-3 text-center font-bold text-slate-800">{item.quantity}</td>
                                                 <td className="py-2.5 px-3 text-right">{inrExact(item.cost)}</td>
-                                                <td className="py-2.5 px-3 text-center text-slate-500">{item.gstPercent || 0}%</td>
+                                                <td className="py-2.5 px-3 text-center text-slate-500">
+                                                    {item.gstPercent || 0}% {item.purchaseGstType === "INCLUSIVE" ? <span className="text-[10px] text-emerald-600 font-bold block">(Incl.)</span> : null}
+                                                </td>
                                                 <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                                                    {inr(item.lineTotal || (item.quantity * item.cost * (1 + (item.gstPercent || 0) / 100)))}
+                                                    {inr(item.lineTotal || (item.purchaseGstType === "INCLUSIVE" ? (item.quantity * item.cost) : (item.quantity * item.cost * (1 + (item.gstPercent || 0) / 100))))}
                                                 </td>
                                             </tr>
                                         ))}

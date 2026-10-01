@@ -82,13 +82,63 @@ function parseSellerIdFilters({ sellerId, sellerIds }) {
   return [];
 }
 
-function makeProductSku(name, index = 1) {
+/**
+ * Generates a short (~6 char) suffix that is unique per call.
+ * Uses the last 4 chars of the current timestamp in base-36 + 2 random base-36 chars.
+ * e.g. "K3X9AB"
+ */
+function dynamicSuffix() {
+  return (Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 4)).toUpperCase();
+}
+
+/**
+ * Auto-generates a product SKU that is unique per call.
+ * Format: <UP-TO-5-CHAR-NAME-PREFIX>-<6-CHAR-DYNAMIC-SUFFIX>
+ * e.g.  "RICE-K3X9AB"
+ */
+function makeProductSku(name) {
   const prefix = String(name || "")
     .trim()
     .replace(/[^a-zA-Z0-9]/g, "")
     .slice(0, 5)
     .toUpperCase() || "ITEM";
-  return `${prefix}-${String(index).padStart(3, "0")}`;
+  return `${prefix}-${dynamicSuffix()}`;
+}
+
+/**
+ * Returns a slug that is guaranteed to be unique in the Product collection.
+ * Appends a fresh dynamic suffix on every call — collision-free in practice.
+ * Falls back to another fresh suffix up to 5 times, then uses full timestamp.
+ * Pass excludeId when updating so the product's own slug is not a false conflict.
+ */
+async function ensureUniqueSlug(baseSlug, excludeId = null) {
+  for (let i = 0; i < 5; i++) {
+    const candidate = `${baseSlug}-${dynamicSuffix().toLowerCase()}`;
+    const filter = { slug: candidate };
+    if (excludeId) filter._id = { $ne: excludeId };
+    const exists = await Product.exists(filter).lean();
+    if (!exists) return candidate;
+  }
+  return `${baseSlug}-${Date.now().toString(36)}`;
+}
+
+/**
+ * Returns a top-level SKU that is guaranteed to be unique in the Product collection.
+ * For auto-generated SKUs the dynamicSuffix already makes them unique;
+ * for explicit (user-typed) SKUs we verify and regenerate if needed.
+ * Pass excludeId when updating so the product's own SKU is not a false conflict.
+ */
+async function ensureUniqueSku(baseSku, excludeId = null) {
+  let candidate = baseSku;
+  for (let i = 0; i < 5; i++) {
+    const filter = { sku: candidate };
+    if (excludeId) filter._id = { $ne: excludeId };
+    const exists = await Product.exists(filter).lean();
+    if (!exists) return candidate;
+    const prefix = baseSku.split("-")[0] || "ITEM";
+    candidate = `${prefix}-${dynamicSuffix()}`;
+  }
+  return `${baseSku}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function parseJsonIfString(value) {
@@ -823,12 +873,11 @@ export const createProduct = async (req, res) => {
       return handleResponse(res, 400, "Product name is required");
     }
     
-    // Auto-generate slug
-    if (!productData.slug || productData.slug.trim() === "") {
-      productData.slug = slugify(productData.name);
-    } else {
-      productData.slug = slugify(productData.slug);
-    }
+    // Auto-generate slug and make it unique
+    const rawSlug = (!productData.slug || productData.slug.trim() === "")
+      ? slugify(productData.name)
+      : slugify(productData.slug);
+    productData.slug = await ensureUniqueSlug(rawSlug);
 
     productData.description =
       typeof productData.description === "string"
@@ -860,11 +909,10 @@ export const createProduct = async (req, res) => {
             : makeProductSku(productData.name, idx + 1),
       }));
 
-      if (!productData.sku || String(productData.sku).trim() === "") {
-        productData.sku = productData.variants[0]?.sku || makeProductSku(productData.name, 1);
-      } else {
-        productData.sku = String(productData.sku).trim().toUpperCase();
-      }
+      const rawSku = (!productData.sku || String(productData.sku).trim() === "")
+        ? (productData.variants[0]?.sku || makeProductSku(productData.name, 1))
+        : String(productData.sku).trim().toUpperCase();
+      productData.sku = await ensureUniqueSku(rawSku);
 
       // Master stock is always the sum of all variant stocks
       productData.stock = productData.variants.reduce(
@@ -881,11 +929,10 @@ export const createProduct = async (req, res) => {
         productData.purchaseCost = firstVar.purchaseCost;
       }
     } else {
-      if (!productData.sku || String(productData.sku).trim() === "") {
-        productData.sku = makeProductSku(productData.name, 1);
-      } else {
-        productData.sku = String(productData.sku).trim().toUpperCase();
-      }
+      const rawSku = (!productData.sku || String(productData.sku).trim() === "")
+        ? makeProductSku(productData.name, 1)
+        : String(productData.sku).trim().toUpperCase();
+      productData.sku = await ensureUniqueSku(rawSku);
     }
 
     const { value: parsedReturnPolicy, error: returnPolicyError } =
@@ -1055,11 +1102,10 @@ export const updateProduct = async (req, res) => {
     }
 
     if (productData.name) {
-      if (!productData.slug || productData.slug.trim() === "") {
-        productData.slug = slugify(productData.name);
-      } else {
-        productData.slug = slugify(productData.slug);
-      }
+      const rawSlug = (!productData.slug || productData.slug.trim() === "")
+        ? slugify(productData.name)
+        : slugify(productData.slug);
+      productData.slug = await ensureUniqueSlug(rawSlug, product._id);
     }
 
     if (productData.description !== undefined) {
@@ -1094,11 +1140,10 @@ export const updateProduct = async (req, res) => {
             : makeProductSku(skuBaseName, idx + 1),
       }));
 
-      if (!productData.sku || String(productData.sku).trim() === "") {
-        productData.sku = productData.variants[0]?.sku || product.sku || makeProductSku(skuBaseName, 1);
-      } else {
-        productData.sku = String(productData.sku).trim().toUpperCase();
-      }
+      const rawSku = (!productData.sku || String(productData.sku).trim() === "")
+        ? (productData.variants[0]?.sku || product.sku || makeProductSku(skuBaseName, 1))
+        : String(productData.sku).trim().toUpperCase();
+      productData.sku = await ensureUniqueSku(rawSku, product._id);
 
       // Sellers cannot change inventory stock via product edit; stock is managed via Stock Management
       if (role === "seller" && Array.isArray(product.variants) && product.variants.length > 0) {

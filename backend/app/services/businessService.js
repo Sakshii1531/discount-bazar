@@ -124,11 +124,31 @@ function priceItems(items) {
   let subtotal = 0;
   let gstTotal = 0;
   const priced = items.map((i) => {
-    const base = roundCurrency(i.quantity * i.cost);
-    const gst = roundCurrency((base * (i.gstPercent || 0)) / 100);
+    const isInclusive = String(i.purchaseGstType || "").toUpperCase() === "INCLUSIVE";
+    const qty = Number(i.quantity) || 0;
+    const cost = Number(i.cost) || 0;
+    const gstPct = Number(i.gstPercent) || 0;
+    let base, gst, lineTotal;
+    if (isInclusive) {
+      lineTotal = roundCurrency(qty * cost);
+      base = roundCurrency(lineTotal / (1 + gstPct / 100));
+      gst = roundCurrency(lineTotal - base);
+    } else {
+      base = roundCurrency(qty * cost);
+      gst = roundCurrency((base * gstPct) / 100);
+      lineTotal = roundCurrency(base + gst);
+    }
     subtotal += base;
     gstTotal += gst;
-    return { product: i.productId, variantSku: i.variantSku || "", quantity: i.quantity, cost: i.cost, gstPercent: i.gstPercent || 0, lineTotal: roundCurrency(base + gst) };
+    return {
+      product: i.productId,
+      variantSku: i.variantSku || "",
+      quantity: i.quantity,
+      cost: i.cost,
+      gstPercent: i.gstPercent || 0,
+      purchaseGstType: isInclusive ? "INCLUSIVE" : "EXCLUSIVE",
+      lineTotal,
+    };
   });
   return { priced, subtotal: roundCurrency(subtotal), gstTotal: roundCurrency(gstTotal), total: roundCurrency(subtotal + gstTotal) };
 }

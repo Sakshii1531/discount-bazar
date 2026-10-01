@@ -198,6 +198,22 @@ const AddProduct = () => {
     }
   };
 
+  // If opening from the Purchases flow, always start with a fresh blank form.
+  // A stale draft from a previously-saved product would have the same name →
+  // same slug/SKU → "Slug or SKU already exists" error on the backend.
+  useEffect(() => {
+    if (returnTo && returnTo.includes("/seller/business/purchases")) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(TAB_STORAGE_KEY);
+      } catch (e) {}
+      setFormData(initialFormData);
+      setModalTab("general");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const handleFocusIn = (e) => {
       if (
@@ -425,12 +441,43 @@ const AddProduct = () => {
         });
       }
 
+      const isFromPurchases = Boolean(returnTo && returnTo.includes("/seller/business/purchases"));
+
+      // Exclude variants that the user left completely blank (e.g. untouched initial empty row)
+      const filledVariants = (formData.variants || []).filter((v) =>
+        String(v.name || "").trim() !== "" ||
+        Number(v.stock) > 0 ||
+        (v.purchaseCost !== "" && v.purchaseCost !== undefined && Number(v.purchaseCost) > 0)
+      );
+      const effectiveVariants = filledVariants.length > 0 ? filledVariants : (formData.variants || []);
+
       // Variants
-      const sanitizedVariants = (formData.variants || []).map((v, idx) => ({
+      const sanitizedVariants = effectiveVariants.map((v, idx) => ({
         ...v,
+        stock: isFromPurchases ? 0 : v.stock,
         sku: v.sku && String(v.sku).trim() ? String(v.sku).trim().toUpperCase() : makeSku(formData.name, idx + 1),
       }));
       data.append("variants", JSON.stringify(sanitizedVariants));
+      if (isFromPurchases) {
+        data.set("stock", 0);
+      }
+
+      // Collect entered stock, cost and gst for auto-filling the purchase bill
+      const inwardItems = sanitizedVariants.map((v, idx) => {
+        // sanitizedVariants has stock zeroed for the purchases flow, so read the entered stock
+        const rawQty = Number(effectiveVariants[idx]?.stock);
+        const qty = !isNaN(rawQty) && rawQty > 0 ? rawQty : (Number(formData.stock) > 0 ? Number(formData.stock) : 1);
+        const cost = v.purchaseCost !== "" && v.purchaseCost !== undefined ? v.purchaseCost : (formData.purchaseCost !== "" && formData.purchaseCost !== undefined ? formData.purchaseCost : "");
+        const gst = formData.gstPercent !== "" && formData.gstPercent !== undefined ? formData.gstPercent : 0;
+        return {
+          variantSku: v.sku,
+          overallStock: !isNaN(rawQty) && rawQty >= 0 ? rawQty : (Number(formData.stock) >= 0 ? Number(formData.stock) : totalStock),
+          quantity: qty,
+          cost: cost !== "" ? Number(cost) : "",
+          gstPercent: Number(gst) || 0,
+          purchaseGstType: formData.purchaseGstType || "EXCLUSIVE",
+        };
+      });
 
       const response = await sellerApi.createProduct(data);
       const approvalStatus = response?.data?.result?.approvalStatus;
@@ -453,7 +500,9 @@ const AddProduct = () => {
         navigate(returnTo, {
           state: {
             createdProductId: createdProd?._id,
+            createdProduct: createdProd,
             targetLineIndex,
+            inwardItems,
           },
         });
       } else {

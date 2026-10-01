@@ -39,6 +39,7 @@ const lineItems = Joi.array().min(1).items(Joi.object({
   quantity: Joi.number().integer().min(1).required(),
   cost: Joi.number().min(0).required(),
   gstPercent: Joi.number().min(0).max(100).default(0),
+  purchaseGstType: str.valid("INCLUSIVE", "EXCLUSIVE").default("EXCLUSIVE"),
 })).required();
 const billSchema = Joi.object({
   supplierId: id.required(),

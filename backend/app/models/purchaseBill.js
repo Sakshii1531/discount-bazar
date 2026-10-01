@@ -6,8 +6,9 @@ const itemSchema = new mongoose.Schema(
     name: String,
     variantSku: { type: String, default: "" },
     quantity: { type: Number, required: true, min: 1 },
-    cost: { type: Number, required: true, min: 0 }, // per unit, ex-GST
+    cost: { type: Number, required: true, min: 0 },
     gstPercent: { type: Number, default: 0, min: 0 },
+    purchaseGstType: { type: String, enum: ["INCLUSIVE", "EXCLUSIVE"], default: "EXCLUSIVE" },
     lineTotal: { type: Number, default: 0 },
   },
   { _id: false },
