@@ -1102,12 +1102,13 @@ const PurchasesTab = () => {
                     )}
 
                     {/* Column Headers for clarity */}
-                    <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
+                    <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_1.2fr_0.9fr_auto] gap-2 px-2 text-[11px] font-bold text-slate-600 uppercase tracking-wide">
                         <span>1. Product Name *</span>
                         <span>2. Variant / Unit</span>
                         <span>3. Purchase Qty *</span>
                         <span>4. Purchase Cost (₹) *</span>
-                        <span>5. GST %</span>
+                        <span>5. Total Value (₹)</span>
+                        <span>6. GST %</span>
                         <span className="w-8"></span>
                     </div>
 
@@ -1121,7 +1122,7 @@ const PurchasesTab = () => {
                             : null;
 
                         return (
-                            <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                            <div key={i} className="grid grid-cols-2 md:grid-cols-[2fr_1.2fr_1.1fr_1.1fr_1.2fr_0.9fr_auto] gap-2 items-end md:items-center bg-slate-50/80 p-3 rounded-xl border border-slate-200">
                                 <div className="col-span-2 md:col-span-1">
                                     <div className="flex items-center justify-between md:hidden mb-1">
                                         <label className="text-[10px] font-bold text-slate-600">Product Name *</label>
@@ -1186,6 +1187,14 @@ const PurchasesTab = () => {
                                 <div>
                                     <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Purchase Cost (₹) *</label>
                                     <input className={inputCls} type="number" min="0" step="0.01" placeholder="Cost Price ₹ (per unit)" value={l.cost} onChange={(e) => setLine(i, { cost: e.target.value })} title="Cost price per unit" />
+                                </div>
+                                <div>
+                                    <label className="block md:hidden text-[10px] font-bold text-slate-600 mb-1">Total Value (₹)</label>
+                                    <div className={`${inputCls} bg-slate-100 text-slate-700 font-semibold whitespace-nowrap overflow-hidden text-ellipsis`} title="Purchase Qty × Purchase Cost">
+                                        {l.quantity !== "" && l.cost !== ""
+                                            ? ((Number(l.quantity) || 0) * (Number(l.cost) || 0)).toLocaleString("en-IN", { maximumFractionDigits: 2 })
+                                            : "—"}
+                                    </div>
                                 </div>
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
