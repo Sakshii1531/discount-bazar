@@ -275,6 +275,7 @@ const ProductDetailSheet = () => {
     useEffect(() => {
         if (isOpen) {
             controls.start("visible");
+            setIsExpanded(true); // Open directly in full view (no drag needed)
             document.body.style.overflow = "hidden"; // Prevent background scroll
             document.body.style.touchAction = "none"; // Disable swipe background panning
             document.documentElement.style.overflow = "hidden";

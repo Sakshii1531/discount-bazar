@@ -7,6 +7,7 @@ import { useCart } from '../../context/CartContext';
 import { useLocation as useAppLocation } from "../../context/LocationContext";
 import { useSettings } from '@core/context/SettingsContext';
 import LocationDrawer from '../shared/LocationDrawer';
+import CategoriesMegaMenu from './CategoriesMegaMenu';
 
 const Header = () => {
     const { settings } = useSettings();
@@ -140,8 +141,7 @@ const Header = () => {
                     {/* Desktop Navigation */}
                     <nav className="hidden md:flex items-center gap-6">
                         <Link to="/" className="text-sm font-medium transition-colors hover:text-[var(--primary)]">Home</Link>
-
-                        <Link to="/categories" className="text-sm font-medium transition-colors hover:text-[var(--primary)]">Categories</Link>
+                        <CategoriesMegaMenu variant="text" buttonClassName="text-slate-800 hover:text-[var(--primary)] text-sm font-medium" />
                         <Link to="/offers" className="text-sm font-medium transition-colors hover:text-[var(--primary)]">Offers</Link>
                     </nav>
 
