@@ -79,10 +79,15 @@ async function incrementWindowCounter(redisKey, { limit, windowSeconds }) {
   const redis = getRedisClient();
   if (redis) {
     try {
-      const [count] = await Promise.all([
-        redis.incr(redisKey),
-        redis.expire(redisKey, windowSeconds),
-      ]);
+      const count = await redis.incr(redisKey);
+      if (count === 1) {
+        await redis.expire(redisKey, windowSeconds);
+      } else {
+        const ttl = await redis.ttl(redisKey);
+        if (ttl === -1) {
+          await redis.expire(redisKey, windowSeconds);
+        }
+      }
       return Number(count) <= limit;
     } catch {
       // fall back to in-memory counter
