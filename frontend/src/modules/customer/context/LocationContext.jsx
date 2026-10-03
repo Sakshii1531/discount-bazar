@@ -109,6 +109,61 @@ export const LocationProvider = ({ children }) => {
         longitude,
       });
 
+      // Keyless reverse geocoding (OpenStreetMap) used when Google is unavailable,
+      // so the user sees a real address instead of raw coordinates.
+      const reverseGeocodeWithOSM = async (latitude, longitude) => {
+        try {
+          const params = new URLSearchParams({
+            format: "jsonv2",
+            lat: String(latitude),
+            lon: String(longitude),
+            addressdetails: "1",
+          });
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+            { headers: { "Accept-Language": "en" } },
+          );
+          if (!response.ok) return null;
+          const data = await response.json();
+          const addr = data?.address;
+          if (!addr) return null;
+
+          const area =
+            addr.neighbourhood || addr.suburb || addr.quarter || addr.residential;
+          const road = addr.road;
+          const city =
+            addr.city || addr.town || addr.village || addr.county || addr.state_district;
+          const state = addr.state;
+          const pincode = addr.postcode;
+
+          const displayParts = [];
+          if (addr.house_number) displayParts.push(addr.house_number);
+          if (road) displayParts.push(road);
+          if (area && area !== road) displayParts.push(area);
+          if (city) displayParts.push(city);
+          let statePincode = "";
+          if (state) statePincode += state;
+          if (pincode) statePincode += (statePincode ? " " : "") + pincode;
+          if (statePincode) displayParts.push(statePincode);
+          if (addr.country) displayParts.push(addr.country);
+
+          const name = displayParts.join(", ") || data.display_name;
+          if (!name) return null;
+
+          return {
+            name,
+            time: "12-15 mins",
+            city: city || currentLocation?.city || "Indore",
+            state: state || currentLocation?.state || "Madhya Pradesh",
+            pincode: pincode || currentLocation?.pincode || "452018",
+            latitude,
+            longitude,
+          };
+        } catch {
+          return null;
+        }
+      };
+
       const handleLocationSuccess = async (latitude, longitude) => {
         try {
           // Always succeed with coordinates (needed for delivery fee calculation),
@@ -193,6 +248,9 @@ export const LocationProvider = ({ children }) => {
               latitude: latitude,
               longitude: longitude,
             };
+          } else {
+            liveLocation =
+              (await reverseGeocodeWithOSM(latitude, longitude)) || liveLocation;
           }
 
           updateLocation(liveLocation, {
@@ -201,7 +259,9 @@ export const LocationProvider = ({ children }) => {
           });
           resolve({ ok: true, location: liveLocation });
         } catch (err) {
-          const loc = fallbackFromCoords(latitude, longitude);
+          const loc =
+            (await reverseGeocodeWithOSM(latitude, longitude)) ||
+            fallbackFromCoords(latitude, longitude);
           updateLocation(loc, { persist: true, updateSavedHome: false });
           resolve({
             ok: true,
