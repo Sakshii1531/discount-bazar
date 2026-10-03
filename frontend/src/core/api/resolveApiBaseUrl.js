@@ -34,8 +34,15 @@ export function resolveApiBaseUrl() {
   let resolvedUrl;
 
   if (!envUrl) {
-    const fallbackHost = browserHostname || "localhost";
-    resolvedUrl = buildLocalApiUrl(fallbackHost);
+    const isLocalHost =
+      !browserHostname ||
+      browserHostname === "localhost" ||
+      browserHostname === "127.0.0.1" ||
+      /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(browserHostname);
+    // In production (e.g. behind nginx) the API is served on the same origin at /api
+    resolvedUrl = isLocalHost
+      ? buildLocalApiUrl(browserHostname || "localhost")
+      : `${normalizeOrigin(window.location.origin)}${DEFAULT_API_PATH}`;
   } else {
     try {
       const parsed = new URL(envUrl);
