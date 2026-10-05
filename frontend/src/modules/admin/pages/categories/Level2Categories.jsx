@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import Pagination from "@shared/components/ui/Pagination";
+import SearchableSelect from "@shared/components/ui/SearchableSelect";
 import {
   Plus,
   Search,
@@ -335,6 +336,15 @@ const Level2Categories = () => {
     const parent = headerCategories.find((h) => (h._id || h.id) === id);
     return parent ? parent.name : "Unknown";
   };
+
+  const sortedHeaderOptions = useMemo(() => {
+    return [...headerCategories]
+      .map((h) => ({
+        id: h._id || h.id,
+        label: h.name || "Untitled",
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [headerCategories]);
 
   const handleSelect = (id) => {
     setSelectedItems((prev) => {
@@ -672,19 +682,16 @@ const Level2Categories = () => {
                       <label className="text-sm font-medium text-gray-700">
                         Parent Header Category
                       </label>
-                      <select
+                      <SearchableSelect
+                        options={sortedHeaderOptions}
                         value={formData.parentId}
-                        onChange={(e) =>
-                          setFormData({ ...formData, parentId: e.target.value })
+                        onChange={(val) =>
+                          setFormData({ ...formData, parentId: val })
                         }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
-                        <option value="">Select Header Category</option>
-                        {headerCategories.map((h) => (
-                          <option key={h._id || h.id} value={h._id || h.id}>
-                            {h.name}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Select Header Category"
+                        searchPlaceholder="Search header category..."
+                        emptyMessage="No header categories found"
+                      />
                     </div>
 
                     <div className="space-y-2">

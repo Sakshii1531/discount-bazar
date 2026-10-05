@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import Pagination from "@shared/components/ui/Pagination";
+import SearchableSelect from "@shared/components/ui/SearchableSelect";
 import {
   Plus,
   Search,
@@ -651,19 +652,16 @@ const SubCategories = () => {
                       <label className="text-sm font-medium text-gray-700">
                         Parent Category (Level 2)
                       </label>
-                      <select
+                      <SearchableSelect
+                        options={sortedParentCategoryOptions}
                         value={formData.parentId}
-                        onChange={(e) =>
-                          setFormData({ ...formData, parentId: e.target.value })
+                        onChange={(val) =>
+                          setFormData({ ...formData, parentId: val })
                         }
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
-                        <option value="">Select Parent Category</option>
-                        {sortedParentCategoryOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Select Parent Category"
+                        searchPlaceholder="Search parent category..."
+                        emptyMessage="No parent categories found"
+                      />
                     </div>
 
                     <div className="space-y-2">

@@ -24,6 +24,8 @@ export { default as Loader } from './Loader';
 export { default as Modal } from './Modal';
 export { default as PageHeader } from './PageHeader';
 export { default as Pagination } from './Pagination';
+export { default as SearchableSelect } from './SearchableSelect';
 export { default as StatCard } from './StatCard';
 export { default as StatusBadge } from './StatusBadge';
 export { ToastProvider, useToast } from './Toast';
+

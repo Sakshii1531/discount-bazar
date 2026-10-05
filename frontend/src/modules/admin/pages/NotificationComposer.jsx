@@ -137,7 +137,14 @@ const NotificationComposer = () => {
             const result = broadcastRes?.data?.result || {};
             const targetedUsers = Number(result?.targetedUsers || 0);
             const delivered = Number(result?.delivered || 0);
-            
+
+            // Nobody to send to (e.g. no one in this audience has enabled push):
+            // say so instead of reporting a successful broadcast.
+            if (targetedUsers === 0) {
+                showToast(broadcastRes?.data?.message || 'No users with notifications enabled in this audience', 'warning');
+                return;
+            }
+
             let successMsg = 'Notification broadcast successfully!';
             if (targetedUsers > 0) {
                 if (delivered === targetedUsers) {
@@ -547,11 +554,16 @@ const NotificationComposer = () => {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-1">
-                                                <h4 className="ds-body font-bold truncate">{seg.label}</h4>
-                                                <span className={cn(
-                                                    "ds-body font-bold",
-                                                    selectedSegment === seg.id ? "text-primary" : "text-slate-900"
-                                                )}>
+                                                {/* Inline colour: the unlayered .ds-body rule overrides Tailwind's
+                                                    text-* utilities, which left dark text on the selected (navy) card. */}
+                                                <h4
+                                                    className="ds-body font-bold truncate"
+                                                    style={{ color: selectedSegment === seg.id ? '#ffffff' : '#0f172a' }}
+                                                >{seg.label}</h4>
+                                                <span
+                                                    className="ds-body font-bold"
+                                                    style={{ color: selectedSegment === seg.id ? '#ffffff' : '#0f172a' }}
+                                                >
                                                     {Number(seg.count || 0).toLocaleString('en-IN')}
                                                 </span>
                                             </div>

@@ -271,11 +271,13 @@ export default [
   {
     route: "POST /api/admin/experience",
     as: "admin",
-    body: (ctx) => ({ pageType: "home", title: "Top picks", displayType: "products", config: { products: { productIds: [String(ctx.milk._id)] } } }),
+    // Same flat config the admin Experience Studio sends; the API nests it.
+    body: (ctx) => ({ pageType: "home", title: "Top picks", displayType: "products", config: { categoryIds: [String(ctx.tree.category._id)], productIds: [String(ctx.milk._id)], rows: 1, columns: 2 } }),
     status: 201,
     check: (res, ctx) => {
       ctx.experienceId = res.body.result._id;
       expect(res.body.result).toEqual(expect.objectContaining({ pageType: "home", status: "active" }));
+      expect(res.body.result.config.products.productIds.map(String)).toEqual([String(ctx.milk._id)]);
     },
   },
   {

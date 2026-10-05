@@ -70,11 +70,13 @@ const ContentManager = () => {
     );
 
     const availableCategories = useMemo(() => {
-        if (pageType === 'home') {
+        if (pageType === 'home' || !selectedHeaderId || selectedHeader?.slug?.toLowerCase() === 'all' || selectedHeader?.name?.toLowerCase() === 'all') {
             return headerCategories.flatMap((header) => header.children || []);
         }
-        return selectedHeader?.children || [];
-    }, [headerCategories, pageType, selectedHeader]);
+        const children = selectedHeader?.children || [];
+        if (children.length > 0) return children;
+        return headerCategories.flatMap((header) => header.children || []);
+    }, [headerCategories, pageType, selectedHeader, selectedHeaderId]);
 
     const loadHeaderCategories = async () => {
         try {
@@ -85,7 +87,8 @@ const ContentManager = () => {
                 const headers = Array.isArray(tree) ? tree : [];
                 setHeaderCategories(headers);
                 if (!selectedHeaderId && headers.length) {
-                    setSelectedHeaderId(headers[0]._id);
+                    const firstWithChildren = headers.find(h => (h.children || []).length > 0);
+                    setSelectedHeaderId(firstWithChildren ? firstWithChildren._id : headers[0]._id);
                 }
             }
         } catch (e) {
@@ -765,90 +768,168 @@ const ContentManager = () => {
                     {formData.displayType === 'subcategories' && (
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    Parent categories
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(selectedHeader?.children || []).map(c => {
-                                        const isSelected = formData.subCategoryCategoryIds.includes(c._id);
-                                        return (
-                                            <button
-                                                key={c._id}
-                                                type="button"
-                                                onClick={() =>
-                                                    setFormData(prev => {
-                                                        const alreadySelected = prev.subCategoryCategoryIds.includes(c._id);
-                                                        let nextCategoryIds;
-                                                        let nextSubCategoryIds = prev.subCategoryIds;
-
-                                                        if (alreadySelected) {
-                                                            nextCategoryIds = prev.subCategoryCategoryIds.filter(id => id !== c._id);
-                                                            const childIds = (c.children || []).map(child => child._id);
-                                                            nextSubCategoryIds = prev.subCategoryIds.filter(
-                                                                id => !childIds.includes(id)
-                                                            );
-                                                        } else {
-                                                            nextCategoryIds = [...prev.subCategoryCategoryIds, c._id];
-                                                        }
-
-                                                        return {
-                                                            ...prev,
-                                                            subCategoryCategoryIds: nextCategoryIds,
-                                                            subCategoryIds: nextSubCategoryIds,
-                                                        };
-                                                    })
-                                                }
-                                                className={cn(
-                                                    "px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all",
-                                                    isSelected
-                                                        ? "bg-primary text-primary-foreground border-primary"
-                                                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-white"
-                                                )}
-                                            >
-                                                {c.name}
-                                            </button>
-                                        );
-                                    })}
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        1. Parent Categories
+                                    </label>
+                                    {availableCategories.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const allIds = availableCategories.map(c => c._id);
+                                                const areAllSelected = allIds.every(id => formData.subCategoryCategoryIds.includes(id));
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    subCategoryCategoryIds: areAllSelected ? [] : allIds,
+                                                    subCategoryIds: areAllSelected ? [] : prev.subCategoryIds,
+                                                }));
+                                            }}
+                                            className="text-[10px] font-bold text-primary hover:underline"
+                                        >
+                                            {availableCategories.every(c => formData.subCategoryCategoryIds.includes(c._id))
+                                                ? "Deselect All"
+                                                : "Select All"}
+                                        </button>
+                                    )}
                                 </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    Subcategories
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(selectedHeader?.children || [])
-                                        .filter(c => formData.subCategoryCategoryIds.includes(c._id))
-                                        .flatMap(c => c.children || [])
-                                        .map(s => {
-                                        const isSelected = formData.subCategoryIds.includes(s._id);
-                                        return (
-                                            <button
-                                                key={s._id}
-                                                type="button"
-                                                onClick={() =>
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        subCategoryIds: isSelected
-                                                            ? prev.subCategoryIds.filter(id => id !== s._id)
-                                                            : [...prev.subCategoryIds, s._id],
-                                                    }))
-                                                }
-                                                className={cn(
-                                                    "px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all",
-                                                    isSelected
-                                                        ? "bg-primary text-primary-foreground border-primary"
-                                                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-white"
-                                                )}
-                                            >
-                                                {s.name}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                {availableCategories.length === 0 ? (
+                                    <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                                        No parent categories found. Please add main categories in Admin &gt; Categories &gt; Main Categories first.
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-100 rounded-xl bg-slate-50/40">
+                                        {availableCategories.map(c => {
+                                            const isSelected = formData.subCategoryCategoryIds.includes(c._id);
+                                            const subCount = (c.children || []).length;
+                                            return (
+                                                <button
+                                                    key={c._id}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setFormData(prev => {
+                                                            const alreadySelected = prev.subCategoryCategoryIds.includes(c._id);
+                                                            let nextCategoryIds;
+                                                            let nextSubCategoryIds = prev.subCategoryIds;
+
+                                                            if (alreadySelected) {
+                                                                nextCategoryIds = prev.subCategoryCategoryIds.filter(id => id !== c._id);
+                                                                const childIds = (c.children || []).map(child => child._id);
+                                                                nextSubCategoryIds = prev.subCategoryIds.filter(
+                                                                    id => !childIds.includes(id)
+                                                                );
+                                                            } else {
+                                                                nextCategoryIds = [...prev.subCategoryCategoryIds, c._id];
+                                                            }
+
+                                                            return {
+                                                                ...prev,
+                                                                subCategoryCategoryIds: nextCategoryIds,
+                                                                subCategoryIds: nextSubCategoryIds,
+                                                            };
+                                                        })
+                                                    }
+                                                    className={cn(
+                                                        "px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all flex items-center gap-1.5",
+                                                        isSelected
+                                                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                                                    )}
+                                                >
+                                                    <span>{c.name}</span>
+                                                    <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500")}>
+                                                        {subCount}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                                 <p className="text-[10px] text-slate-400">
-                                    Displayed in 4-column grids per row.
+                                    Click parent categories above to view and select their subcategories below.
                                 </p>
                             </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        2. Choose Subcategories
+                                    </label>
+                                    {formData.subCategoryCategoryIds.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const visibleSubIds = availableCategories
+                                                    .filter(c => formData.subCategoryCategoryIds.includes(c._id))
+                                                    .flatMap(c => c.children || [])
+                                                    .map(s => s._id);
+                                                const areAllSelected = visibleSubIds.length > 0 && visibleSubIds.every(id => formData.subCategoryIds.includes(id));
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    subCategoryIds: areAllSelected
+                                                        ? prev.subCategoryIds.filter(id => !visibleSubIds.includes(id))
+                                                        : Array.from(new Set([...prev.subCategoryIds, ...visibleSubIds])),
+                                                }));
+                                            }}
+                                            className="text-[10px] font-bold text-primary hover:underline"
+                                        >
+                                            Select / Deselect All
+                                        </button>
+                                    )}
+                                </div>
+                                {formData.subCategoryCategoryIds.length === 0 ? (
+                                    <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-medium">
+                                        Select at least one parent category above to choose its subcategories.
+                                    </div>
+                                ) : (
+                                    (() => {
+                                        const visibleSubs = availableCategories
+                                            .filter(c => formData.subCategoryCategoryIds.includes(c._id))
+                                            .flatMap(c => c.children || []);
+
+                                        if (visibleSubs.length === 0) {
+                                            return (
+                                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-400">
+                                                    No subcategories found under the selected parent categories.
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1.5 border border-slate-100 rounded-xl bg-slate-50/40">
+                                                {visibleSubs.map(s => {
+                                                    const isSelected = formData.subCategoryIds.includes(s._id);
+                                                    return (
+                                                        <button
+                                                            key={s._id}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    subCategoryIds: isSelected
+                                                                        ? prev.subCategoryIds.filter(id => id !== s._id)
+                                                                        : [...prev.subCategoryIds, s._id],
+                                                                }))
+                                                            }
+                                                            className={cn(
+                                                                "px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all",
+                                                                isSelected
+                                                                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                                                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                                                            )}
+                                                        >
+                                                            {s.name}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                                <p className="text-[10px] text-slate-400">
+                                    Selected subcategories will be displayed in 4-column grids in the app.
+                                </p>
+                            </div>
+
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                     Rows
@@ -909,8 +990,8 @@ const ContentManager = () => {
                                     Filter by categories / subcategories (optional)
                                 </label>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="flex flex-wrap gap-2">
-                                        {(selectedHeader?.children || []).map(c => {
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-100 rounded-xl bg-slate-50/40">
+                                        {availableCategories.map(c => {
                                             const isSelected = formData.productCategoryIds.includes(c._id);
                                             return (
                                                 <button
@@ -951,8 +1032,8 @@ const ContentManager = () => {
                                             );
                                         })}
                                     </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {(selectedHeader?.children || [])
+                                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-100 rounded-xl bg-slate-50/40">
+                                        {availableCategories
                                             .filter(c => formData.productCategoryIds.includes(c._id))
                                             .flatMap(c => c.children || [])
                                             .map(s => {

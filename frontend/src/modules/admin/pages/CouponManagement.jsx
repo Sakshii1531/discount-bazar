@@ -593,7 +593,8 @@ const CouponManagement = () => {
                             <input
                                 required
                                 type="date"
-                                min={today}
+                                // Running campaigns keep their past start date when edited.
+                                min={editingCoupon?._id ? undefined : today}
                                 value={formData.validFrom}
                                 onChange={(e) => {
                                     const newFrom = e.target.value;
@@ -623,7 +624,6 @@ const CouponManagement = () => {
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campaign Description</label>
                         <textarea
-                            required
                             rows={3}
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}

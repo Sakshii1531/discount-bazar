@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
@@ -29,6 +29,9 @@ import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlin
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
+import HomeIcon from "@mui/icons-material/Home";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 /** Full-width bottom stroke + tab curve; l/r are 0–100% of column where the inner bump sits. */
 function buildActiveTabPath(l, r) {
@@ -87,7 +90,7 @@ function CategoryNavColumn({
       style={{
         borderBottomColor: isActive ? "transparent" : categoryAccent,
       }}
-      className="relative z-[2] flex min-w-[48px] shrink-0 cursor-pointer flex-col items-center gap-0.5 border-b-2 px-2 pb-0.5 pt-0.5 snap-start md:min-w-[58px]">
+      className="relative z-[2] flex min-w-[54px] shrink-0 cursor-pointer flex-col items-center gap-0.5 border-b-2 px-1.5 pb-0.5 pt-0.5 snap-start md:min-w-[68px] md:px-2">
       <div className="relative z-10 flex h-9 w-9 items-center justify-center md:h-11 md:w-11">
         {typeof cat.icon === "function" ||
         (typeof cat.icon === "object" && cat.icon.$$typeof) ? (
@@ -113,7 +116,7 @@ function CategoryNavColumn({
         <span
           ref={labelRef}
           className={cn(
-            "relative z-10 mx-auto block max-w-[72px] truncate px-1 pb-0.5 text-center text-[8px] uppercase tracking-tight md:max-w-[88px] md:text-[10px]",
+            "relative z-10 mx-auto block max-w-[76px] truncate px-1 pb-0.5 text-center text-[8px] uppercase tracking-tight md:max-w-[92px] md:text-[10px]",
             isActive ? "font-black text-black" : "font-bold text-black",
           )}
           style={{
@@ -356,6 +359,100 @@ const MainLocationHeader = ({
       );
     };
   }, [baseHeaderColor]);
+
+  const displayCategories = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+
+    // Ensure "All" is always the first category
+    const allIndex = categories.findIndex(
+      (c) =>
+        c.slug?.toLowerCase() === "all" ||
+        c.name?.toLowerCase() === "all" ||
+        c.id === "all" ||
+        c._id === "all",
+    );
+
+    if (allIndex > 0) {
+      const allItem = categories[allIndex];
+      const rest = categories.filter((_, idx) => idx !== allIndex);
+      return [allItem, ...rest];
+    }
+
+    if (allIndex === -1) {
+      return [
+        {
+          id: "all",
+          _id: "all",
+          name: "All",
+          icon: HomeIcon,
+          headerColor: "#0e7490",
+          headerFontColor: "#111111",
+          headerIconColor: "#111111",
+        },
+        ...categories,
+      ];
+    }
+
+    return categories;
+  }, [categories]);
+
+  const isCategoryActive = useCallback(
+    (cat) => {
+      const catId = cat.id || cat._id;
+      const actId = activeCategory?.id || activeCategory?._id;
+      if (!actId || actId === "all") {
+        return (
+          catId === "all" ||
+          cat.name?.toLowerCase() === "all" ||
+          cat.slug?.toLowerCase() === "all"
+        );
+      }
+      return (
+        catId === actId ||
+        (cat._id && cat._id === actId) ||
+        (cat.id && cat.id === actId)
+      );
+    },
+    [activeCategory],
+  );
+
+  const categoryScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollButtons = useCallback(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    updateScrollButtons();
+    el.addEventListener("scroll", updateScrollButtons, { passive: true });
+    window.addEventListener("resize", updateScrollButtons);
+    return () => {
+      el.removeEventListener("scroll", updateScrollButtons);
+      window.removeEventListener("resize", updateScrollButtons);
+    };
+  }, [updateScrollButtons, displayCategories]);
+
+  const scrollCategories = (direction) => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const scrollAmount = direction === "left" ? -280 : 280;
+    el.scrollBy({ left: scrollAmount, behavior: "smooth" });
+  };
+
+  const handleCategoriesWheel = (e) => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
+      el.scrollLeft += e.deltaY;
+    }
+  };
 
   return (
     <>
@@ -690,34 +787,62 @@ const MainLocationHeader = ({
             document.body
           )}
 
-          {/* Categories Navigation - Smooth Collapse */}
-          {categories.length > 0 && (
-            <motion.div
-              layout
-              transition={{
-                layout: {
-                  type: "spring",
-                  stiffness: 420,
-                  damping: 34,
-                  mass: 0.6,
-                },
-              }}
-              className="relative flex items-end md:justify-center gap-0 overflow-x-auto no-scrollbar -mx-2 px-2 md:mx-0 md:px-0 z-10 snap-x pt-0.5 min-h-[68px] md:min-h-[76px] pb-0.5 mt-1">
-              {categories.map((cat) => {
-                const isActive = activeCategory?.id === cat.id;
-                return (
-                  <CategoryNavColumn
-                    key={cat.id}
-                    cat={cat}
-                    isActive={isActive}
-                    categoryAccent={categoryAccent}
-                    onCategorySelect={onCategorySelect}
-                    headerFontColor={headerFontColor}
-                    headerIconColor={headerIconColor}
-                  />
-                );
-              })}
-            </motion.div>
+          {/* Categories Navigation - Smooth Horizontal Scroll */}
+          {displayCategories.length > 0 && (
+            <div className="relative w-full mt-1">
+              {/* Left Scroll Arrow (Desktop) */}
+              {canScrollLeft && (
+                <button
+                  type="button"
+                  onClick={() => scrollCategories("left")}
+                  className="hidden md:flex absolute -left-1 top-1/2 -translate-y-1/2 z-30 h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-md backdrop-blur-sm hover:bg-white hover:scale-110 active:scale-95 transition-all border border-black/10 cursor-pointer"
+                  aria-label="Scroll left"
+                >
+                  <ChevronLeftIcon sx={{ fontSize: 18 }} />
+                </button>
+              )}
+
+              {/* Right Scroll Arrow (Desktop) */}
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => scrollCategories("right")}
+                  className="hidden md:flex absolute right-1 top-1/2 -translate-y-1/2 z-30 h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-md backdrop-blur-sm hover:bg-white hover:scale-110 active:scale-95 transition-all border border-black/10 cursor-pointer"
+                  aria-label="Scroll right"
+                >
+                  <ChevronRightIcon sx={{ fontSize: 18 }} />
+                </button>
+              )}
+
+              <motion.div
+                ref={categoryScrollRef}
+                layout
+                onWheel={handleCategoriesWheel}
+                transition={{
+                  layout: {
+                    type: "spring",
+                    stiffness: 420,
+                    damping: 34,
+                    mass: 0.6,
+                  },
+                }}
+                className="relative flex items-end justify-start gap-0 overflow-x-auto no-scrollbar scroll-smooth -mx-2 px-2 md:mx-0 md:px-2 md:pr-24 z-10 snap-x pt-0.5 min-h-[68px] md:min-h-[76px] pb-0.5">
+                {displayCategories.map((cat) => {
+                  const isActive = isCategoryActive(cat);
+                  return (
+                    <CategoryNavColumn
+                      key={cat.id || cat._id}
+                      cat={cat}
+                      isActive={isActive}
+                      categoryAccent={categoryAccent}
+                      onCategorySelect={onCategorySelect}
+                      headerFontColor={headerFontColor}
+                      headerIconColor={headerIconColor}
+                    />
+                  );
+                })}
+              </motion.div>
+            </div>
           )}
 
           {/* Background Decorative patterns */}
