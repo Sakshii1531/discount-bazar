@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutGrid, ChevronDown, Search, ArrowRight, X, Sparkles } from 'lucide-react';
@@ -23,6 +24,7 @@ const CategoriesMegaMenu = ({
     const [selectedGroupIdx, setSelectedGroupIdx] = useState(0);
     const [searchFilter, setSearchFilter] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [panelPos, setPanelPos] = useState(null);
     const menuRef = useRef(null);
     const buttonRef = useRef(null);
     const navigate = useNavigate();
@@ -95,6 +97,32 @@ const CategoriesMegaMenu = ({
         };
     }, [isOpen]);
 
+    // The panel is portalled to <body> so headers with overflow-hidden/transform
+    // can't clip it; position it under the trigger and keep it in the viewport.
+    useLayoutEffect(() => {
+        if (!isOpen) return undefined;
+        const place = () => {
+            const rect = buttonRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const gutter = 16;
+            const top = rect.bottom + 10;
+            const isDesktop = vw >= 768;
+            const width = isDesktop ? Math.min(vw >= 1024 ? 820 : 720, vw - gutter * 2) : vw - gutter * 2;
+            const left = isDesktop ? Math.min(Math.max(rect.left, gutter), vw - width - gutter) : gutter;
+            const maxHeight = Math.max(240, Math.min(isDesktop ? 540 : vh * 0.8, vh - top - gutter));
+            setPanelPos({ top, left, width, maxHeight });
+        };
+        place();
+        window.addEventListener('resize', place);
+        window.addEventListener('scroll', place, true);
+        return () => {
+            window.removeEventListener('resize', place);
+            window.removeEventListener('scroll', place, true);
+        };
+    }, [isOpen]);
+
     const activeGroup = groups[selectedGroupIdx] || groups[0];
 
     // Filtered categories when search is active
@@ -124,7 +152,8 @@ const CategoriesMegaMenu = ({
             <button
                 ref={buttonRef}
                 type="button"
-                onClick={() => setIsOpen((prev) => !prev)}
+                // Opens the full categories page (instead of the dropdown card).
+                onClick={() => navigate('/categories')}
                 className={cn(
                     "flex items-center gap-1.5 font-bold transition-all select-none cursor-pointer outline-none",
                     variant === "capsule" 
@@ -149,15 +178,17 @@ const CategoriesMegaMenu = ({
             </button>
 
             {/* Dropdown Menu Modal */}
+            {typeof document !== 'undefined' && createPortal(
             <AnimatePresence>
-                {isOpen && (
+                {isOpen && panelPos && (
                     <motion.div
                         ref={menuRef}
                         initial={{ opacity: 0, y: 10, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.98 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="fixed md:absolute left-4 right-4 md:left-0 md:right-auto top-[76px] md:top-full md:mt-2.5 w-[calc(100vw-32px)] md:w-[720px] lg:w-[820px] max-h-[80vh] md:max-h-[540px] bg-white rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.25)] border border-slate-200/90 overflow-hidden flex flex-col z-[400]"
+                        style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width, maxHeight: panelPos.maxHeight }}
+                        className="fixed bg-white rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.25)] border border-slate-200/90 overflow-hidden flex flex-col z-[400]"
                     >
                         {/* Top Bar: Search & Quick Details */}
                         <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50/80">
@@ -342,7 +373,9 @@ const CategoriesMegaMenu = ({
                         </div>
                     </motion.div>
                 )}
-            </AnimatePresence>
+            </AnimatePresence>,
+            document.body,
+            )}
         </div>
     );
 };
