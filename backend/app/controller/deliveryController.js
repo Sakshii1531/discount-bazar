@@ -390,8 +390,13 @@ export const updateDeliveryLocation = async (req, res) => {
             typeof lat !== "number" ||
             typeof lng !== "number" ||
             Number.isNaN(lat) ||
-            Number.isNaN(lng)
+            Number.isNaN(lng) ||
+            lat < -90 ||
+            lat > 90 ||
+            lng < -180 ||
+            lng > 180
         ) {
+            // Out-of-range values used to reach Mongo's geo index and fail with a 500.
             return handleResponse(res, 400, "Valid numeric lat and lng are required");
         }
 

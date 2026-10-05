@@ -103,6 +103,12 @@ export const updateReviewStatus = async (req, res) => {
         const { status } = req.body; // approved or rejected
         const { id } = req.params;
 
+        // findByIdAndUpdate skips schema validators; an unknown status used to
+        // be saved and the review vanished from both pending and public lists.
+        if (!["approved", "rejected", "pending"].includes(status)) {
+            return handleResponse(res, 400, "status must be approved, rejected or pending");
+        }
+
         const review = await Review.findByIdAndUpdate(id, { status }, { new: true });
         if (!review) return handleResponse(res, 404, "Review not found");
 

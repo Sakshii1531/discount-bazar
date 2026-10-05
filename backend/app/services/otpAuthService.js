@@ -43,16 +43,6 @@ const OTP_VERIFY_LIMIT_PER_WINDOW = () =>
     10,
   );
 
-export function isTestPhone(phone) {
-  return [
-    "+916268423925",
-    "+919111966732",
-    "+917389961407",
-    "7389961407",
-    "6268423925",
-    "9111966732",
-  ].includes(phone);
-}
 
 function otpHashSecret() {
   return process.env.OTP_HASH_SECRET || process.env.JWT_SECRET || "unsafe-dev-secret";
@@ -140,10 +130,10 @@ export async function issueCustomerOtp({
   const phone = normalizeAndValidatePhone(rawPhone);
   const now = new Date();
 
-  const sendAllowed = isTestPhone(phone) || (await incrementWindowCounter(`otp:send:phone:${phone}`, {
+  const sendAllowed = await incrementWindowCounter(`otp:send:phone:${phone}`, {
     limit: OTP_SEND_LIMIT_PER_WINDOW(),
     windowSeconds: OTP_SEND_LIMIT_WINDOW_SECONDS(),
-  }));
+  });
   if (!sendAllowed) {
     const err = new Error("Too many OTP requests. Try again later.");
     err.statusCode = 429;
@@ -205,10 +195,9 @@ export async function issueCustomerOtp({
     }
   }
 
-  let otp = generateOTP();
-  if (flow === "signup" || phone === "+916268423925" || phone === "+919111966732" || phone === "+917389961407" || phone === "7389961407") {
-    otp = "1234";
-  }
+  // generateOTP() already returns the fixed mock code outside production
+  // (USE_REAL_SMS off); every real login/signup gets a random code.
+  const otp = generateOTP();
   customer.otpHash = hashOtp(phone, otp);
   customer.otpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES() * 60 * 1000);
   customer.otpFailedAttempts = 0;
@@ -233,7 +222,7 @@ export async function issueCustomerOtp({
       });
     } catch (smsError) {
       console.error("[sms] SMS dispatch failed:", smsError.message);
-      if (process.env.NODE_ENV !== "production" || phone === "+917389961407" || phone === "7389961407") {
+      if (process.env.NODE_ENV !== "production") {
         otpAuditLog("customer_otp_sms_fallback_mock", {
           phone: maskPhone(phone),
           flow,
@@ -269,10 +258,10 @@ export async function verifyCustomerOtpCode({
     throw err;
   }
 
-  const verifyAllowed = isTestPhone(phone) || (await incrementWindowCounter(`otp:verify:phone:${phone}`, {
+  const verifyAllowed = await incrementWindowCounter(`otp:verify:phone:${phone}`, {
     limit: OTP_VERIFY_LIMIT_PER_WINDOW(),
     windowSeconds: OTP_VERIFY_LIMIT_WINDOW_SECONDS(),
-  }));
+  });
   if (!verifyAllowed) {
     const err = new Error("Too many OTP verification attempts. Try again later.");
     err.statusCode = 429;

@@ -16,11 +16,27 @@ jest.unstable_mockModule("../app/services/sellerVerificationService.js", () => (
   issueSellerVerificationOtp: jest.fn(),
   verifySellerOtpCode: jest.fn(),
   verifySellerVerificationToken: mockVerifySellerVerificationToken,
+  issueSellerResetOtp: jest.fn(),
+  verifySellerResetOtpCode: jest.fn(),
+  consumeSellerResetVerification: jest.fn(),
 }));
 
 jest.unstable_mockModule("../app/services/mediaService.js", () => ({
   uploadToCloudinary: mockUploadToCloudinary,
 }));
+
+// signupSeller notifies admins after creating the seller; keep this a pure unit test.
+jest.unstable_mockModule("../app/models/admin.js", () => ({
+  default: { find: () => ({ select: () => ({ lean: async () => [] }) }) },
+}));
+jest.unstable_mockModule("../app/modules/notifications/notification.emitter.js", () => ({
+  emitNotificationEvent: jest.fn(async () => {}),
+}));
+jest.unstable_mockModule("../app/services/orderSocketEmitter.js", () => ({
+  emitPendingReviewUpdateToAdmins: jest.fn(),
+}));
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || "unit-test-secret";
 
 const { signupSeller } = await import("../app/controller/sellerAuthController.js");
 

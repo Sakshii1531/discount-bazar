@@ -114,8 +114,11 @@ export function getJSON(key, fallback = null, { storage = 'local' } = {}) {
     const raw = rawGet(key, { storage });
     if (raw == null) return fallback;
 
-    const parsed = safeParseJson(raw, undefined);
-    if (parsed === undefined) {
+    // A sentinel object (not `undefined`, which the default parameter would
+    // turn into null) so a corrupted blob is detected and dropped.
+    const CORRUPTED = {};
+    const parsed = safeParseJson(raw, CORRUPTED);
+    if (parsed === CORRUPTED) {
         // Corrupted: drop it so future reads return the fallback cleanly.
         rawRemove(key, { storage });
         return fallback;

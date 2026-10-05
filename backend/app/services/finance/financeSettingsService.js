@@ -86,13 +86,17 @@ export async function getOrCreateFinanceSettings({ session } = {}) {
   let settings = await Setting.findOne(query, null, options);
 
   if (!settings) {
-    settings = await Setting.create(
-      {
-        ...DEFAULT_FINANCE_SETTINGS,
-        pricingMode: DEFAULT_FINANCE_SETTINGS.deliveryPricingMode,
-        baseDeliveryCharge: DEFAULT_FINANCE_SETTINGS.customerBaseDeliveryFee,
-        fleetCommissionRatePerKm: DEFAULT_FINANCE_SETTINGS.deliveryPartnerRatePerKm,
-      },
+    // Array form is required for Model.create() to honour the session option;
+    // otherwise the insert silently runs outside the caller's transaction.
+    [settings] = await Setting.create(
+      [
+        {
+          ...DEFAULT_FINANCE_SETTINGS,
+          pricingMode: DEFAULT_FINANCE_SETTINGS.deliveryPricingMode,
+          baseDeliveryCharge: DEFAULT_FINANCE_SETTINGS.customerBaseDeliveryFee,
+          fleetCommissionRatePerKm: DEFAULT_FINANCE_SETTINGS.deliveryPartnerRatePerKm,
+        },
+      ],
       options,
     );
   }

@@ -1,10 +1,13 @@
 import { jest } from "@jest/globals";
+import { createRequire } from "module";
 
 const mockSession = {
   startTransaction: jest.fn(),
   commitTransaction: jest.fn(),
   abortTransaction: jest.fn(),
   endSession: jest.fn(),
+  // True until committed or aborted, like a real ClientSession.
+  inTransaction: jest.fn(() => mockSession.commitTransaction.mock.calls.length === 0 && mockSession.abortTransaction.mock.calls.length === 0),
 };
 const mockStartSession = jest.fn().mockResolvedValue(mockSession);
 
@@ -53,10 +56,20 @@ const OrderMock = jest.fn().mockImplementation((doc) => {
 OrderMock.find = mockOrderFind;
 OrderMock.findOne = jest.fn();
 
+// Wrap the real mongoose (loaded via CommonJS, outside the ESM mock registry)
+// and override only startSession, so models imported by the service still
+// get a working Schema/Types.
+const realMongoose = createRequire(import.meta.url)("mongoose");
 jest.unstable_mockModule("mongoose", () => ({
-  default: {
-    startSession: mockStartSession,
-  },
+  default: new Proxy(realMongoose, {
+    get: (target, key) => (key === "startSession" ? mockStartSession : Reflect.get(target, key)),
+  }),
+}));
+
+// placeOrderAtomic checks that every item belongs to one seller.
+let mockProductRows = [];
+jest.unstable_mockModule("../app/models/product.js", () => ({
+  default: { find: () => ({ select: () => ({ lean: async () => mockProductRows }) }) },
 }));
 
 jest.unstable_mockModule("../app/models/customer.js", () => ({
@@ -293,99 +306,31 @@ describe("checkout atomic service", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
-  test("creates one checkout group with multiple seller child orders in one checkout", async () => {
-    mockBuildCheckoutPricingSnapshot.mockResolvedValueOnce({
-      sellerCount: 2,
-      itemCount: 3,
-      aggregateBreakdown: {
-        currency: "INR",
-        grandTotal: 310,
-        productSubtotal: 260,
-        deliveryFeeCharged: 50,
-        handlingFeeCharged: 0,
-        discountTotal: 0,
-        taxTotal: 0,
-        sellerPayoutTotal: 220,
-        adminProductCommissionTotal: 40,
-        riderPayoutTotal: 30,
-        platformTotalEarning: 80,
-        lineItems: [],
-        snapshots: {},
-      },
-      sellerBreakdownEntries: [
-        {
-          sellerId: "67f000000000000000000001",
-          distanceKm: 1,
-          items: [
-            { productId: "p1", productName: "A", quantity: 1, price: 100, image: "u1" },
-          ],
-          breakdown: {
-            currency: "INR",
-            grandTotal: 120,
-            productSubtotal: 100,
-            deliveryFeeCharged: 20,
-            handlingFeeCharged: 0,
-            discountTotal: 0,
-            taxTotal: 0,
-            sellerPayoutTotal: 90,
-            adminProductCommissionTotal: 10,
-            riderPayoutTotal: 10,
-            platformTotalEarning: 20,
-            lineItems: [],
-            snapshots: {},
+  // Multi-seller checkout was intentionally replaced by a single-seller cart
+  // rule: placeOrderAtomic now refuses carts that span sellers.
+  test("rejects a checkout whose items belong to more than one seller", async () => {
+    mockProductRows = [
+      { _id: "67f000000000000000000011", sellerId: "67f000000000000000000001" },
+      { _id: "67f000000000000000000012", sellerId: "67f000000000000000000002" },
+    ];
+    try {
+      await expect(
+        placeOrderAtomic({
+          customerId: "67f0000000000000000000c1",
+          payload: {
+            items: [
+              { product: "67f000000000000000000011", quantity: 1 },
+              { product: "67f000000000000000000012", quantity: 2 },
+            ],
+            address: { city: "Indore" },
+            paymentMode: "ONLINE",
           },
-        },
-        {
-          sellerId: "67f000000000000000000002",
-          distanceKm: 2,
-          items: [
-            { productId: "p2", productName: "B", quantity: 2, price: 80, image: "u2" },
-          ],
-          breakdown: {
-            currency: "INR",
-            grandTotal: 190,
-            productSubtotal: 160,
-            deliveryFeeCharged: 30,
-            handlingFeeCharged: 0,
-            discountTotal: 0,
-            taxTotal: 0,
-            sellerPayoutTotal: 130,
-            adminProductCommissionTotal: 30,
-            riderPayoutTotal: 20,
-            platformTotalEarning: 60,
-            lineItems: [],
-            snapshots: {},
-          },
-        },
-      ],
-    });
-
-    const result = await placeOrderAtomic({
-      customerId: "67f0000000000000000000c1",
-      payload: {
-        items: [
-          { product: "p1", quantity: 1 },
-          { product: "p2", quantity: 2 },
-        ],
-        address: { city: "Indore" },
-        paymentMode: "ONLINE",
-      },
-      idempotencyKey: null,
-    });
-
-    expect(result.duplicate).toBe(false);
-    expect(result.checkoutGroup.checkoutGroupId).toBe("CHK-01JSRTEST0000000000000000");
-    expect(result.orders).toHaveLength(2);
-    expect(result.orders[0].checkoutGroupId).toBe("CHK-01JSRTEST0000000000000000");
-    expect(result.orders[1].checkoutGroupId).toBe("CHK-01JSRTEST0000000000000000");
-    expect(result.orders[0].checkoutGroupIndex).toBe(0);
-    expect(result.orders[1].checkoutGroupIndex).toBe(1);
-    expect(mockTransactionCreate).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ reference: "ORD-01JSRTEST0000000000000001" }),
-        expect.objectContaining({ reference: "ORD-01JSRTEST0000000000000002" }),
-      ]),
-      expect.objectContaining({ session: mockSession }),
-    );
+          idempotencyKey: null,
+        }),
+      ).rejects.toMatchObject({ statusCode: 400, message: expect.stringMatching(/multiple sellers/) });
+      expect(mockSession.commitTransaction).not.toHaveBeenCalled();
+    } finally {
+      mockProductRows = [];
+    }
   });
 });

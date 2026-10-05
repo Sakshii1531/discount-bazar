@@ -17,6 +17,8 @@ jest.unstable_mockModule("../app/models/category.js", () => ({
     find: mockFind,
     findByIdAndDelete: mockFindByIdAndDelete,
     findOne: mockFindOne,
+    // deleteCategory returns 404 for unknown ids; report the id as existing.
+    exists: jest.fn().mockResolvedValue({ _id: "cat1" }),
   },
 }));
 

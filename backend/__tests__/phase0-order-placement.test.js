@@ -1,10 +1,13 @@
 import { jest } from "@jest/globals";
+import { createRequire } from "module";
 
 const mockSession = {
   startTransaction: jest.fn(),
   commitTransaction: jest.fn(),
   abortTransaction: jest.fn(),
   endSession: jest.fn(),
+  // True until committed or aborted, like a real ClientSession.
+  inTransaction: jest.fn(() => mockSession.commitTransaction.mock.calls.length === 0 && mockSession.abortTransaction.mock.calls.length === 0),
 };
 const mockStartSession = jest.fn().mockResolvedValue(mockSession);
 
@@ -53,10 +56,20 @@ const OrderMock = jest.fn().mockImplementation((doc) => {
 OrderMock.find = mockOrderFind;
 OrderMock.findOne = mockOrderFindOne;
 
+// Wrap the real mongoose (loaded via CommonJS, outside the ESM mock registry)
+// and override only startSession, so models imported by the service still
+// get a working Schema/Types.
+const realMongoose = createRequire(import.meta.url)("mongoose");
 jest.unstable_mockModule("mongoose", () => ({
-  default: {
-    startSession: mockStartSession,
-  },
+  default: new Proxy(realMongoose, {
+    get: (target, key) => (key === "startSession" ? mockStartSession : Reflect.get(target, key)),
+  }),
+}));
+
+// placeOrderAtomic checks that every item belongs to one seller.
+let mockProductRows = [];
+jest.unstable_mockModule("../app/models/product.js", () => ({
+  default: { find: () => ({ select: () => ({ lean: async () => mockProductRows }) }) },
 }));
 
 jest.unstable_mockModule("../app/models/customer.js", () => ({

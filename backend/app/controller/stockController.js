@@ -17,6 +17,13 @@ export const adjustStock = async (req, res) => {
         const { productId, variantSku, type, quantity, note } = req.body;
         const sellerId = req.user.id;
 
+        // Validate before touching stock: an unknown type used to decrement the
+        // product, save it, and only then fail on the StockHistory enum (500),
+        // leaving stock changed with no audit record.
+        if (!["Restock", "Correction"].includes(type)) {
+            return handleResponse(res, 400, "type must be Restock or Correction");
+        }
+
         const product = await Product.findOne({ _id: productId, sellerId });
         if (!product) {
             return handleResponse(res, 404, "Product not found or unauthorized");

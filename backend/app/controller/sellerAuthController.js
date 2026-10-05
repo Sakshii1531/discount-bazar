@@ -244,7 +244,8 @@ export const signupSeller = async (req, res) => {
             requiresApproval: true,
         });
     } catch (error) {
-        return handleResponse(res, 500, error.message);
+        // Validation errors (e.g. missing/invalid verification token) carry a 4xx statusCode.
+        return handleResponse(res, error.statusCode || 500, error.message);
     }
 };
 

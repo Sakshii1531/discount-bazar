@@ -390,6 +390,17 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
     throw error;
   }
 
+  // Durable fallback: the Redis check above is a no-op when Redis is disabled
+  // (or the cached result expired). The sale records its key on the order, so
+  // a retried request must return that sale instead of billing it again.
+  const existingSale = await Order.findOne({
+    seller: sellerId,
+    "placement.idempotencyKey": idempotencyKey,
+  }).lean();
+  if (existingSale) {
+    return { order: existingSale, duplicate: true };
+  }
+
   // Checked before taking the idempotency lock: a closed day must not leave
   // the key locked (retries would otherwise get 409 until the lock expires).
   await assertDayOpen(sellerId);

@@ -98,7 +98,12 @@ export const deleteCoupon = async (req, res) => {
 // Simple validation engine for checkout
 export const validateCoupon = async (req, res) => {
     try {
-        const { code, cartTotal, items, customerId } = req.body;
+        const { code, cartTotal, items } = req.body;
+        // Never trust a client-supplied customerId: it drives the server-cart
+        // lookup and per-user usage limits. Signed-in customers are identified
+        // by their token; only admins may check on behalf of a customer.
+        const customerId =
+            req.user?.role === "admin" ? req.body.customerId || null : req.user?.id || null;
 
         if (!code) {
             return handleResponse(res, 400, "Coupon code is required");

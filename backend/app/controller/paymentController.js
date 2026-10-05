@@ -127,7 +127,10 @@ export const handlePhonePeWebhook = async (req, res) => {
       message: error?.message,
       error,
     });
-    return res.status(500).send("Internal Server Error");
+    // Signature failures carry statusCode 401; only genuine faults are 500
+    // (a 500 also makes the gateway keep retrying the webhook).
+    const status = error?.statusCode || 500;
+    return res.status(status).send(status === 500 ? "Internal Server Error" : error.message);
   }
 };
 

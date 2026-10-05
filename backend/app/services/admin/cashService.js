@@ -212,6 +212,24 @@ export async function settleRiderCashEntry({ riderId, amount, method }) {
     return null;
   }
 
+  // Same rule as the cash-balance listing: collections minus settlements.
+  // Settling more than the rider holds would drive their cash negative.
+  const cashTxns = await Transaction.find({
+    user: riderId,
+    type: { $in: ["Cash Collection", "Cash Settlement"] },
+  })
+    .select("type amount")
+    .lean();
+  const currentCash = cashTxns.reduce(
+    (sum, t) => (t.type === "Cash Collection" ? sum + Number(t.amount || 0) : sum - Math.abs(Number(t.amount || 0))),
+    0,
+  );
+  if (Number(amount) > currentCash + 0.001) {
+    const error = new Error(`Amount exceeds the rider's cash in hand (₹${Math.max(0, currentCash)})`);
+    error.statusCode = 400;
+    throw error;
+  }
+
   const settlement = await Transaction.create({
     user: riderId,
     userModel: "Delivery",

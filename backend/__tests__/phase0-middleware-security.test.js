@@ -4,6 +4,9 @@ import { createRateLimiter } from "../app/middleware/rateLimiter.js";
 import { requestContextMiddleware } from "../app/middleware/requestContext.js";
 import { errorHandler, notFoundHandler } from "../app/middleware/errorMiddleware.js";
 
+// Rate limiting is bypassed outside production unless explicitly enabled.
+process.env.ENABLE_RATE_LIMIT_DEV = "true";
+
 describe("Phase 0 global API security middleware", () => {
   function buildApp() {
     const app = express();

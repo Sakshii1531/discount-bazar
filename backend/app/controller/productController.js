@@ -1206,8 +1206,12 @@ export const updateProduct = async (req, res) => {
       successMessage = "Product updated. Upload photo to submit for online approval.";
     } else {
       const approvalConfig = await getProductApprovalConfig();
-      const wasDraft = product.approvalStatus === PRODUCT_APPROVAL_STATUS.DRAFT;
-      if (approvalConfig.sellerEditRequiresApproval || wasDraft) {
+      // "Edits don't need re-approval" only applies to products an admin has
+      // already approved. Draft, pending and rejected products must (re)enter
+      // the moderation queue — otherwise one seller edit published them.
+      const wasApproved =
+        resolveProductApprovalStatus(product) === PRODUCT_APPROVAL_STATUS.APPROVED;
+      if (approvalConfig.sellerEditRequiresApproval || !wasApproved) {
         moderationUpdate = buildSellerPendingModerationUpdate();
         successMessage = "Product submitted for admin approval";
         isPendingApproval = true;

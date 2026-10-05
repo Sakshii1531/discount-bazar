@@ -306,6 +306,11 @@ export const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const existing = await Category.exists({ _id: id });
+    if (!existing) {
+      return handleResponse(res, 404, "Category not found");
+    }
+
     const deleteWithChildren = async (parentId) => {
       const children = await Category.find({ parentId });
       for (const child of children) {

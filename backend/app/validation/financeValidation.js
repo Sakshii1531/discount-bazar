@@ -60,6 +60,8 @@ export const createFinanceOrderSchema = checkoutPreviewSchema.keys({
 export const verifyOnlinePaymentSchema = Joi.object({
   merchantOrderId: Joi.string().trim().required(),
   transactionId: Joi.string().trim().optional(),
+  // Required when the active gateway is Razorpay (HMAC of order_id|payment_id).
+  signature: Joi.string().trim().optional(),
   paymentMeta: Joi.object().unknown(true).optional(),
 });
 

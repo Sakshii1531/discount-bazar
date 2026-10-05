@@ -1,4 +1,11 @@
 export const handleResponse = (res, statusCode, message, data = {}) => {
+  // Safety net: controllers pass caught errors straight through as 500, so a
+  // malformed id in the URL (Mongoose CastError) looked like a server crash.
+  // It is a client error.
+  if (statusCode === 500 && /^Cast to ObjectId failed/.test(String(message || ""))) {
+    statusCode = 400;
+    message = "Invalid id";
+  }
   const success = statusCode >= 200 && statusCode < 300;
 
   const sanitize = (item) => {

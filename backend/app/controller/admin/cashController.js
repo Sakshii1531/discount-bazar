@@ -36,7 +36,7 @@ export const settleRiderCash = async (req, res) => {
     return handleResponse(res, 201, "Cash settled successfully", settlement);
   } catch (error) {
     const statusCode =
-      error.message === "Missing riderId or invalid amount" ? 400 : 500;
+      error.statusCode || (error.message === "Missing riderId or invalid amount" ? 400 : 500);
     return handleResponse(res, statusCode, error.message);
   }
 };

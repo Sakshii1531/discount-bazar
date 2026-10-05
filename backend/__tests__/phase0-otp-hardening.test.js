@@ -17,6 +17,9 @@ jest.unstable_mockModule("../app/utils/otp.js", () => ({
   useRealSMS: jest.fn(() => false),
 }));
 
+// The resend cooldown is only enforced in production unless explicitly enabled.
+process.env.ENABLE_RATE_LIMIT_DEV = "true";
+
 const { issueCustomerOtp, verifyCustomerOtpCode } = await import(
   "../app/services/otpAuthService.js"
 );

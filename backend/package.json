@@ -11,9 +11,12 @@
     "worker": "node worker.js",
     "scheduler": "node scheduler.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js __tests__/unit",
+    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js __tests__/e2e --runInBand",
     "test:finance-flow": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathPatterns=finance-.*\\.test\\.js",
     "test:finance-e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --testPathPatterns=finance-api-e2e\\.test\\.js",
-    "test:delivery-broadcast": "node scripts/test-delivery-broadcast-flow.js"
+    "test:delivery-broadcast": "node scripts/test-delivery-broadcast-flow.js",
+    "record:e2e-fixtures": "node --experimental-vm-modules node_modules/jest/bin/jest.js __tests__/e2e/record-frontend-fixtures.e2e.test.js"
   },
   "jest": {
     "testEnvironment": "node",
@@ -24,7 +27,8 @@
     ],
     "testMatch": [
       "**/__tests__/**/*.test.js"
-    ]
+    ],
+    "maxWorkers": 2
   },
   "keywords": [
     "ecommerce",
@@ -70,6 +74,7 @@
     "@types/jest": "^30.0.0",
     "fast-check": "^4.5.3",
     "jest": "^30.2.0",
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   },

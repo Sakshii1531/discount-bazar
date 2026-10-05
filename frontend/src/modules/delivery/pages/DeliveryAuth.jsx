@@ -180,7 +180,7 @@ const DeliveryAuth = () => {
   }, []);
 
   // OTP state
-  const [otp, setOtp] = useState(["1", "2", "3", "4"]);
+  const [otp, setOtp] = useState(["", "", "", ""]);
   const [agreed, setAgreed] = useState(true);
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);

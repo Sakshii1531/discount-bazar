@@ -624,25 +624,25 @@ export async function reconcileCodCash(
     const order = await findOrderForUpdate(orderOrId, session);
     const partnerId = deliveryPartnerId || order.deliveryBoy;
     if (!partnerId) {
-      throw new Error("Delivery partner is required for reconciliation");
+      throw Object.assign(new Error("Delivery partner is required for reconciliation"), { statusCode: 400 });
     }
     if (order.paymentMode !== "COD") {
-      throw new Error("COD reconciliation is only allowed for COD orders");
+      throw Object.assign(new Error("COD reconciliation is only allowed for COD orders"), { statusCode: 400 });
     }
 
     const requested = roundCurrency(amount || 0);
     if (requested <= 0) {
-      throw new Error("Reconciliation amount must be greater than 0");
+      throw Object.assign(new Error("Reconciliation amount must be greater than 0"), { statusCode: 400 });
     }
 
     const codCollected = roundCurrency(order.paymentBreakdown?.codCollectedAmount || 0);
     const codRemitted = roundCurrency(order.paymentBreakdown?.codRemittedAmount || 0);
     const codPending = roundCurrency(codCollected - codRemitted);
     if (codPending <= 0) {
-      throw new Error("No COD pending amount for this order");
+      throw Object.assign(new Error("No COD pending amount for this order"), { statusCode: 400 });
     }
     if (requested > codPending) {
-      throw new Error("Reconciliation amount exceeds COD pending amount");
+      throw Object.assign(new Error("Reconciliation amount exceeds COD pending amount"), { statusCode: 400 });
     }
 
     await updateCashInHand({
@@ -705,12 +705,16 @@ export async function reconcileCodCash(
     const nextRemitted = addMoney(codRemitted, requested);
     const nextPending = roundCurrency(codCollected - nextRemitted);
 
+    // Spread a plain object: spreading the Mongoose subdocument itself drops
+    // nested fields such as `snapshots`, which then fails validation on save.
+    const currentBreakdown = order.paymentBreakdown?.toObject?.() || order.paymentBreakdown || {};
     order.paymentBreakdown = {
-      ...(order.paymentBreakdown || {}),
+      ...currentBreakdown,
       codCollectedAmount: codCollected,
       codRemittedAmount: nextRemitted,
       codPendingAmount: nextPending,
     };
+    ensurePaymentBreakdownSnapshots(order);
 
     order.paymentStatus =
       nextPending <= 0

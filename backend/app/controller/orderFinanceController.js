@@ -139,6 +139,7 @@ export const verifyOnlineOrderPayment = async (req, res) => {
       userId: req.user?.id,
       gatewayOrderId: payload.merchantOrderId,
       gatewayPaymentId: payload.transactionId || null,
+      gatewaySignature: payload.signature || null,
       correlationId: req.correlationId || null,
     });
 

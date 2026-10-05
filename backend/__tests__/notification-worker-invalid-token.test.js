@@ -20,6 +20,11 @@ jest.unstable_mockModule("../app/modules/notifications/token.model.js", () => ({
   },
 }));
 
+// The worker reads per-user preferences; none stored means defaults (all on).
+jest.unstable_mockModule("../app/modules/notifications/preference.model.js", () => ({
+  default: { findOne: () => ({ lean: async () => null }) },
+}));
+
 jest.unstable_mockModule("../app/modules/notifications/firebase.service.js", () => ({
   sendFCM: mockSendFCM,
 }));

@@ -1,0 +1,960 @@
+{
+  "/seller/business/purchases": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "results": []
+  },
+  "/seller/business/suppliers": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "results": []
+  },
+  "/seller/business/customers": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "results": []
+  },
+  "/seller/business/dashboard": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "result": {
+      "date": "2026-10-03",
+      "salesToday": 0,
+      "salesCount": 0,
+      "purchasesToday": 0,
+      "stockUnits": 50,
+      "stockValue": 0,
+      "profitToday": 0,
+      "customerPending": 0,
+      "supplierPending": 0,
+      "lowStockCount": 0,
+      "lowStock": [],
+      "expiryTotals": {
+        "count": 0,
+        "expired": 0,
+        "today": 0,
+        "tomorrow": 0,
+        "next7Days": 0,
+        "next30Days": 0,
+        "attentionRequired": 0
+      },
+      "expiryAlerts": [],
+      "expensesToday": 0
+    }
+  },
+  "/seller/business/settings": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "result": {
+      "timezone": "Asia/Kolkata"
+    }
+  },
+  "/seller/business/cash-register/today": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "result": {
+      "date": "2026-10-03",
+      "openingCash": 0,
+      "cashSales": 0,
+      "digitalSales": {
+        "UPI": 0,
+        "CARD": 0,
+        "OTHER": 0,
+        "ONLINE": 0
+      },
+      "digitalTotal": 0,
+      "customerReceiptsCash": 0,
+      "customerReceiptsDigital": 0,
+      "supplierPaymentsCash": 0,
+      "refundsCash": 0,
+      "expensesTotal": 0,
+      "expensesCash": 0,
+      "manualCashIn": 0,
+      "manualCashOut": 0,
+      "cashIn": 0,
+      "cashOut": 0,
+      "net": 0,
+      "closingCash": 0,
+      "closed": false,
+      "countedClosingCash": null,
+      "difference": null
+    }
+  },
+  "/seller/business/reports/sales": {
+    "success": true,
+    "error": false,
+    "message": "OK",
+    "result": {
+      "rows": [],
+      "totals": {
+        "count": 0,
+        "total": 0,
+        "gst": 0,
+        "discount": 0
+      }
+    }
+  },
+  "/seller/pos/catalog": {
+    "success": true,
+    "error": false,
+    "message": "POS catalog fetched",
+    "results": [
+      {
+        "_id": "6ac0f2d120438b243c0b54c1",
+        "name": "Fresh Milk",
+        "sku": "SKU-179102996954110",
+        "price": 60,
+        "salePrice": 55,
+        "stock": 50,
+        "lowStockAlert": 5,
+        "size": "",
+        "colour": "",
+        "mrp": 0,
+        "purchaseCost": 0,
+        "gstPercent": 0,
+        "purchaseGstType": "EXCLUSIVE",
+        "mainImage": "https://res.cloudinary.com/demo/image/upload/milk.jpg",
+        "headerId": "6ac0f2d120438b243c0b54bb",
+        "categoryId": {
+          "_id": "6ac0f2d120438b243c0b54bd",
+          "name": "Dairy 17910299695249"
+        },
+        "subcategoryId": "6ac0f2d120438b243c0b54bf",
+        "variants": []
+      }
+    ]
+  },
+  "/seller/pos/sales": {
+    "success": true,
+    "error": false,
+    "message": "POS sales fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/seller/pos/returns": {
+    "success": true,
+    "error": false,
+    "message": "POS returns fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/seller/stats": {
+    "success": true,
+    "error": false,
+    "message": "Stats fetched successfully",
+    "result": {
+      "overview": {
+        "totalSales": "₹0",
+        "totalOrders": "0",
+        "avgOrderValue": "₹0",
+        "conversionRate": "0%",
+        "salesTrend": "0%",
+        "ordersTrend": "0%"
+      },
+      "salesTrend": [
+        {
+          "name": "Sun",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Mon",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Tue",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Wed",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Thu",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Fri",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        },
+        {
+          "name": "Sat",
+          "sales": 0,
+          "orders": 0,
+          "traffic": 0
+        }
+      ],
+      "categoryMix": [
+        {
+          "_id": "Dairy 17910299695249",
+          "subject": "Dairy 17910299695249",
+          "A": 1
+        }
+      ],
+      "topProducts": [],
+      "trafficSources": [],
+      "insights": {
+        "topCity": "N/A",
+        "peakTime": "N/A",
+        "topDevice": "N/A"
+      }
+    }
+  },
+  "/seller/earnings": {
+    "success": true,
+    "error": false,
+    "message": "Earnings fetched successfully",
+    "result": {
+      "balances": {
+        "settledBalance": 0,
+        "pendingPayouts": 0,
+        "onHoldBalance": 0,
+        "availableBalance": 0,
+        "totalRevenue": 0,
+        "totalWithdrawn": 0
+      },
+      "monthlyChart": [
+        {
+          "name": "May",
+          "revenue": 0
+        },
+        {
+          "name": "Jun",
+          "revenue": 0
+        },
+        {
+          "name": "Jul",
+          "revenue": 0
+        },
+        {
+          "name": "Aug",
+          "revenue": 0
+        },
+        {
+          "name": "Sep",
+          "revenue": 0
+        },
+        {
+          "name": "Oct",
+          "revenue": 0
+        }
+      ],
+      "ledger": []
+    }
+  },
+  "/seller/wallet/summary": {
+    "success": true,
+    "error": false,
+    "message": "Seller wallet summary fetched",
+    "result": {
+      "availableBalance": 0,
+      "pendingBalance": 0,
+      "totalCredited": 0,
+      "totalDebited": 0
+    }
+  },
+  "/admin/stats": {
+    "success": true,
+    "error": false,
+    "message": "Admin stats fetched successfully",
+    "result": {
+      "overview": {
+        "totalUsers": 1,
+        "activeSellers": 1,
+        "totalOrders": 0,
+        "totalRevenue": 0
+      },
+      "revenueHistory": [
+        {
+          "name": "Sep 4",
+          "revenue": 0,
+          "fullDate": "2026-09-04"
+        },
+        {
+          "name": "Sep 5",
+          "revenue": 0,
+          "fullDate": "2026-09-05"
+        },
+        {
+          "name": "Sep 6",
+          "revenue": 0,
+          "fullDate": "2026-09-06"
+        },
+        {
+          "name": "Sep 7",
+          "revenue": 0,
+          "fullDate": "2026-09-07"
+        },
+        {
+          "name": "Sep 8",
+          "revenue": 0,
+          "fullDate": "2026-09-08"
+        },
+        {
+          "name": "Sep 9",
+          "revenue": 0,
+          "fullDate": "2026-09-09"
+        },
+        {
+          "name": "Sep 10",
+          "revenue": 0,
+          "fullDate": "2026-09-10"
+        },
+        {
+          "name": "Sep 11",
+          "revenue": 0,
+          "fullDate": "2026-09-11"
+        },
+        {
+          "name": "Sep 12",
+          "revenue": 0,
+          "fullDate": "2026-09-12"
+        },
+        {
+          "name": "Sep 13",
+          "revenue": 0,
+          "fullDate": "2026-09-13"
+        },
+        {
+          "name": "Sep 14",
+          "revenue": 0,
+          "fullDate": "2026-09-14"
+        },
+        {
+          "name": "Sep 15",
+          "revenue": 0,
+          "fullDate": "2026-09-15"
+        },
+        {
+          "name": "Sep 16",
+          "revenue": 0,
+          "fullDate": "2026-09-16"
+        },
+        {
+          "name": "Sep 17",
+          "revenue": 0,
+          "fullDate": "2026-09-17"
+        },
+        {
+          "name": "Sep 18",
+          "revenue": 0,
+          "fullDate": "2026-09-18"
+        },
+        {
+          "name": "Sep 19",
+          "revenue": 0,
+          "fullDate": "2026-09-19"
+        },
+        {
+          "name": "Sep 20",
+          "revenue": 0,
+          "fullDate": "2026-09-20"
+        },
+        {
+          "name": "Sep 21",
+          "revenue": 0,
+          "fullDate": "2026-09-21"
+        },
+        {
+          "name": "Sep 22",
+          "revenue": 0,
+          "fullDate": "2026-09-22"
+        },
+        {
+          "name": "Sep 23",
+          "revenue": 0,
+          "fullDate": "2026-09-23"
+        },
+        {
+          "name": "Sep 24",
+          "revenue": 0,
+          "fullDate": "2026-09-24"
+        },
+        {
+          "name": "Sep 25",
+          "revenue": 0,
+          "fullDate": "2026-09-25"
+        },
+        {
+          "name": "Sep 26",
+          "revenue": 0,
+          "fullDate": "2026-09-26"
+        },
+        {
+          "name": "Sep 27",
+          "revenue": 0,
+          "fullDate": "2026-09-27"
+        },
+        {
+          "name": "Sep 28",
+          "revenue": 0,
+          "fullDate": "2026-09-28"
+        },
+        {
+          "name": "Sep 29",
+          "revenue": 0,
+          "fullDate": "2026-09-29"
+        },
+        {
+          "name": "Sep 30",
+          "revenue": 0,
+          "fullDate": "2026-09-30"
+        },
+        {
+          "name": "Oct 1",
+          "revenue": 0,
+          "fullDate": "2026-10-01"
+        },
+        {
+          "name": "Oct 2",
+          "revenue": 0,
+          "fullDate": "2026-10-02"
+        },
+        {
+          "name": "Oct 3",
+          "revenue": 0,
+          "fullDate": "2026-10-03"
+        }
+      ],
+      "recentOrders": [],
+      "categoryData": [
+        {
+          "_id": "6ac0f2d120438b243c0b54bb",
+          "name": "Grocery 17910299695249",
+          "value": 1,
+          "color": "#4f46e5"
+        }
+      ],
+      "topProducts": []
+    }
+  },
+  "/admin/sellers/active": {
+    "success": true,
+    "error": false,
+    "message": "Active sellers fetched successfully",
+    "result": {
+      "items": [
+        {
+          "id": "6ac0f2d120438b243c0b54ac",
+          "_id": "6ac0f2d120438b243c0b54ac",
+          "shopName": "E2E Mart",
+          "ownerName": "E2E Seller",
+          "email": "seller17910299692662@test.com",
+          "phone": "8299692663",
+          "category": "General",
+          "status": "active",
+          "verificationStatus": "verified",
+          "joinedAt": "2026-10-03T12:19:29.272Z",
+          "joinedDate": "03 Oct 2026",
+          "lastOrderAt": null,
+          "lastOrderLabel": "No orders yet",
+          "totalOrders": 0,
+          "deliveredOrders": 0,
+          "pendingOrders": 0,
+          "totalRevenue": 0,
+          "avgOrderValue": 0,
+          "fulfillmentRate": 0,
+          "productCount": 1,
+          "activeProductCount": 1,
+          "serviceRadius": 10,
+          "location": "22.7196, 75.8577",
+          "city": "Location not set",
+          "latitude": 22.7196,
+          "longitude": 75.8577,
+          "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=E2E%20Mart"
+        }
+      ],
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1,
+      "stats": {
+        "totalActiveSellers": 1,
+        "totalOrders": 0,
+        "totalRevenue": 0,
+        "newThisMonth": 1,
+        "highVolume": 0,
+        "averageRevenuePerSeller": 0,
+        "averageOrdersPerSeller": 0
+      },
+      "filters": {
+        "categories": []
+      }
+    }
+  },
+  "/admin/sellers/pending": {
+    "success": true,
+    "error": false,
+    "message": "Pending seller applications fetched",
+    "result": {
+      "items": [
+        {
+          "id": "6ac0f2d120438b243c0b54b7",
+          "shopName": "Pending Kirana",
+          "ownerName": "Ravi",
+          "email": "seller17910299694056@test.com",
+          "phone": "8299694057",
+          "category": "General",
+          "applicationDate": "03 Oct 2026",
+          "receivedAt": "05:49 pm",
+          "status": "pending",
+          "documents": [],
+          "documentFiles": [],
+          "location": "Not provided",
+          "description": "No application note provided.",
+          "verificationScore": 40,
+          "missingInfo": true
+        }
+      ],
+      "page": 1,
+      "limit": 25,
+      "total": 1,
+      "totalPages": 1,
+      "stats": {
+        "totalApplications": 1,
+        "receivedToday": 1,
+        "missingInfo": 1,
+        "avgReviewTimeHours": 24
+      }
+    }
+  },
+  "/admin/delivery-partners?verified=false": {
+    "success": true,
+    "error": false,
+    "message": "Delivery partners fetched successfully",
+    "result": {
+      "items": [
+        {
+          "_id": "6ac0f2d120438b243c0b54b5",
+          "name": "Pending Rider",
+          "phone": "7299694015",
+          "vehicleType": "bike",
+          "isVerified": false,
+          "isOnline": true,
+          "location": {
+            "type": "Point",
+            "coordinates": [
+              0,
+              0
+            ]
+          },
+          "role": "delivery",
+          "ratingAverage": 0,
+          "ratingCount": 0,
+          "ratingSum": 0,
+          "ratingDistribution": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0
+          },
+          "createdAt": "2026-10-03T12:19:29.402Z",
+          "totalDeliveredOrders": 0,
+          "totalOrders": 0,
+          "deliveredOrdersCount": 0,
+          "todayEarnings": 0,
+          "walletBalance": 0,
+          "wallet": 0,
+          "earnings": 0,
+          "currentArea": "Unassigned",
+          "locationName": "Unassigned"
+        }
+      ],
+      "page": 1,
+      "limit": 25,
+      "total": 1,
+      "totalPages": 1
+    }
+  },
+  "/admin/delivery-partners?verified=true": {
+    "success": true,
+    "error": false,
+    "message": "Delivery partners fetched successfully",
+    "result": {
+      "items": [
+        {
+          "_id": "6ac0f2d120438b243c0b54b3",
+          "name": "E2E Rider",
+          "phone": "7299693954",
+          "vehicleType": "bike",
+          "isVerified": true,
+          "isOnline": true,
+          "location": {
+            "type": "Point",
+            "coordinates": [
+              0,
+              0
+            ]
+          },
+          "role": "delivery",
+          "ratingAverage": 0,
+          "ratingCount": 0,
+          "ratingSum": 0,
+          "ratingDistribution": {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0
+          },
+          "createdAt": "2026-10-03T12:19:29.397Z",
+          "totalDeliveredOrders": 0,
+          "totalOrders": 0,
+          "deliveredOrdersCount": 0,
+          "todayEarnings": 0,
+          "walletBalance": 0,
+          "wallet": 0,
+          "earnings": 0,
+          "currentArea": "Unassigned",
+          "locationName": "Unassigned"
+        }
+      ],
+      "page": 1,
+      "limit": 25,
+      "total": 1,
+      "totalPages": 1
+    }
+  },
+  "/admin/users": {
+    "success": true,
+    "error": false,
+    "message": "Users fetched successfully",
+    "result": {
+      "items": [
+        {
+          "_id": "6ac0f2d120438b243c0b54b9",
+          "phone": "+919299695198",
+          "id": "6ac0f2d120438b243c0b54b9",
+          "name": "E2E Customer",
+          "joinedDate": "2026-10-03T12:19:29.521Z",
+          "status": "active",
+          "totalOrders": 0,
+          "totalSpent": 0,
+          "lastOrderDate": null,
+          "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=E2E Customer"
+        }
+      ],
+      "page": 1,
+      "limit": 25,
+      "total": 1,
+      "totalPages": 1
+    }
+  },
+  "/admin/faqs": {
+    "success": true,
+    "error": false,
+    "message": "FAQs fetched successfully",
+    "result": {
+      "items": [
+        {
+          "_id": "6ac0f2d120438b243c0b54c3",
+          "question": "How fast is delivery?",
+          "answer": "Usually 12-15 minutes.",
+          "category": "Customer",
+          "status": "published",
+          "views": 0,
+          "createdAt": "2026-10-03T12:19:29.551Z"
+        }
+      ],
+      "page": 1,
+      "limit": 25,
+      "total": 1,
+      "totalPages": 1
+    }
+  },
+  "/admin/finance/summary": {
+    "success": true,
+    "error": false,
+    "message": "Admin finance summary fetched",
+    "result": {
+      "totalPlatformEarning": 0,
+      "totalAdminEarning": 0,
+      "availableBalance": 0,
+      "walletAvailableBalance": 0,
+      "systemFloatCOD": 0,
+      "sellerPendingPayouts": 0,
+      "deliveryPendingPayouts": 0,
+      "reconciledOnlineInflows": 0,
+      "reconciledCODInflows": 0
+    }
+  },
+  "/admin/finance/ledger": {
+    "success": true,
+    "error": false,
+    "message": "Finance ledger fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/admin/finance/payouts": {
+    "success": true,
+    "error": false,
+    "message": "Finance payouts fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/admin/seller-withdrawals": {
+    "success": true,
+    "error": false,
+    "message": "Seller withdrawals fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/admin/delivery-withdrawals": {
+    "success": true,
+    "error": false,
+    "message": "Delivery withdrawals fetched",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/admin/coupons": {
+    "success": true,
+    "error": false,
+    "message": "Coupons fetched successfully",
+    "results": []
+  },
+  "/admin/pending-review-counts": {
+    "success": true,
+    "error": false,
+    "message": "Pending review counts fetched",
+    "result": {
+      "pendingSellers": 1,
+      "pendingDrivers": 1,
+      "pendingProducts": 0,
+      "pendingWithdrawals": 0,
+      "totalPending": 2
+    }
+  },
+  "/tickets/admin/all": {
+    "success": true,
+    "error": false,
+    "message": "All tickets fetched successfully",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 25,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/delivery/stats": {
+    "success": true,
+    "error": false,
+    "message": "Stats fetched",
+    "result": {
+      "today": 0,
+      "yesterday": 0,
+      "growth": 0,
+      "trend": "0%",
+      "deliveries": 0,
+      "incentives": 0,
+      "cashCollected": 0
+    }
+  },
+  "/delivery/earnings": {
+    "success": true,
+    "error": false,
+    "message": "Earnings fetched",
+    "result": {
+      "totalEarnings": 0,
+      "availableBalance": 0,
+      "pendingWithdrawals": 0,
+      "settledWithdrawals": 0,
+      "onlinePay": 0,
+      "incentives": 0,
+      "tipsReceived": 0,
+      "cashCollected": 0,
+      "chartData": [
+        {
+          "name": "Sun",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Mon",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Tue",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Wed",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Thu",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Fri",
+          "earnings": 0,
+          "incentives": 0
+        },
+        {
+          "name": "Sat",
+          "earnings": 0,
+          "incentives": 0
+        }
+      ],
+      "withdrawals": [],
+      "transactions": [],
+      "recentTransactions": []
+    }
+  },
+  "/delivery/cod/summary": {
+    "success": true,
+    "error": false,
+    "message": "COD cash summary fetched",
+    "result": {
+      "systemFloatCOD": 0,
+      "cashInHand": 0,
+      "toRemit": [],
+      "toCollect": []
+    }
+  },
+  "/delivery/order-history": {
+    "success": true,
+    "error": false,
+    "message": "Delivery orders fetched",
+    "results": []
+  },
+  "/delivery/withdrawals": {
+    "success": true,
+    "error": false,
+    "message": "Delivery withdrawals fetched successfully",
+    "results": []
+  },
+  "/delivery-partners/me/rating": {
+    "success": true,
+    "error": false,
+    "message": "Partner rating summary retrieved",
+    "result": {
+      "partnerId": "6ac0f2d120438b243c0b54b3",
+      "name": "E2E Rider",
+      "vehicleType": "bike",
+      "profileImage": null,
+      "ratingAverage": 0,
+      "ratingCount": 0,
+      "ratingSum": 0,
+      "ratingDistribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      }
+    }
+  },
+  "/orders/available": {
+    "success": true,
+    "error": false,
+    "message": "No orders found",
+    "results": []
+  },
+  "/customer/transactions": {
+    "success": true,
+    "error": false,
+    "message": "Transactions fetched",
+    "result": {
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "totalPages": 1
+    }
+  },
+  "/notifications": {
+    "success": true,
+    "error": false,
+    "message": "Notifications fetched successfully",
+    "result": {
+      "items": [],
+      "notifications": [],
+      "unreadCount": 0,
+      "page": 1,
+      "limit": 20,
+      "total": 0,
+      "totalPages": 1
+    }
+  },
+  "/product-ratings/products/:productId/rating-summary": {
+    "success": true,
+    "error": false,
+    "message": "Product rating summary fetched successfully",
+    "result": {
+      "average": 0,
+      "count": 0,
+      "sum": 0,
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      }
+    }
+  },
+  "/product-ratings/products/:productId/ratings": {
+    "success": true,
+    "error": false,
+    "message": "Product reviews fetched successfully",
+    "result": {
+      "items": [],
+      "page": 1,
+      "limit": 10,
+      "total": 0,
+      "totalPages": 1
+    }
+  }
+}

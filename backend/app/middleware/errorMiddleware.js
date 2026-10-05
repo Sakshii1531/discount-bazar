@@ -17,7 +17,10 @@ export function errorHandler(err, req, res, next) {
     return next(err);
   }
 
-  const statusCode = err.statusCode || err.status || 500;
+  // A malformed ObjectId in params/body is a client error, not a crash.
+  const isCastError = err?.name === "CastError";
+  const statusCode = isCastError ? 400 : err.statusCode || err.status || 500;
+  if (isCastError) err.message = "Invalid id";
   const isProd = process.env.NODE_ENV === "production";
   const safeMessage = statusCode >= 500 && isProd
     ? "Internal server error"

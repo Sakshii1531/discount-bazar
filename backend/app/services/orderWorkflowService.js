@@ -1153,17 +1153,19 @@ export async function requestHandoffOtpAtomic(deliveryId, orderId, lat, lng) {
 
   const d = distanceMeters(rider.lat, rider.lng, cust.lat, cust.lng);
   if (d > OTP_RADIUS_M()) {
-    // TEMPORARY: Removed proximity validation for testing
-    console.warn(`[TESTING] Bypassing proximity check. Distance: ${Math.round(d)}m, Limit: ${OTP_RADIUS_M()}m`);
-    /*
-    const err = new Error(
-      `Delivery person must be within ${OTP_RADIUS_M()} meters of delivery location. Current distance: ${Math.round(d)}m`,
-    );
-    err.statusCode = 403;
-    err.code = "PROXIMITY_OUT_OF_RANGE";
-    err.details = { currentDistance: Math.round(d), requiredRange: `0-${OTP_RADIUS_M()}m` };
-    throw err;
-    */
+    // The rider must be at the customer's door to request the hand-over OTP.
+    // Field testing can opt out explicitly with DELIVERY_OTP_SKIP_PROXIMITY=true.
+    if (process.env.DELIVERY_OTP_SKIP_PROXIMITY === "true") {
+      console.warn(`[delivery-otp] Proximity check skipped by config. Distance: ${Math.round(d)}m, Limit: ${OTP_RADIUS_M()}m`);
+    } else {
+      const err = new Error(
+        `Delivery person must be within ${OTP_RADIUS_M()} meters of delivery location. Current distance: ${Math.round(d)}m`,
+      );
+      err.statusCode = 403;
+      err.code = "PROXIMITY_OUT_OF_RANGE";
+      err.details = { currentDistance: Math.round(d), requiredRange: `0-${OTP_RADIUS_M()}m` };
+      throw err;
+    }
   }
 
   const redis = getRedisClient();

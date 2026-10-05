@@ -19,6 +19,10 @@ export const createTicket = async (req, res) => {
         const { subject, description, priority, userType, mediaUrl, mediaType, mimeType } = req.body;
         const userId = req.user.id; // From verifyToken middleware
 
+        if (!String(subject || "").trim() || !String(description || "").trim()) {
+            return handleResponse(res, 400, "Subject and description are required");
+        }
+
         const safeMediaUrl = String(mediaUrl || "").trim();
         const safeMediaType = String(mediaType || "").trim();
         const safeMimeType = String(mimeType || "").trim();
@@ -122,7 +126,7 @@ export const getAllTickets = async (req, res) => {
 // Admin/User: Reply to a ticket
 export const replyToTicket = async (req, res) => {
     try {
-        const { text, isAdmin, mediaUrl, mediaType, mimeType } = req.body;
+        const { text, mediaUrl, mediaType, mimeType } = req.body;
         const { id } = req.params;
 
         const ticket = await Ticket.findById(id);
@@ -137,12 +141,13 @@ export const replyToTicket = async (req, res) => {
             return handleResponse(res, 400, "Message text or mediaUrl is required");
         }
 
-        const isUserAdmin = Boolean(
-            isAdmin === true ||
-            isAdmin === "true" ||
-            req.user?.role === "admin" ||
-            req.user?.role === "superadmin"
-        );
+        // Staff status comes from the verified token only — never from the body.
+        const isUserAdmin = req.user?.role === "admin" || req.user?.role === "superadmin";
+
+        // Non-staff may only reply to their own tickets.
+        if (!isUserAdmin && String(ticket.userId) !== String(req.user?.id)) {
+            return handleResponse(res, 404, "Ticket not found");
+        }
 
         const newMessage = {
             sender: isUserAdmin ? "Support Team" : (req.user.name || "User"),
@@ -208,6 +213,12 @@ export const updateTicketStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const { id } = req.params;
+
+        // findByIdAndUpdate skips schema validators, so check the enum here.
+        const allowedStatuses = Ticket.schema.path("status").enumValues;
+        if (!allowedStatuses.includes(status)) {
+            return handleResponse(res, 400, `status must be one of: ${allowedStatuses.join(", ")}`);
+        }
 
         const ticket = await Ticket.findByIdAndUpdate(id, { status }, { new: true });
         if (!ticket) return handleResponse(res, 404, "Ticket not found");

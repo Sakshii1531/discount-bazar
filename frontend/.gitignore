@@ -43,3 +43,10 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+
+# Test artifacts
+dist-e2e
+test-results
+playwright-report
+blob-report
+explore-*.txt
