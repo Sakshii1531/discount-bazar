@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const purchaseReturnSchema = new mongoose.Schema(
   {
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true, index: true },
-    supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
+    supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", default: null },
     returnNo: { type: String, required: true },
     purchaseBill: { type: mongoose.Schema.Types.ObjectId, ref: "PurchaseBill", default: null },
     date: { type: Date, default: Date.now },

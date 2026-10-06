@@ -60,6 +60,15 @@ const productSchema = new mongoose.Schema(
         purchaseBasePrice: { type: Number, min: 0, default: 0 },
         purchaseGstAmount: { type: Number, min: 0, default: 0 },
         purchaseFinalPrice: { type: Number, min: 0, default: 0 },
+        // Seller's extra delivery fee (₹) and time (whole minutes) for this product,
+        // added on top of the admin's global values (see deliveryQuoteService).
+        productDeliveryFee: { type: Number, min: 0, default: 0 },
+        productDeliveryTimeMinutes: {
+            type: Number,
+            min: 0,
+            default: 0,
+            validate: { validator: Number.isInteger, message: "Delivery time must be whole minutes" },
+        },
         expiryDate: { type: Date, default: null },
         weight: {
             type: String,

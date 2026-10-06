@@ -137,6 +137,40 @@ export default [
   },
   { route: "PATCH /api/products/moderation/:id/approve", name: "unknown product", as: "admin", params: { id: OID }, body: {}, status: 404 },
 
+  // ── Delivery fee / time (global + product) ────────────────────────────────
+  {
+    route: "POST /api/products/delivery-quote",
+    body: (ctx) => ({ productIds: [String(ctx.milk._id)] }),
+    check: (res) => {
+      expect(res.body.result).toEqual(
+        expect.objectContaining({ deliveryFee: expect.any(Number), deliveryTime: expect.any(String) }),
+      );
+      expect(res.body.result.sellers).toHaveLength(1);
+    },
+  },
+  {
+    route: "POST /api/products/bulk-upload",
+    as: "seller",
+    body: (ctx) => ({
+      rows: [
+        {
+          name: "Matrix Bulk Item",
+          category: ctx.tree.category.name,
+          subcategory: ctx.tree.subcategory.name,
+          price: "40",
+          productDeliveryFee: "5",
+          productDeliveryTimeMinutes: "10",
+        },
+      ],
+    }),
+    check: async (res) => {
+      expect(res.body.result.summary).toEqual(expect.objectContaining({ created: 1, failed: 0 }));
+      const created = await Product.findOne({ name: "Matrix Bulk Item" }).lean();
+      expect(created).toEqual(expect.objectContaining({ productDeliveryFee: 5, productDeliveryTimeMinutes: 10 }));
+      await Product.deleteOne({ _id: created._id });
+    },
+  },
+  { route: "POST /api/products/bulk-upload", name: "rejects an empty import", as: "seller", body: { rows: [] }, status: 400 },
   // ── Stock ─────────────────────────────────────────────────────────────────
   {
     route: "POST /api/products/adjust-stock",
@@ -255,11 +289,39 @@ export default [
     body: { title: "Dairy & bakery deals" },
     check: (res) => expect(res.body.result.title).toBe("Dairy & bakery deals"),
   },
+  {
+    route: "PUT /api/admin-offer-sections/:id",
+    name: "saves an uploaded side image",
+    as: "admin",
+    params: (ctx) => ({ id: ctx.sectionId }),
+    body: { sideImageUrl: "https://res.cloudinary.com/demo/image/upload/side.png" },
+    check: (res) => expect(res.body.result.sideImageUrl).toBe("https://res.cloudinary.com/demo/image/upload/side.png"),
+  },
+  {
+    route: "PUT /api/admin-offer-sections/:id",
+    name: "rejects a side image that is not a URL",
+    as: "admin",
+    params: (ctx) => ({ id: ctx.sectionId }),
+    body: { sideImageUrl: "javascript:alert(1)" },
+    status: 400,
+  },
   { route: "GET /api/offer-sections", name: "requires location", status: 400 },
   {
     route: "GET /api/offer-sections",
     query: near,
-    check: (res) => expect(listOf(res).map((s) => s.title)).toContain("Dairy & bakery deals"),
+    check: (res) => {
+      const section = listOf(res).find((s) => s.title === "Dairy & bakery deals");
+      expect(section).toBeDefined();
+      expect(section.sideImageUrl).toBe("https://res.cloudinary.com/demo/image/upload/side.png");
+    },
+  },
+  {
+    route: "PUT /api/admin-offer-sections/:id",
+    name: "an empty side image falls back to the preset",
+    as: "admin",
+    params: (ctx) => ({ id: ctx.sectionId }),
+    body: { sideImageUrl: "" },
+    check: (res) => expect(res.body.result.sideImageUrl).toBe(""),
   },
   {
     route: "DELETE /api/admin-offer-sections/:id",

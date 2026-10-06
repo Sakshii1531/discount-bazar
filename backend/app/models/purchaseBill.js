@@ -17,7 +17,8 @@ const itemSchema = new mongoose.Schema(
 const purchaseBillSchema = new mongoose.Schema(
   {
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true, index: true },
-    supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
+    // Optional: a seller can record a purchase without picking a supplier.
+    supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", default: null },
     billNo: { type: String, required: true, trim: true },
     billDate: { type: Date, default: Date.now },
     items: { type: [itemSchema], validate: (v) => v.length > 0 },

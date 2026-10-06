@@ -14,6 +14,7 @@ import { customerApi } from '../../services/customerApi';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { formatAmount } from "@shared/utils/currency";
+import { getProductDeliveryFeeLabel } from "../../utils/deliveryLabels";
 
 const AccordionItem = ({ title, children, id, icon, expandedSections, toggleSection }) => {
     const isOpen = expandedSections.includes(id);
@@ -567,6 +568,7 @@ const ProductDetailSheet = () => {
                                             >
                                                 <Clock size={12} strokeWidth={2.5} className="text-primary" />
                                                 {selectedProduct.deliveryTime || currentLocation?.time || '10-15 MINS'}
+                                                {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ''}
                                             </motion.div>
                                             {hasDisplayDiscount && (
                                                 <motion.div
@@ -1002,6 +1004,7 @@ const ProductDetailSheet = () => {
                                 <div className="inline-flex items-center gap-1.5 bg-[#F0FDF4] border border-brand-100 text-primary px-2.5 py-1 rounded-lg text-[10px] font-black uppercase mb-3">
                                     <Clock size={12} strokeWidth={3} />
                                     {selectedProduct.deliveryTime || currentLocation?.time || "10-15 Mins"}
+                                    {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ""}
                                 </div>
 
                                 <h2 className="text-xl font-black text-[#1A1A1A] leading-tight mb-2">

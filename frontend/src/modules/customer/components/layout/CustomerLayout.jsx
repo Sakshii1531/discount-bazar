@@ -89,7 +89,7 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
     const showHeader = showHeaderProp !== undefined ? showHeaderProp : (!hideHeaderRoutes.includes(path) && !path.startsWith('/category') && !path.startsWith('/orders') && !path.startsWith('/product'));
     const showBottomNav = showBottomNavProp !== undefined ? showBottomNavProp : (!hideBottomNavRoutes.includes(path) && !path.startsWith('/product'));
     const showCart = showCartProp !== undefined ? showCartProp : (!hideCartRoutes.includes(path) && !path.startsWith('/orders'));
-    const showFooter = !hideFooterRoutes.includes(path) && !path.startsWith('/product');
+    const showFooter = !hideFooterRoutes.includes(path) && !path.startsWith('/product') && !path.startsWith('/category/');
 
     // Condition to hide the MobileFooterMessage ("India's last minute app") on specific pages
     const hideFooterMessageRoutes = ['/profile', '/profile/edit', '/privacy', '/terms'];

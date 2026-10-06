@@ -11,9 +11,10 @@ import {
 } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
 import { adminApi } from "../services/adminApi";
+import SideImagePicker from "../components/SideImagePicker";
 import {
   BACKGROUND_COLOR_OPTIONS,
-  SIDE_IMAGE_OPTIONS,
+  getSectionSideImage,
 } from "@/shared/constants/offerSectionOptions";
 
 // Uses the same backend collection as offer sections,
@@ -27,10 +28,12 @@ const ShopByStoreManagement = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStore, setEditingStore] = useState(null);
+  const [isUploadingSide, setIsUploadingSide] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     backgroundColor: "#FCD34D",
     sideImageKey: "grocery",
+    sideImageUrl: "",
     categoryIds: [],
     productIds: [],
     order: 0,
@@ -110,6 +113,7 @@ const ShopByStoreManagement = () => {
       title: "",
       backgroundColor: "#FCD34D",
       sideImageKey: "grocery",
+      sideImageUrl: "",
       categoryIds: [],
       productIds: [],
       order: stores.length,
@@ -133,6 +137,7 @@ const ShopByStoreManagement = () => {
       title: store.title || "",
       backgroundColor: store.backgroundColor || "#FCD34D",
       sideImageKey: store.sideImageKey || "grocery",
+      sideImageUrl: store.sideImageUrl || "",
       categoryIds: catIds,
       productIds: store.productIds || [],
       order: store.order ?? 0,
@@ -144,6 +149,10 @@ const ShopByStoreManagement = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isUploadingSide) {
+      showToast("Please wait for the image to finish uploading", "warning");
+      return;
+    }
     if (!formData.title.trim()) {
       showToast("Store name is required", "warning");
       return;
@@ -156,6 +165,7 @@ const ShopByStoreManagement = () => {
       title: formData.title.trim(),
       backgroundColor: formData.backgroundColor,
       sideImageKey: formData.sideImageKey,
+      sideImageUrl: formData.sideImageUrl || "",
       categoryIds: formData.categoryIds,
       productIds: formData.productIds,
       order: Number(formData.order) || 0,
@@ -239,9 +249,6 @@ const ShopByStoreManagement = () => {
         </div>
         <div className="divide-y divide-slate-50">
           {stores.map((store, idx) => {
-            const sideOpt = SIDE_IMAGE_OPTIONS.find(
-              (o) => o.key === store.sideImageKey
-            );
             const catNames = (store.categoryIds || []).length
               ? (store.categoryIds || [])
                   .map((c) =>
@@ -262,8 +269,8 @@ const ShopByStoreManagement = () => {
                     className="h-14 w-14 rounded-2xl flex-shrink-0 bg-cover bg-center ring-2 ring-slate-100"
                     style={{
                       backgroundColor: store.backgroundColor || "#FCD34D",
-                      backgroundImage: sideOpt?.imageUrl
-                        ? `url(${sideOpt.imageUrl})`
+                      backgroundImage: getSectionSideImage(store)
+                        ? `url(${getSectionSideImage(store)})`
                         : undefined,
                     }}
                   />
@@ -437,40 +444,14 @@ const ShopByStoreManagement = () => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Hero image
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {SIDE_IMAGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      sideImageKey: opt.key,
-                    }))
-                  }
-                  className={cn(
-                    "rounded-xl overflow-hidden border-2 transition-all aspect-square bg-slate-100",
-                    formData.sideImageKey === opt.key
-                      ? "border-primary ring-2 ring-primary/30"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <img
-                    src={opt.imageUrl}
-                    alt={opt.label}
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="block text-[10px] font-bold text-slate-600 p-1 truncate">
-                    {opt.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <SideImagePicker
+            label="Hero image (upload your own or choose one)"
+            inputId="store-hero-image-file"
+            sideImageKey={formData.sideImageKey}
+            sideImageUrl={formData.sideImageUrl}
+            onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+            onUploadingChange={setIsUploadingSide}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

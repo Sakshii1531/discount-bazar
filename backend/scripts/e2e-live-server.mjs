@@ -15,5 +15,15 @@ const server = express();
 server.use(cors({ origin: true, credentials: true }));
 server.use(app);
 server.listen(7999, () => {
-  console.log(JSON.stringify({ ready: true, adminToken: tokenFor("admin", ctx.admin._id) }));
+  console.log(
+    JSON.stringify({
+      ready: true,
+      adminToken: tokenFor("admin", ctx.admin._id),
+      sellerToken: tokenFor("seller", ctx.seller._id),
+      customerToken: tokenFor("customer", ctx.customer._id),
+      milkId: String(ctx.milk._id),
+      breadId: String(ctx.bread._id),
+      location: ctx.location,
+    }),
+  );
 });

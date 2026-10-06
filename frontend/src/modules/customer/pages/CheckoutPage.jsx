@@ -1183,7 +1183,13 @@ const CheckoutPage = () => {
                   <Clock size={24} className="text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-lg">Delivery in 12-15 mins</h3>
+                  <h3 className="font-black text-slate-800 text-lg" data-testid="checkout-delivery-time">
+                    {pricingPreview?.deliveryTimeLabel
+                      ? pricingPreview.deliveryTimeMinutes > 0
+                        ? `Delivery in ${pricingPreview.deliveryTimeLabel}`
+                        : pricingPreview.deliveryTimeLabel
+                      : "Delivery in 12-15 mins"}
+                  </h3>
                   <p className="text-sm text-slate-500">Shipment of {cartCount} items</p>
                 </div>
               </div>

@@ -17,6 +17,7 @@ export const adminCatalogApi = {
 
     // Product Management
     getProducts: (params) => axiosInstance.get('/products', { params }),
+    getProduct: (id) => axiosInstance.get(`/products/${id}`),
     getProductModerationList: (params) =>
         axiosInstance.get('/products/moderation', { params }),
     approveProductModeration: (id, data = {}) =>

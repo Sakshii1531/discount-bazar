@@ -303,6 +303,14 @@ const orderSchema = new mongoose.Schema(
       currency: { type: String, default: CURRENCY },
       productSubtotal: { type: Number, default: 0 },
       deliveryFeeCharged: { type: Number, default: 0 },
+      // Delivery snapshot frozen at order time (global + product values); later
+      // admin/seller changes never alter these.
+      globalDeliveryFee: { type: Number, default: 0 },
+      productDeliveryFeeTotal: { type: Number, default: 0 },
+      globalDeliveryTimeMinutes: { type: Number, default: 0 },
+      deliveryTimeMinutes: { type: Number, default: 0 },
+      deliveryTimeLabel: { type: String, default: "" },
+      isFreeDelivery: { type: Boolean, default: false },
       handlingFeeCharged: { type: Number, default: 0 },
       tipTotal: { type: Number, default: 0 },
       discountTotal: { type: Number, default: 0 },

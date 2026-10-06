@@ -7,6 +7,7 @@
 import { expect } from "@jest/globals";
 import { MOCK_OTP } from "../../../app/utils/otp.js";
 import Product from "../../../app/models/product.js";
+import PartyLedgerEntry from "../../../app/models/partyLedgerEntry.js";
 import { listOf } from "../helpers/world.js";
 
 const OID = "64b7f0c2a1b2c3d4e5f60718";
@@ -334,6 +335,93 @@ export default [
   { route: "POST /api/seller/business/purchases/:id/cancel", as: "seller", params: (ctx) => ({ id: ctx.purchaseId2 }) },
   { route: "GET /api/seller/business/purchases", as: "seller", check: (res) => expect(listOf(res).map((b) => b.billNo)).toEqual(expect.arrayContaining(["B-101", "B-102"])) },
   { route: "POST /api/seller/business/purchases", name: "validates line items", as: "seller", body: (ctx) => ({ supplierId: ctx.supplierId, billNo: "X", items: [] }), status: 400 },
+  {
+    route: "POST /api/seller/business/purchases",
+    name: "saves and confirms a bill without a supplier",
+    as: "seller",
+    body: (ctx) => ({ supplierId: null, billNo: "NS-1", items: [{ productId: String(ctx.bread._id), quantity: 4, cost: 25 }], amountPaid: 60, paymentMethod: "CASH", confirm: true }),
+    status: 201,
+    before: async (ctx) => {
+      ctx.breadBeforeNoSupplier = await stockOf(ctx.bread._id);
+    },
+    check: async (res, ctx) => {
+      ctx.noSupplierBillId = res.body.result._id;
+      expect(res.body.result.supplier).toBeNull();
+      expect(res.body.result.status).toBe("CONFIRMED");
+      expect(await stockOf(ctx.bread._id)).toBe(ctx.breadBeforeNoSupplier + 4);
+      // Only the payment is recorded (cash out); nobody is owed the unpaid part.
+      const rows = await PartyLedgerEntry.find({ refId: res.body.result._id }).lean();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual(expect.objectContaining({ kind: "PAYMENT", amount: 60, party: null }));
+    },
+  },
+  {
+    route: "POST /api/seller/business/purchases",
+    name: "an empty supplier string also means no supplier",
+    as: "seller",
+    body: (ctx) => ({ supplierId: "", billNo: "NS-2", items: [{ productId: String(ctx.bread._id), quantity: 1, cost: 25 }] }),
+    status: 201,
+    check: (res) => expect(res.body.result.supplier).toBeNull(),
+  },
+  {
+    route: "POST /api/seller/business/purchases",
+    name: "rejects a supplier that is not the seller's",
+    as: "seller",
+    body: (ctx) => ({ supplierId: "64b000000000000000000000", billNo: "NS-3", items: [{ productId: String(ctx.bread._id), quantity: 1, cost: 25 }] }),
+    status: 404,
+  },
+  {
+    route: "PUT /api/seller/business/purchases/:id",
+    name: "a supplier can be added to a bill later",
+    as: "seller",
+    params: (ctx) => ({ id: ctx.noSupplierBillId }),
+    body: (ctx) => ({ supplierId: ctx.supplierId, billNo: "NS-1", items: [{ productId: String(ctx.bread._id), quantity: 4, cost: 25 }], amountPaid: 60, paymentMethod: "CASH" }),
+    check: async (res, ctx) => {
+      expect(String(res.body.result.supplier)).toBe(String(ctx.supplierId));
+      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId }).lean();
+      expect(rows.map((r) => r.kind).sort()).toEqual(["PAYMENT", "PURCHASE"]);
+    },
+  },
+  {
+    route: "PUT /api/seller/business/purchases/:id",
+    name: "the supplier can be removed again",
+    as: "seller",
+    params: (ctx) => ({ id: ctx.noSupplierBillId }),
+    body: (ctx) => ({ supplierId: null, billNo: "NS-1", items: [{ productId: String(ctx.bread._id), quantity: 4, cost: 25 }], amountPaid: 60, paymentMethod: "CASH" }),
+    check: async (res, ctx) => {
+      expect(res.body.result.supplier).toBeNull();
+      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId }).lean();
+      expect(rows.map((r) => r.kind)).toEqual(["PAYMENT"]);
+    },
+  },
+  {
+    route: "POST /api/seller/business/purchase-returns",
+    name: "returns stock from a bill without a supplier",
+    as: "seller",
+    body: (ctx) => ({ supplierId: null, purchaseBillId: ctx.noSupplierBillId, items: [{ productId: String(ctx.bread._id), quantity: 1, cost: 25 }], reason: "Damaged" }),
+    status: 201,
+    check: async (res, ctx) => {
+      expect(res.body.result.supplier).toBeNull();
+      expect(await stockOf(ctx.bread._id)).toBe(ctx.breadBeforeNoSupplier + 3);
+    },
+  },
+  {
+    route: "GET /api/seller/business/reports/:type",
+    name: "purchase report labels bills without a supplier",
+    as: "seller",
+    params: { type: "purchases" },
+    check: (res) => {
+      const row = (res.body.result.rows || []).find((r) => r.billNo === "NS-1");
+      expect(row).toEqual(expect.objectContaining({ supplier: "No supplier", paid: 60 }));
+    },
+  },
+  {
+    route: "GET /api/seller/business/accounts/:view",
+    name: "payments list includes the no-supplier payment",
+    as: "seller",
+    params: { view: "payments" },
+    check: (res) => expect(JSON.stringify(res.body.result)).toContain("No supplier"),
+  },
 
   // ── Payments, ledgers, expenses, cash ─────────────────────────────────────
   {

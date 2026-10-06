@@ -10,7 +10,8 @@ import {
     MapPin,
     History,
     Sparkles,
-    RefreshCw
+    RefreshCw,
+    Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@shared/components/ui/Toast';
@@ -32,6 +33,8 @@ const BillingCharges = () => {
         extraPerKm: 10,
         deliveryPartnerRatePerKm: 5,
         fixedCharge: 30,
+        globalDeliveryTimeMinutes: 15,
+        zeroDeliveryTimeMessage: 'Instant Delivery',
         returnDeliveryCommission: 0,
         handlingFeeStrategy: "highest_category_fee",
         codEnabled: true,
@@ -62,6 +65,8 @@ const BillingCharges = () => {
                     extraPerKm: s.incrementalKmSurcharge ?? prev.extraPerKm,
                     deliveryPartnerRatePerKm: s.deliveryPartnerRatePerKm ?? s.fleetCommissionRatePerKm ?? prev.deliveryPartnerRatePerKm,
                     fixedCharge: s.fixedDeliveryFee ?? s.customerBaseDeliveryFee ?? prev.fixedCharge,
+                    globalDeliveryTimeMinutes: s.globalDeliveryTimeMinutes ?? prev.globalDeliveryTimeMinutes,
+                    zeroDeliveryTimeMessage: s.zeroDeliveryTimeMessage ?? prev.zeroDeliveryTimeMessage,
                     returnDeliveryCommission: returnFee,
                     handlingFeeStrategy: s.handlingFeeStrategy ?? prev.handlingFeeStrategy,
                     globalTaxRate: s.globalTaxRate ?? prev.globalTaxRate,
@@ -103,6 +108,8 @@ const BillingCharges = () => {
                     deliveryPartnerRatePerKm: config.extraPerKm,
                     fleetCommissionRatePerKm: config.extraPerKm,
                     fixedDeliveryFee: config.fixedCharge,
+                    globalDeliveryTimeMinutes: Math.max(0, Math.round(Number(config.globalDeliveryTimeMinutes) || 0)),
+                    zeroDeliveryTimeMessage: (config.zeroDeliveryTimeMessage || '').trim() || 'Instant Delivery',
                     returnDeliveryCommission: config.returnDeliveryCommission,
                     handlingFeeStrategy: config.handlingFeeStrategy,
                     globalTaxRate: config.globalTaxRate,
@@ -426,6 +433,63 @@ const BillingCharges = () => {
                                 </p>
                             </div>
                         )}
+
+                        {/* Global Delivery Time */}
+                        <div className="mt-8 pt-6 border-t border-slate-100">
+                            <div className="flex items-center gap-2.5 mb-4">
+                                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+                                    <Clock className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                                        Global Delivery Time
+                                    </h4>
+                                    <p className="text-xs text-slate-500">
+                                        Customers see global + product values. The delivery fee above is the global fee; sellers can add an extra fee and time per product.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                                <div className="space-y-2">
+                                    <label htmlFor="globalDeliveryTimeMinutes" className="text-xs font-bold text-slate-700">
+                                        Global Delivery Time (minutes)
+                                    </label>
+                                    <div className="relative group">
+                                        <input
+                                            id="globalDeliveryTimeMinutes"
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={config.globalDeliveryTimeMinutes === 0 ? '' : config.globalDeliveryTimeMinutes}
+                                            onChange={(e) => setConfig((prev) => ({ ...prev, globalDeliveryTimeMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) }))}
+                                            className="w-full pl-4 pr-14 py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-brand-500 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all"
+                                            placeholder="0"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs pointer-events-none uppercase">mins</span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                        Whole minutes. Example: global 15 + product 20 = customer sees 35 mins.
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <label htmlFor="zeroDeliveryTimeMessage" className="text-xs font-bold text-slate-700">
+                                        Message when delivery time is 0
+                                    </label>
+                                    <input
+                                        id="zeroDeliveryTimeMessage"
+                                        type="text"
+                                        maxLength={60}
+                                        value={config.zeroDeliveryTimeMessage}
+                                        onChange={(e) => setConfig((prev) => ({ ...prev, zeroDeliveryTimeMessage: e.target.value }))}
+                                        className="w-full px-4 py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-brand-500 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all"
+                                        placeholder="Instant Delivery"
+                                    />
+                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                        Shown instead of a time when global and product times are both 0 (e.g. Instant Delivery, Same Day Delivery). A total fee of ₹0 shows as Free Delivery.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
 
                         {/* Reverse Logistics Section: Return Delivery Fee */}
                         <div className="mt-8 pt-6 border-t border-slate-100">

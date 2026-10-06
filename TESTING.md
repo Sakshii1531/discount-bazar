@@ -179,6 +179,31 @@ Each fix has a regression test.
 18. Frontend: `getJSON()` returned `null` instead of the fallback for corrupted
     storage, and the rider OTP boxes started pre-filled.
 
+**Experience Studio / hero banners**
+19. Banner title and subtitle were saved but never shown on the storefront, and
+    banner links were ignored (banners were not clickable). Banners now show a
+    caption and open the linked header, category, subcategory, product or URL.
+    The admin picks the target from dropdowns and product search instead of
+    typing a slug/ID, and hero banners can be linked too
+    (`src/__tests__/unit/customer/bannerLinks.test.jsx`).
+
+## Delivery fee and delivery time (global + product)
+
+`api-delivery-fee.e2e.test.js` covers the feature end to end:
+- admin settings (global fee, global time, zero-time message, partial updates);
+- seller values (negative fee or fractional minutes are rejected);
+- listing, detail and cart quote;
+- checkout preview;
+- the order snapshot, which is unchanged by later edits;
+- bulk CSV import.
+
+`unit/services/deliveryQuote.test.js` covers the calculation rules:
+- final value = global + product;
+- a total fee of 0 is free delivery;
+- a total time of 0 shows the admin's message;
+- in a cart, each product's fee is added once and the slowest time is used;
+- across sellers, fees add up and the delivery time is the slowest seller's.
+
 ## Disk space
 
 Each backend E2E suite starts a small MongoDB replica set (about 300 MB while it

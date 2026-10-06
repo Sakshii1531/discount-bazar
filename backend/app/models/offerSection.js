@@ -24,6 +24,8 @@ const offerSectionSchema = new mongoose.Schema(
       ],
       default: "hair-care",
     },
+    // Admin-uploaded side image; when set it is shown instead of the preset above.
+    sideImageUrl: { type: String, trim: true, default: "" },
     categoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category" }, // legacy single category
     sellerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Seller" }],

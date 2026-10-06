@@ -135,6 +135,22 @@ function buildAggregateBreakdown(sellerBreakdowns = []) {
     codPendingAmount: sumField(sellerBreakdowns, "codPendingAmount"),
     distanceKmActual: sumField(sellerBreakdowns, "distanceKmActual"),
     distanceKmRounded: sumField(sellerBreakdowns, "distanceKmRounded"),
+    // Delivery fee is summed across sellers above; each seller ships on its own,
+    // so the checkout ETA is the slowest seller's time.
+    globalDeliveryFee: sumField(sellerBreakdowns, "globalDeliveryFee"),
+    productDeliveryFeeTotal: sumField(sellerBreakdowns, "productDeliveryFeeTotal"),
+    deliveryTimeMinutes: Math.max(0, ...sellerBreakdowns.map((row) => Number(row?.deliveryTimeMinutes || 0))),
+    deliveryTimeLabel: sellerBreakdowns.reduce(
+      (slowest, row) =>
+        !slowest || Number(row?.deliveryTimeMinutes || 0) > Number(slowest.deliveryTimeMinutes || 0) ? row : slowest,
+      null,
+    )?.deliveryTimeLabel || "",
+    sellerDeliveryQuotes: sellerBreakdowns.map((row) => ({
+      sellerId: row.sellerId,
+      deliveryFeeCharged: Number(row?.deliveryFeeCharged || 0),
+      deliveryTimeMinutes: Number(row?.deliveryTimeMinutes || 0),
+      deliveryTimeLabel: row?.deliveryTimeLabel || "",
+    })),
     snapshots: {
       perSeller: sellerBreakdowns.map((row, index) => ({
         index,
@@ -149,6 +165,7 @@ function buildAggregateBreakdown(sellerBreakdowns = []) {
       })),
     ),
   };
+  aggregate.isFreeDelivery = aggregate.deliveryFeeCharged === 0;
   return aggregate;
 }
 
@@ -309,6 +326,7 @@ function applyFreeDeliveryToSellerBreakdowns(sellerBreakdownEntries = []) {
       continue;
     }
     breakdown.deliveryFeeCharged = 0;
+    breakdown.isFreeDelivery = true;
     breakdown.grossTotal = round2(Number(breakdown.grossTotal || 0) - oldDeliveryFee);
     breakdown.grandTotal = round2(Number(breakdown.grandTotal || 0) - oldDeliveryFee);
     breakdown.payableAmount = breakdown.grandTotal;

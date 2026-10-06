@@ -32,6 +32,7 @@ export const sellerApi = {
 
     // Stock
     adjustStock: (data) => axiosInstance.post('/products/adjust-stock', data),
+    bulkUploadProducts: (rows) => axiosInstance.post('/products/bulk-upload', { rows }, { timeout: 300000 }),
     getStockHistory: () => axiosInstance.get('/products/stock-history'),
 
     // Notifications

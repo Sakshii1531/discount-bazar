@@ -154,6 +154,19 @@ const settingSchema = new mongoose.Schema(
             default: 30,
             min: 0,
         },
+        // Global delivery time (whole minutes) added to each product's own delivery time.
+        globalDeliveryTimeMinutes: {
+            type: Number,
+            default: 15,
+            min: 0,
+        },
+        // Shown instead of a time when global + product delivery time is 0.
+        zeroDeliveryTimeMessage: {
+            type: String,
+            trim: true,
+            maxlength: 60,
+            default: "Instant Delivery",
+        },
         handlingFeeStrategy: {
             type: String,
             enum: ALL_HANDLING_FEE_STRATEGIES,

@@ -28,6 +28,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { sellerApi } from "../services/sellerApi";
 import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
+import ProductDeliverySettings from "../components/product/ProductDeliverySettings";
+import BulkProductUpload from "../components/product/BulkProductUpload";
 import { toast } from "sonner";
 import Pagination from "@shared/components/ui/Pagination";
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
@@ -127,6 +129,7 @@ const ProductManagement = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterDropdownRef = useRef(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [viewingVariants, setViewingVariants] = useState(null);
@@ -218,6 +221,8 @@ const ProductManagement = () => {
     purchaseCost: "",
     gstPercent: "",
     purchaseGstType: "EXCLUSIVE",
+    productDeliveryFee: "",
+    productDeliveryTimeMinutes: "",
     expiryDate: "",
     mainImage: null,
     galleryImages: [],
@@ -446,6 +451,8 @@ const ProductManagement = () => {
         data.append(k, formData[k] ?? "");
       });
       data.append("purchaseGstType", formData.purchaseGstType || "EXCLUSIVE");
+      data.append("productDeliveryFee", formData.productDeliveryFee || 0);
+      data.append("productDeliveryTimeMinutes", formData.productDeliveryTimeMinutes || 0);
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -557,6 +564,8 @@ const ProductManagement = () => {
         purchaseCost: item.purchaseCost ?? "",
         gstPercent: item.gstPercent ?? "",
         purchaseGstType: item.purchaseGstType || "EXCLUSIVE",
+        productDeliveryFee: item.productDeliveryFee ? String(item.productDeliveryFee) : "",
+        productDeliveryTimeMinutes: item.productDeliveryTimeMinutes ? String(item.productDeliveryTimeMinutes) : "",
         expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : "",
         shelfLife: item.shelfLife || "",
         countryOfOrigin: item.countryOfOrigin || "",
@@ -610,6 +619,8 @@ const ProductManagement = () => {
         purchaseCost: "",
         gstPercent: "",
         purchaseGstType: "EXCLUSIVE",
+        productDeliveryFee: "",
+        productDeliveryTimeMinutes: "",
         expiryDate: "",
         shelfLife: "",
         countryOfOrigin: "",
@@ -654,12 +665,25 @@ const ProductManagement = () => {
             Track your items, prices, and how many are left in stock.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setIsBulkUploadOpen(true)}
+          className="flex items-center gap-2 border border-slate-200 bg-white text-slate-800 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors font-semibold">
+          Bulk Upload
+        </button>
         <button
           onClick={() => navigate("/seller/products/add")}
           className="flex items-center gap-2 bg-black  text-primary-foreground px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors">
           <HiOutlinePlus className="h-5 w-5" />
           Add New Product
         </button>
+        </div>
+        <BulkProductUpload
+          open={isBulkUploadOpen}
+          onClose={() => setIsBulkUploadOpen(false)}
+          onDone={() => fetchProducts(1)}
+        />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1626,6 +1650,11 @@ const ProductManagement = () => {
                         gstRate={formData.gstPercent}
                         onTypeChange={(t) => setFormData((prev) => ({ ...prev, purchaseGstType: t }))}
                         onRateChange={(r) => setFormData((prev) => ({ ...prev, gstPercent: r }))}
+                      />
+                      <ProductDeliverySettings
+                        fee={formData.productDeliveryFee}
+                        minutes={formData.productDeliveryTimeMinutes}
+                        onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
                       />
                       <div className="space-y-4">
                         {formData.variants.map((v, i) => (

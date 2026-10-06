@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Product from "../models/product.js";
 import Order from "../models/order.js";
 import Review from "../models/review.js";
@@ -38,6 +39,8 @@ import {
 import { buildSearchRegex } from "../utils/regex.js";
 import { computePurchaseGst } from "../utils/money.js";
 import { parseAndValidateReturnPolicy } from "../validation/returnPolicyValidation.js";
+import { decorateProductsWithDelivery, quoteCartDelivery } from "../services/deliveryQuoteService.js";
+import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
 
 // Phase 3 P3-5: when search term is reasonably specific and the env flag
 // is enabled, prefer Mongo's `name + tags` text index over case-insensitive
@@ -265,6 +268,28 @@ function applyPurchaseGst(productData, existing = null) {
       v.purchaseFinalPrice = b.finalPrice;
     });
   }
+}
+
+// Seller delivery extras: empty means 0; negative, non-numeric or fractional minutes are rejected.
+function applyDeliveryFields(productData) {
+  const parse = (key, label, { integer = false } = {}) => {
+    if (productData[key] === undefined) return;
+    const raw = productData[key];
+    if (raw === "" || raw === null) {
+      productData[key] = 0;
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      throw Object.assign(new Error(label + " must be 0 or more"), { statusCode: 400 });
+    }
+    if (integer && !Number.isInteger(n)) {
+      throw Object.assign(new Error(label + " must be whole minutes"), { statusCode: 400 });
+    }
+    productData[key] = integer ? n : Math.round(n * 100) / 100;
+  };
+  parse("productDeliveryFee", "Product delivery fee");
+  parse("productDeliveryTimeMinutes", "Product delivery time", { integer: true });
 }
 
 function applyMediaFields(productData) {
@@ -532,7 +557,7 @@ export const getProducts = async (req, res) => {
       const [rawProducts, total] = await Promise.all([
         Product.find(finalQuery)
           .select(
-            "name slug description sku price salePrice stock brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants createdAt",
+            "name slug description sku price salePrice stock brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           // No .populate() — names resolved via cache-backed entityNameCache
           .sort(sortQuery)
@@ -593,9 +618,11 @@ export const getProducts = async (req, res) => {
     const role = String(req.user?.role || "").toLowerCase();
     const shouldCache = !role || (role !== "admin" && role !== "seller");
 
-    const result = shouldCache
+    const cached = shouldCache
       ? await getOrSet(buildProductListKey(req.query), fetchFn, getTTL("productList"))
       : await fetchFn();
+    // Final delivery fee/time are added after the cache so admin/seller changes show at once.
+    const result = { ...cached, items: await decorateProductsWithDelivery(cached?.items || []) };
 
     return handleResponse(res, 200, "Products fetched successfully", result);
   } catch (error) {
@@ -691,7 +718,7 @@ export const getSellerProducts = async (req, res) => {
     ] = await Promise.all([
       Product.find(query)
         .select(
-          "name slug description sku barcode price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType",
+          "name slug description sku barcode price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes",
         )
         .populate("headerId", "name")
         .populate("categoryId", "name")
@@ -972,6 +999,7 @@ export const createProduct = async (req, res) => {
 
     try {
       applyPurchaseGst(productData);
+      applyDeliveryFields(productData);
       await assertItemMasterValid(productData, req.user.id);
     } catch (e) {
       return handleResponse(res, e.statusCode || 400, e.message);
@@ -1223,6 +1251,7 @@ export const updateProduct = async (req, res) => {
 
     try {
       applyPurchaseGst(productData, product);
+      applyDeliveryFields(productData);
       await assertItemMasterValid(
         {
           ...productData,
@@ -1365,7 +1394,7 @@ export const getProductById = async (req, res) => {
       async () =>
         Product.findById(id)
           .select(
-            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants createdAt",
+            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           .populate("headerId", "name")
           .populate("categoryId", "name")
@@ -1393,7 +1422,7 @@ export const getProductById = async (req, res) => {
       }
     }
 
-    const payload = normalizeProductDocumentModeration(product);
+    const payload = await decorateProductsWithDelivery(normalizeProductDocumentModeration(product));
     
     if (req.user) {
         const userId = req.user.id;
@@ -1551,7 +1580,7 @@ export const getModerationProducts = async (req, res) => {
       await Promise.all([
         Product.find(moderatedQuery)
           .select(
-            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants createdAt",
+            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           .populate("headerId", "name")
           .populate("categoryId", "name")
@@ -1702,6 +1731,28 @@ export const rejectProduct = async (req, res) => {
       "Product rejected successfully",
       normalizeProductDocumentModeration(updated?.toObject?.() || updated),
     );
+  } catch (error) {
+    return handleResponse(res, 500, error.message);
+  }
+};
+
+/* ===============================
+   CART DELIVERY QUOTE (public)
+   Final delivery fee/time for a set of products before checkout.
+================================ */
+export const getDeliveryQuote = async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
+    const validIds = [...new Set(ids.map(String))]
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .slice(0, 200);
+    const products = validIds.length
+      ? await Product.find({ _id: { $in: validIds } })
+          .select("_id sellerId productDeliveryFee productDeliveryTimeMinutes")
+          .lean()
+      : [];
+    const settings = await getOrCreateFinanceSettings();
+    return handleResponse(res, 200, "Delivery quote", quoteCartDelivery(products, settings));
   } catch (error) {
     return handleResponse(res, 500, error.message);
   }

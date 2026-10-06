@@ -20,6 +20,11 @@ jest.unstable_mockModule("../app/controller/productController.js", () => ({
   getModerationProducts: jest.fn((req, res) => res.status(200).json({})),
   approveProduct: jest.fn((req, res) => res.status(200).json({})),
   rejectProduct: jest.fn((req, res) => res.status(200).json({})),
+  getDeliveryQuote: jest.fn((req, res) => res.status(200).json({ route: "delivery-quote" })),
+}));
+
+jest.unstable_mockModule("../app/controller/productBulkController.js", () => ({
+  bulkUploadProducts: jest.fn((req, res) => res.status(200).json({ route: "bulk-upload" })),
 }));
 
 jest.unstable_mockModule("../app/controller/stockController.js", () => ({
@@ -53,6 +58,15 @@ describe("product routes ordering", () => {
     expect(response.body.route).toBe("seller-me");
     expect(mockGetSellerProducts).toHaveBeenCalledTimes(1);
     expect(mockGetProductById).not.toHaveBeenCalled();
+  });
+
+  test("POST /delivery-quote and /bulk-upload reach their own handlers", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/products", productRoutes);
+
+    expect((await request(app).post("/products/delivery-quote").send({})).body.route).toBe("delivery-quote");
+    expect((await request(app).post("/products/bulk-upload").send({ rows: [] })).body.route).toBe("bulk-upload");
   });
 
   test("GET /:id still resolves product detail handler", async () => {

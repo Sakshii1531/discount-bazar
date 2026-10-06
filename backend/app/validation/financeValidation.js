@@ -117,6 +117,8 @@ export const updateDeliverySettingsSchema = Joi.object({
   deliveryPartnerRatePerKm: Joi.number().min(0).optional(),
   fleetCommissionRatePerKm: Joi.number().min(0).optional(),
   fixedDeliveryFee: Joi.number().min(0).optional(),
+  globalDeliveryTimeMinutes: Joi.number().integer().min(0).max(10080).optional(),
+  zeroDeliveryTimeMessage: Joi.string().trim().max(60).allow("").optional(),
   handlingFeeStrategy: Joi.string()
     .valid("highest_category_fee", "sum_of_category_fees", "max_single_fee", "per_item_fee")
     .optional(),
@@ -135,6 +137,8 @@ export const updateDeliverySettingsSchema = Joi.object({
   "deliveryPartnerRatePerKm",
   "fleetCommissionRatePerKm",
   "fixedDeliveryFee",
+  "globalDeliveryTimeMinutes",
+  "zeroDeliveryTimeMessage",
   "handlingFeeStrategy",
   "globalTaxRate",
   "codEnabled",

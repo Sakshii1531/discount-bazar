@@ -4,7 +4,7 @@ import { customerApi } from "../services/customerApi";
 import ProductCard from "../components/shared/ProductCard";
 import { useLocation as useAppLocation } from "../context/LocationContext";
 import {
-  getSideImageByKey,
+  getSectionSideImage,
   getBackgroundColorByValue,
 } from "@/shared/constants/offerSectionOptions";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
@@ -21,6 +21,8 @@ const mapProduct = (p) => ({
   originalPrice: p.price,
   weight: p.weight || "1 unit",
   deliveryTime: p.deliveryTime || null,
+  finalDeliveryFee: p.finalDeliveryFee,
+  isFreeDelivery: p.isFreeDelivery,
 });
 
 const ShopByStorePage = () => {
@@ -122,7 +124,7 @@ const ShopByStorePage = () => {
             sortedStores.map((store) => {
               const isActive = store._id === activeStoreId;
               const bgColor = getBackgroundColorByValue(store.backgroundColor);
-              const sideImageUrl = getSideImageByKey(store.sideImageKey);
+              const sideImageUrl = getSectionSideImage(store);
 
               return (
                 <button
@@ -206,7 +208,7 @@ const ShopByStorePage = () => {
                 const name =
                   typeof cat === "object" && cat?.name ? cat.name : "Category";
                 const key = cat?._id || String(name);
-                const sampleImage = getSideImageByKey(activeStore.sideImageKey);
+                const sampleImage = getSectionSideImage(activeStore);
                 return (
                   <div
                     key={key}

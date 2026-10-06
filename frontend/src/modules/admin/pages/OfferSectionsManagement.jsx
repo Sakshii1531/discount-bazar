@@ -13,9 +13,10 @@ import {
 } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
 import { adminApi } from "../services/adminApi";
+import SideImagePicker from "../components/SideImagePicker";
 import {
   BACKGROUND_COLOR_OPTIONS,
-  SIDE_IMAGE_OPTIONS,
+  getSectionSideImage,
 } from "@/shared/constants/offerSectionOptions";
 
 const OfferSectionsManagement = () => {
@@ -27,10 +28,13 @@ const OfferSectionsManagement = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
+  const [isUploadingSide, setIsUploadingSide] = useState(false);
+
   const [formData, setFormData] = useState({
     title: "",
     backgroundColor: "#FCD34D",
     sideImageKey: "hair-care",
+    sideImageUrl: "",
     categoryIds: [],
     sellerIds: [],
     productIds: [],
@@ -131,6 +135,7 @@ const OfferSectionsManagement = () => {
       title: "",
       backgroundColor: "#FCD34D",
       sideImageKey: "hair-care",
+      sideImageUrl: "",
       categoryIds: [],
       sellerIds: [],
       productIds: [],
@@ -157,6 +162,7 @@ const OfferSectionsManagement = () => {
       title: section.title || "",
       backgroundColor: section.backgroundColor || "#FCD34D",
       sideImageKey: section.sideImageKey || "hair-care",
+      sideImageUrl: section.sideImageUrl || "",
       categoryIds: catIds,
       sellerIds: selIds,
       productIds: section.productIds || [],
@@ -169,6 +175,10 @@ const OfferSectionsManagement = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isUploadingSide) {
+      showToast("Please wait for the side image to finish uploading", "warning");
+      return;
+    }
     if (!formData.title.trim()) {
       showToast("Section title is required", "warning");
       return;
@@ -181,6 +191,7 @@ const OfferSectionsManagement = () => {
       title: formData.title.trim(),
       backgroundColor: formData.backgroundColor,
       sideImageKey: formData.sideImageKey,
+      sideImageUrl: formData.sideImageUrl || "",
       categoryIds: formData.categoryIds,
       sellerIds: formData.sellerIds || [],
       productIds: formData.productIds,
@@ -280,9 +291,6 @@ const OfferSectionsManagement = () => {
         </div>
         <div className="divide-y divide-slate-50">
           {sections.map((section, idx) => {
-            const sideOpt = SIDE_IMAGE_OPTIONS.find(
-              (o) => o.key === section.sideImageKey
-            );
             const sectionCatIds = (section.categoryIds || []).map((c) => (typeof c === "object" && c?._id ? c._id : c));
             const sectionSellerIds = (section.sellerIds || []).map((s) => (typeof s === "object" && s?._id ? s._id : s));
             const catNames = (section.categoryIds || []).length
@@ -302,8 +310,8 @@ const OfferSectionsManagement = () => {
                     className="h-14 w-14 rounded-2xl flex-shrink-0 bg-cover bg-center ring-2 ring-slate-100"
                     style={{
                       backgroundColor: section.backgroundColor || "#FCD34D",
-                      backgroundImage: sideOpt?.imageUrl
-                        ? `url(${sideOpt.imageUrl})`
+                      backgroundImage: getSectionSideImage(section)
+                        ? `url(${getSectionSideImage(section)})`
                         : undefined,
                     }}
                   />
@@ -544,40 +552,14 @@ const OfferSectionsManagement = () => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Side image (choose one)
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {SIDE_IMAGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      sideImageKey: opt.key,
-                    }))
-                  }
-                  className={cn(
-                    "rounded-xl overflow-hidden border-2 transition-all aspect-square bg-slate-100",
-                    formData.sideImageKey === opt.key
-                      ? "border-primary ring-2 ring-primary/30"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <img
-                    src={opt.imageUrl}
-                    alt={opt.label}
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="block text-[10px] font-bold text-slate-600 p-1 truncate">
-                    {opt.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <SideImagePicker
+            label="Side image (upload your own or choose one)"
+            inputId="offer-side-image-file"
+            sideImageKey={formData.sideImageKey}
+            sideImageUrl={formData.sideImageUrl}
+            onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+            onUploadingChange={setIsUploadingSide}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

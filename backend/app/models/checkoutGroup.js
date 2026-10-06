@@ -85,6 +85,12 @@ const checkoutGroupSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      globalDeliveryFee: { type: Number, default: 0 },
+      productDeliveryFeeTotal: { type: Number, default: 0 },
+      deliveryTimeMinutes: { type: Number, default: 0 },
+      deliveryTimeLabel: { type: String, default: "" },
+      isFreeDelivery: { type: Boolean, default: false },
+      sellerDeliveryQuotes: { type: Array, default: [] },
       handlingFeeCharged: {
         type: Number,
         default: 0,

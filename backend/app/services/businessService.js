@@ -175,16 +175,24 @@ function qtyMap(items) {
   return m;
 }
 
+// Supplier given: it must belong to this seller. Empty means "no supplier".
+async function resolveSupplierId(sellerId, supplierId, session) {
+  if (!supplierId) return null;
+  if (!(await Supplier.exists({ _id: supplierId, seller: sellerId }).session(session))) throw err(404, "Supplier not found");
+  return supplierId;
+}
+
 async function writeBillLedger(bill, session) {
   const base = {
     seller: bill.seller, partyType: "SUPPLIER", party: bill.supplier,
     refModel: "PurchaseBill", refId: bill._id, refNo: bill.billNo, date: bill.billDate,
   };
-  const rows = [{ ...base, kind: "PURCHASE", effect: 1, amount: bill.total, note: "Purchase bill" }];
+  // Without a supplier nobody is owed money, so only the payment (cash out) is recorded.
+  const rows = bill.supplier ? [{ ...base, kind: "PURCHASE", effect: 1, amount: bill.total, note: "Purchase bill" }] : [];
   if (bill.amountPaid > 0) {
     rows.push({ ...base, kind: "PAYMENT", effect: -1, amount: bill.amountPaid, method: bill.paymentMethod || "CASH", note: "Paid on bill" });
   }
-  await PartyLedgerEntry.create(rows, { session, ordered: true });
+  if (rows.length) await PartyLedgerEntry.create(rows, { session, ordered: true });
 }
 
 const clearBillLedger = (bill, session) =>
@@ -216,12 +224,12 @@ async function confirmBillTxn(bill, session) {
 export async function createPurchaseBill(sellerId, p) {
   await assertDayOpen(sellerId, p.billDate || new Date());
   return inTxn(async (session) => {
-    if (!(await Supplier.exists({ _id: p.supplierId, seller: sellerId }).session(session))) throw err(404, "Supplier not found");
+    const supplierId = await resolveSupplierId(sellerId, p.supplierId, session);
     const t = priceItems(p.items);
     const items = await nameItems(sellerId, t.priced, session);
     const paid = Math.min(p.amountPaid || 0, t.total);
     const [bill] = await PurchaseBill.create([{
-      seller: sellerId, supplier: p.supplierId, billNo: p.billNo, billDate: p.billDate || new Date(), items,
+      seller: sellerId, supplier: supplierId, billNo: p.billNo, billDate: p.billDate || new Date(), items,
       subtotal: t.subtotal, gstTotal: t.gstTotal, total: t.total, amountPaid: paid,
       paymentMethod: paid ? p.paymentMethod || "CASH" : "", status: "DRAFT", note: p.note || "",
     }], { session });
@@ -263,7 +271,7 @@ export async function updatePurchaseBill(sellerId, id, p) {
       await applyCostUpdate(items, sellerId, session);
       await clearBillLedger(bill, session);
     }
-    if (p.supplierId) bill.supplier = p.supplierId;
+    if (p.supplierId !== undefined) bill.supplier = await resolveSupplierId(sellerId, p.supplierId, session);
     if (p.billNo) bill.billNo = p.billNo;
     if (p.billDate) bill.billDate = p.billDate;
     bill.items = items;
@@ -309,18 +317,19 @@ export async function listPurchaseBills(sellerId, { from, to, supplierId } = {})
 export async function createPurchaseReturn(sellerId, p) {
   await assertDayOpen(sellerId, p.date || new Date());
   return inTxn(async (session) => {
-    if (!(await Supplier.exists({ _id: p.supplierId, seller: sellerId }).session(session))) throw err(404, "Supplier not found");
+    const supplierId = await resolveSupplierId(sellerId, p.supplierId, session);
     const t = priceItems(p.items);
     const items = await nameItems(sellerId, t.priced, session);
     const emits = [];
     const returnNo = `PR-${Date.now().toString(36).toUpperCase()}`;
     const [ret] = await PurchaseReturn.create([{
-      seller: sellerId, supplier: p.supplierId, returnNo, purchaseBill: p.purchaseBillId || null,
+      seller: sellerId, supplier: supplierId, returnNo, purchaseBill: p.purchaseBillId || null,
       date: p.date || new Date(), items, total: t.total, reason: p.reason || "",
     }], { session });
     await applyQtyMap(qtyMap(items), -1, { sellerId, type: "PurchaseReturn", note: `Purchase return ${returnNo}`, session, emits });
-    await PartyLedgerEntry.create([{
-      seller: sellerId, partyType: "SUPPLIER", party: p.supplierId, kind: "PURCHASE_RETURN", effect: -1,
+    // No supplier: stock goes back, but there is no supplier balance to reduce.
+    if (supplierId) await PartyLedgerEntry.create([{
+      seller: sellerId, partyType: "SUPPLIER", party: supplierId, kind: "PURCHASE_RETURN", effect: -1,
       amount: t.total, refModel: "PurchaseReturn", refId: ret._id, refNo: returnNo, date: ret.date,
       note: p.reason || "Purchase return",
     }], { session });

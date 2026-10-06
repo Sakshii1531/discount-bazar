@@ -23,6 +23,7 @@ import { sellerApi } from "../services/sellerApi";
 
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
 import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
+import ProductDeliverySettings from "../components/product/ProductDeliverySettings";
 
 const TABS = [
   { id: "general", label: "General Info", icon: HiOutlineTag },
@@ -58,6 +59,8 @@ const initialFormData = {
   purchaseCost: "",
   gstPercent: "",
   purchaseGstType: "EXCLUSIVE",
+  productDeliveryFee: "",
+  productDeliveryTimeMinutes: "",
   expiryDate: "",
   shelfLife: "",
   countryOfOrigin: "",
@@ -390,6 +393,8 @@ const AddProduct = () => {
         if (formData[k] !== "" && formData[k] != null) data.append(k, formData[k]);
       });
       data.append("purchaseGstType", formData.purchaseGstType || "EXCLUSIVE");
+      data.append("productDeliveryFee", formData.productDeliveryFee || 0);
+      data.append("productDeliveryTimeMinutes", formData.productDeliveryTimeMinutes || 0);
       data.append("weight", formData.weight);
       data.append("shelfLife", formData.shelfLife || "");
       data.append("countryOfOrigin", formData.countryOfOrigin || "");
@@ -799,6 +804,13 @@ const AddProduct = () => {
                 gstRate={formData.gstPercent}
                 onTypeChange={(t) => setFormData((prev) => ({ ...prev, purchaseGstType: t }))}
                 onRateChange={(r) => setFormData((prev) => ({ ...prev, gstPercent: r }))}
+              />
+
+              <ProductDeliverySettings
+                fee={formData.productDeliveryFee}
+                minutes={formData.productDeliveryTimeMinutes}
+                onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+                showPreview={false}
               />
 
               <div className="space-y-4">

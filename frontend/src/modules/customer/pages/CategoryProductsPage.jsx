@@ -134,7 +134,7 @@ const CategoryProductsPage = () => {
     }, [safeProducts]);
 
     return (
-        <div className="flex flex-col min-h-screen bg-white max-w-md mx-auto relative font-sans">
+        <div className="flex flex-col min-h-screen bg-white max-w-md md:max-w-none w-full mx-auto relative font-sans md:h-screen md:min-h-0 md:overflow-hidden">
             {/* Header */}
             <header className={cn(
                 "sticky top-0 z-50 bg-white border-b border-gray-50 px-4 py-4 flex items-center justify-between",
@@ -180,7 +180,7 @@ const CategoryProductsPage = () => {
                 ) : (
                     <>
                         {/* Sidebar */}
-                        <aside className="w-[70px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
+                        <aside className="w-[70px] md:w-[110px] lg:w-[130px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto overscroll-contain hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
                             {subCategories.map((cat) => (
                                 <button
                                     key={cat.id}
@@ -209,8 +209,8 @@ const CategoryProductsPage = () => {
                         </aside>
 
                         {/* Content */}
-                        <main className="flex-1 p-2 pb-24 bg-white space-y-4 overflow-x-hidden">
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-3">
+                        <main className="flex-1 p-2 md:p-6 pb-24 md:h-[calc(100vh-60px)] md:overflow-y-auto md:overscroll-contain bg-white space-y-4 overflow-x-hidden">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-x-2 gap-y-3 md:gap-4">
                                 {filteredProducts.map((product) => (
                                     <ProductCard key={product.id} product={product} compact={true} />
                                 ))}

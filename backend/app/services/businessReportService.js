@@ -93,7 +93,7 @@ async function purchaseReport(sellerId, { from, to }) {
   const docs = await PurchaseBill.find({ seller: sellerId, status: "CONFIRMED", billDate: { $gte: from, $lte: to } })
     .populate("supplier", "name").sort({ billDate: -1 }).lean();
   const rows = docs.map((d) => ({
-    billNo: d.billNo, date: d.billDate, supplier: d.supplier?.name, gst: d.gstTotal, total: d.total,
+    billNo: d.billNo, date: d.billDate, supplier: d.supplier?.name || "No supplier", gst: d.gstTotal, total: d.total,
     paid: d.amountPaid, due: r2(d.total - d.amountPaid),
   }));
   return { rows, totals: { count: rows.length, total: r2(rows.reduce((s, x) => s + x.total, 0)), due: r2(rows.reduce((s, x) => s + x.due, 0)) } };
@@ -384,7 +384,7 @@ const POS_METHOD = { QR: "UPI" };
 const tenderLabel = (m) => POS_METHOD[m] || m || "CASH";
 
 async function partyNames(entries) {
-  const ids = (type) => [...new Set(entries.filter((e) => e.partyType === type).map((e) => String(e.party)))];
+  const ids = (type) => [...new Set(entries.filter((e) => e.partyType === type && e.party).map((e) => String(e.party)))];
   const [sups, custs] = await Promise.all([
     Supplier.find({ _id: { $in: ids("SUPPLIER") } }).select("name").lean(),
     PosCustomer.find({ _id: { $in: ids("CUSTOMER") } }).select("name").lean(),
@@ -404,7 +404,7 @@ async function paymentsMade(s, between) {
   return [
     ...supplierPaid.map((e) => ({
       id: String(e._id), date: e.date, type: "Supplier Payment",
-      party: names.get(String(e.party)) || "Supplier",
+      party: e.party ? names.get(String(e.party)) || "Supplier" : "No supplier",
       reference: e.refNo || "", method: e.method || "CASH", note: e.note || "", amount: r2(e.amount),
     })),
     ...refunds.map((x) => ({

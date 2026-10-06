@@ -11,6 +11,7 @@ import { useLocation as useAppLocation } from '../context/LocationContext';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { useSettings } from '@core/context/SettingsContext';
 import Lottie from 'lottie-react';
+import { getProductDeliveryFeeLabel } from "../utils/deliveryLabels";
 
 const ProductDetailPage = () => {
     const { id } = useParams();
@@ -482,7 +483,10 @@ const ProductDetailPage = () => {
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p>
-                                        <p className="text-xs sm:text-sm font-black text-slate-800 truncate">10-15 Mins</p>
+                                        <p className="text-xs sm:text-sm font-black text-slate-800 truncate" data-testid="product-delivery-time">{product.deliveryTime || '10-15 Mins'}</p>
+                                        {getProductDeliveryFeeLabel(product) && (
+                                            <p className="text-[10px] font-bold text-primary truncate" data-testid="product-delivery-fee">{getProductDeliveryFeeLabel(product)}</p>
+                                        )}
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Brand</p>
@@ -556,7 +560,7 @@ const ProductDetailPage = () => {
                                     </div>
                                     <div className="flex items-center gap-1 text-slate-400">
                                         <Clock size={15} />
-                                        <span>Superfast instant delivery in 10-15 minutes</span>
+                                        <span>{product.deliveryTime ? `Delivery: ${product.deliveryTime}` : 'Superfast instant delivery in 10-15 minutes'}{getProductDeliveryFeeLabel(product) ? ` · ${getProductDeliveryFeeLabel(product)}` : ''}</span>
                                     </div>
                                 </div>
                             </div>

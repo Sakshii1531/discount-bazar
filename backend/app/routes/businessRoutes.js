@@ -42,7 +42,7 @@ const lineItems = Joi.array().min(1).items(Joi.object({
   purchaseGstType: str.valid("INCLUSIVE", "EXCLUSIVE").default("EXCLUSIVE"),
 })).required();
 const billSchema = Joi.object({
-  supplierId: id.required(),
+  supplierId: id.allow(null, ""),
   billNo: str.max(60).required(),
   billDate: date,
   items: lineItems,
@@ -52,7 +52,7 @@ const billSchema = Joi.object({
   confirm: Joi.boolean().default(false),
 });
 const returnSchema = Joi.object({
-  supplierId: id.required(),
+  supplierId: id.allow(null, ""),
   purchaseBillId: id,
   date,
   items: lineItems,

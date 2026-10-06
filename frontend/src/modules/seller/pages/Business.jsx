@@ -712,10 +712,21 @@ const PurchasesTab = () => {
             if (createdId && !isAlreadyProcessed) {
                 const prod = updatedList.find((x) => x._id === createdId) || createdProd;
                 setLines((currentLines) => {
-                    const baseLines = draftLines && draftLines.length > 0 ? draftLines : currentLines;
-                    const idx = targetIdx !== undefined && targetIdx !== null && targetIdx < baseLines.length
-                        ? targetIdx
-                        : 0;
+                    let baseLines = draftLines && draftLines.length > 0 ? draftLines : currentLines;
+                    let idx;
+                    if (targetIdx !== undefined && targetIdx !== null && targetIdx < baseLines.length) {
+                        idx = targetIdx;
+                    } else {
+                        // "Add New Product" (no target row): fill an empty row if there is one,
+                        // otherwise append a new row so existing items are not overwritten.
+                        const emptyIdx = baseLines.findIndex((l) => !l.productId);
+                        if (emptyIdx >= 0) {
+                            idx = emptyIdx;
+                        } else {
+                            baseLines = [...baseLines, { ...emptyLine }];
+                            idx = baseLines.length - 1;
+                        }
+                    }
 
                     if (Array.isArray(inwardItems) && inwardItems.length > 0) {
                         const newLines = [...baseLines];
@@ -963,7 +974,8 @@ const PurchasesTab = () => {
     };
 
     const payload = (confirm) => ({
-        supplierId: form.supplierId,
+        // Supplier is optional; null saves the bill without one.
+        supplierId: form.supplierId || null,
         billNo: form.billNo,
         amountPaid: Number(form.amountPaid) || 0,
         paymentMethod: form.paymentMethod,
@@ -985,10 +997,6 @@ const PurchasesTab = () => {
     };
 
     const save = async (confirm) => {
-        if (!form.supplierId) {
-            toast.error("Please select a supplier before saving the bill");
-            return;
-        }
         const validItems = lines.filter((l) => l.productId);
         if (validItems.length === 0) {
             toast.error("Please add at least one product to the bill");
@@ -1010,7 +1018,7 @@ const PurchasesTab = () => {
 
     const edit = (b) => {
         setEditingId(b._id);
-        setForm({ supplierId: b.supplier?._id || b.supplier, billNo: b.billNo, amountPaid: b.amountPaid, paymentMethod: b.paymentMethod || "CASH" });
+        setForm({ supplierId: b.supplier?._id || b.supplier || "", billNo: b.billNo, amountPaid: b.amountPaid, paymentMethod: b.paymentMethod || "CASH" });
         setLines(b.items.map((i) => {
             return {
                 productId: i.product?._id || i.product,
@@ -1027,7 +1035,7 @@ const PurchasesTab = () => {
     const submitReturn = async () => {
         try {
             await businessApi.createPurchaseReturn({
-                supplierId: ret.supplierId, purchaseBillId: ret.billId, reason: ret.reason,
+                supplierId: ret.supplierId || null, purchaseBillId: ret.billId, reason: ret.reason,
                 items: [{ productId: ret.productId, variantSku: ret.variantSku, quantity: Number(ret.quantity), cost: Number(ret.cost) }],
             });
             toast.success("Purchase return recorded — stock reduced");
@@ -1053,10 +1061,10 @@ const PurchasesTab = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Select Supplier *</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Supplier (optional)</label>
                         <div className="flex items-center gap-1.5">
                             <select className={inputCls} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
-                                <option value="">— Choose supplier —</option>
+                                <option value="">— No supplier —</option>
                                 {suppliers.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
                             </select>
                             <button
@@ -1093,10 +1101,10 @@ const PurchasesTab = () => {
                     </div>
 
                     {!hasSupplier && (
-                        <div className="p-3 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-start gap-2">
-                            <HiOutlineExclamationTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                            <p className="text-[11px] text-amber-800 leading-relaxed">
-                                Please select a supplier above before saving or confirming this purchase bill.
+                        <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl flex items-start gap-2">
+                            <HiOutlineExclamationTriangle className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-slate-600 leading-relaxed">
+                                No supplier selected — the bill will still add stock and record what you paid, but no supplier balance (amount due) is tracked.
                             </p>
                         </div>
                     )}
@@ -1263,7 +1271,7 @@ const PurchasesTab = () => {
                     ) : (
                         <>
                             <button className={ghostBtn} disabled={busy} onClick={() => save(false)}>Save Draft</button>
-                            <button className={btnCls} disabled={busy || !form.supplierId} onClick={() => save(true)}>
+                            <button className={btnCls} disabled={busy} onClick={() => save(true)}>
                                 <HiOutlineCheckCircle className="h-4 w-4" /> Save & Confirm (Adds Stock)
                             </button>
                         </>
@@ -1305,7 +1313,7 @@ const PurchasesTab = () => {
                         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-black text-slate-900">#{b.billNo || "NO-NUMBER"}</span>
-                                <span className="text-slate-600 font-medium">· {b.supplier?.name}</span>
+                                <span className="text-slate-600 font-medium">· {b.supplier?.name || "No supplier"}</span>
                                 <span className="text-slate-400 text-xs">({new Date(b.billDate).toLocaleDateString("en-IN")})</span>
                             </div>
                             <span className={cn(
@@ -1421,7 +1429,7 @@ const PurchasesTab = () => {
                             <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-slate-200">
                                 <div>
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supplier / Vendor Details</span>
-                                    <h4 className="text-base font-black text-slate-900 mt-0.5">{invoiceBill.supplier?.name || "Supplier"}</h4>
+                                    <h4 className="text-base font-black text-slate-900 mt-0.5">{invoiceBill.supplier?.name || "No supplier"}</h4>
                                     {invoiceBill.supplier?.phone && <p className="text-slate-600 mt-0.5 font-medium">Phone: {invoiceBill.supplier.phone}</p>}
                                     {invoiceBill.supplier?.gstin && <p className="text-slate-600 font-medium">GSTIN: {invoiceBill.supplier.gstin}</p>}
                                     {invoiceBill.supplier?.address && <p className="text-slate-500 mt-0.5 max-w-xs">{invoiceBill.supplier.address}</p>}

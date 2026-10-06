@@ -15,10 +15,34 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@shared/components/ui/Toast';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { formatAmount } from "@shared/utils/currency";
+import { customerApi } from "../services/customerApi";
 
 const CartPage = () => {
     const { cart, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
     const { showToast } = useToast();
+    const [deliveryQuote, setDeliveryQuote] = useState(null);
+    const cartProductKey = [...new Set((cart || []).map((item) => String(item.id || "")).filter(Boolean))].sort().join(",");
+
+    // Final delivery fee/time = global + product values, worked out by the server.
+    useEffect(() => {
+        if (!cartProductKey) {
+            setDeliveryQuote(null);
+            return;
+        }
+        let cancelled = false;
+        customerApi
+            .getDeliveryQuote(cartProductKey.split(","))
+            .then((res) => {
+                if (!cancelled) setDeliveryQuote(res.data?.result || null);
+            })
+            .catch(() => {
+                if (!cancelled) setDeliveryQuote(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [cartProductKey]);
+    const deliveryFee = Number(deliveryQuote?.deliveryFee || 0);
     const itemCount = cart.reduce((count, item) => count + item.quantity, 0);
     const [emptyBoxData, setEmptyBoxData] = useState(null);
 
@@ -175,12 +199,20 @@ const CartPage = () => {
                                             <span className="font-bold text-white">₹{formatAmount(cartTotal)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm text-white/75">
-                                            <span>Delivery Fee</span>
-                                            <span className="font-bold text-brand-300">FREE</span>
+                                            <span>Delivery Fee{deliveryQuote?.estimated && deliveryFee > 0 ? " (from)" : ""}</span>
+                                            <span className="font-bold text-brand-300" data-testid="cart-delivery-fee">
+                                                {!deliveryQuote ? "—" : deliveryQuote.isFreeDelivery ? "FREE" : '₹' + formatAmount(deliveryFee)}
+                                            </span>
                                         </div>
+                                        {deliveryQuote?.deliveryTime && (
+                                            <div className="flex justify-between text-sm text-white/75">
+                                                <span>Estimated Delivery</span>
+                                                <span className="font-bold text-white" data-testid="cart-delivery-time">{deliveryQuote.deliveryTime}</span>
+                                            </div>
+                                        )}
                                         <div className="border-t border-white/10 pt-4 flex items-center justify-between">
                                             <span className="text-base font-bold text-white/85">Total Amount</span>
-                                            <span className="text-3xl font-black tracking-tight text-brand-300">₹{formatAmount(cartTotal)}</span>
+                                            <span className="text-3xl font-black tracking-tight text-brand-300">₹{formatAmount(cartTotal + deliveryFee)}</span>
                                         </div>
                                     </div>
 

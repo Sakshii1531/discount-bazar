@@ -20,6 +20,12 @@ import {
   roundCurrency,
 } from "../../utils/money.js";
 import { getOrCreateFinanceSettings } from "./financeSettingsService.js";
+import {
+  getGlobalDeliveryTimeMinutes,
+  quoteCartProductDelivery,
+  toDeliveryFee,
+  toDeliveryMinutes,
+} from "../deliveryQuoteService.js";
 
 function toObjectIdString(value) {
   if (!value) return "";
@@ -321,7 +327,7 @@ export async function hydrateOrderItems(
     .filter(Boolean);
 
   const productQuery = Product.find({ _id: { $in: productIds } })
-    .select("_id name salePrice price mainImage headerId sellerId status approvalStatus variants returnPolicy")
+    .select("_id name salePrice price mainImage headerId sellerId status approvalStatus variants returnPolicy productDeliveryFee productDeliveryTimeMinutes")
     .lean();
   if (session) productQuery.session(session);
   const products = await productQuery;
@@ -384,6 +390,8 @@ export async function hydrateOrderItems(
       sellerId: String(product.sellerId),
       variantSku: rawVariantSku || "",
       variantName: resolvedVariant ? String(resolvedVariant?.name || "").trim() : "",
+      productDeliveryFee: toDeliveryFee(product.productDeliveryFee),
+      productDeliveryTimeMinutes: toDeliveryMinutes(product.productDeliveryTimeMinutes),
       returnPolicy: {
         isReturnable: Boolean(product.returnPolicy?.isReturnable ?? false),
         returnWindowDays: Number(product.returnPolicy?.returnWindowDays ?? 0),
@@ -473,6 +481,8 @@ export async function generateOrderPaymentBreakdown({
       appliedCommissionType: commission.appliedCommissionType,
       appliedCommissionValue: commission.appliedCommissionValue,
       appliedCommissionFixedRule: commission.appliedFixedRule,
+      productDeliveryFee: toDeliveryFee(item.productDeliveryFee),
+      productDeliveryTimeMinutes: toDeliveryMinutes(item.productDeliveryTimeMinutes),
     };
   });
 
@@ -480,7 +490,16 @@ export async function generateOrderPaymentBreakdown({
     handlingFeeStrategy: effectiveHandlingStrategy,
     categoryById,
   });
-  const delivery = calculateCustomerDeliveryFee(distanceKm, effectiveSettings);
+  const globalDelivery = calculateCustomerDeliveryFee(distanceKm, effectiveSettings);
+  // Global (admin) fee + each distinct product's own fee; time = slowest product.
+  const productDelivery = quoteCartProductDelivery(normalizedItems, effectiveSettings);
+  const delivery = {
+    ...globalDelivery,
+    globalDeliveryFee: globalDelivery.deliveryFeeCharged,
+    deliveryFeeCharged: roundCurrency(
+      globalDelivery.deliveryFeeCharged + productDelivery.productDeliveryFeeTotal,
+    ),
+  };
   const rider = calculateRiderPayout(distanceKm, effectiveSettings);
 
   const normalizedDiscount = roundCurrency(discountTotal || 0);
@@ -551,6 +570,13 @@ export async function generateOrderPaymentBreakdown({
     currency: "INR",
     productSubtotal,
     deliveryFeeCharged: delivery.deliveryFeeCharged,
+    // Snapshot of how the delivery fee/time were built (kept on the order).
+    globalDeliveryFee: delivery.globalDeliveryFee,
+    productDeliveryFeeTotal: productDelivery.productDeliveryFeeTotal,
+    globalDeliveryTimeMinutes: getGlobalDeliveryTimeMinutes(effectiveSettings),
+    deliveryTimeMinutes: productDelivery.deliveryTimeMinutes,
+    deliveryTimeLabel: productDelivery.deliveryTimeLabel,
+    isFreeDelivery: delivery.deliveryFeeCharged === 0,
     handlingFeeCharged: handling.handlingFeeCharged,
     tipTotal: normalizedTip,
     discountTotal: normalizedDiscount,

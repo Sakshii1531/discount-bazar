@@ -29,9 +29,13 @@ const OfferSections = ({ sections, noServiceData }) => {
               originalPrice: p.price ?? p.salePrice,
               weight: p.weight,
               deliveryTime: p.deliveryTime,
+              finalDeliveryFee: p.finalDeliveryFee,
+              isFreeDelivery: p.isFreeDelivery,
               variants: p.variants,
             }));
 
+          // An admin-uploaded side image takes this spot; otherwise the first product/seller photo.
+          const customSideImage = String(section.sideImageUrl || "").trim();
           const sectionSellers = (section.sellerIds || [])
             .filter((s) => typeof s === "object" && s !== null)
             .map((s) => ({
@@ -78,7 +82,15 @@ const OfferSections = ({ sections, noServiceData }) => {
                   )}
                 </div>
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl flex-shrink-0 shadow-[0_16px_30px_rgba(0,0,0,0.25)] border border-black/10 overflow-hidden relative bg-black/10 transition-transform hover:-translate-y-1 hover:rotate-[-4deg] hover:scale-105">
-                  {(sectionProducts[0]?.image || sectionSellers[0]?.image) ? (
+                  {customSideImage ? (
+                    <img
+                      src={applyCloudinaryTransform(customSideImage, "f_auto,q_auto,w_200")}
+                      alt={section.title}
+                      loading="lazy"
+                      data-testid="offer-section-side-image"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (sectionProducts[0]?.image || sectionSellers[0]?.image) ? (
                     <>
                       <img
                         src={applyCloudinaryTransform(sectionProducts[0]?.image || sectionSellers[0]?.image, "f_auto,q_auto,w_150")}
@@ -100,12 +112,14 @@ const OfferSections = ({ sections, noServiceData }) => {
                     </div>
                   )}
 
-                  <div className="relative z-10 flex items-center justify-center h-full">
-                    <Sparkles
-                      className="text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]"
-                      size={30}
-                    />
-                  </div>
+                  {!customSideImage && (
+                    <div className="relative z-10 flex items-center justify-center h-full">
+                      <Sparkles
+                        className="text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]"
+                        size={30}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="px-4 pt-4 md:px-5 md:pt-5 pb-1">

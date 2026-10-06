@@ -6,6 +6,7 @@ import {
   HiOutlineXMark,
 } from "react-icons/hi2";
 import { adminApi } from "../services/adminApi";
+import BannerLinkPicker, { isBannerLinkComplete } from "../components/BannerLinkPicker";
 import Card from "@shared/components/ui/Card";
 import Modal from "@shared/components/ui/Modal";
 import { useToast } from "@shared/components/ui/Toast";
@@ -164,14 +165,23 @@ export default function HeroCategoriesPerPage() {
   const handleSave = async () => {
     const items = formBanners.filter((b) => b.imageUrl).map((b) => ({
       imageUrl: b.imageUrl,
-      title: b.title || "",
-      subtitle: b.subtitle || "",
+      title: (b.title || "").trim(),
+      subtitle: (b.subtitle || "").trim(),
       linkType: b.linkType || "none",
-      linkValue: b.linkValue || "",
+      linkValue: (b.linkValue || "").trim(),
       status: b.status || "active",
     }));
 
     if (!editingRow) return;
+    if (formBanners.some((b) => b.isUploading)) {
+      showToast("Please wait for all banner images to finish uploading", "warning");
+      return;
+    }
+    const badLink = items.findIndex((b) => !isBannerLinkComplete(b));
+    if (badLink >= 0) {
+      showToast(`Banner ${badLink + 1}: choose where the banner should open (or pick "No link")`, "warning");
+      return;
+    }
     setSaving(true);
     try {
       await adminApi.setHeroConfig({
@@ -368,13 +378,19 @@ export default function HeroCategoriesPerPage() {
                               value={item.title || ""}
                               onChange={(e) => updateBannerItem(idx, { title: e.target.value })}
                               className="w-full p-2 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none"
-                              placeholder="Title (optional)"
+                              placeholder="Title (optional, shown on the banner)"
                             />
                             <input
                               value={item.subtitle || ""}
                               onChange={(e) => updateBannerItem(idx, { subtitle: e.target.value })}
                               className="w-full p-2 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none"
-                              placeholder="Subtitle (optional)"
+                              placeholder="Subtitle (optional, shown under the title)"
+                            />
+                            <BannerLinkPicker
+                              tree={headers}
+                              linkType={item.linkType}
+                              linkValue={item.linkValue}
+                              onChange={(patch) => updateBannerItem(idx, patch)}
                             />
                           </div>
                         </div>

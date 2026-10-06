@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { useInViewAnimation } from "@/core/hooks/useInViewAnimation";
 import { Sparkles, Heart, Snowflake, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -175,6 +175,7 @@ const Home = () => {
   const { currentLocation } = useLocation();
   const { settings } = useSettings();
   const navigate = useNavigate();
+  const routerLocation = useRouterLocation();
   const quickCatsRef = useRef(null);
   const cachedHomePageData = getCachedHomePageData(currentLocation);
 
@@ -195,6 +196,17 @@ const Home = () => {
 
   const [categories, setCategories] = useState(() => cachedHomePageData?.categories || [ALL_CATEGORY]);
   const [activeCategory, setActiveCategory] = useState(() => cachedHomePageData?.activeCategory || ALL_CATEGORY);
+
+  // A banner linked to a header opens home with that header tab selected.
+  const linkedHeaderId = routerLocation.state?.activeHeaderId;
+  useEffect(() => {
+    if (!linkedHeaderId) return;
+    const match = categories.find((cat) => cat._id === linkedHeaderId);
+    if (!match) return;
+    setActiveCategory(match);
+    navigate(routerLocation.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedHeaderId, categories]);
   const [products, setProducts] = useState(() => cachedHomePageData?.products || []);
   const productsRef = useRef(cachedHomePageData?.products || []);
   const [quickCategories, setQuickCategories] = useState(() => cachedHomePageData?.quickCategories || []);

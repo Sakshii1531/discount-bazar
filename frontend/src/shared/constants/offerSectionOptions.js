@@ -50,7 +50,7 @@ export const SIDE_IMAGE_OPTIONS = [
     key: "hair-care",
     label: "Hair Care",
     imageUrl:
-      "https://images.unsplash.com/photo-1522338242762-594f63bcf581?w=200&h=200&fit=crop",
+      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=200&h=200&fit=crop",
   },
   {
     key: "grocery",
@@ -87,6 +87,10 @@ export const SIDE_IMAGE_OPTIONS = [
 export const getSideImageByKey = (key) =>
   SIDE_IMAGE_OPTIONS.find((o) => o.key === key)?.imageUrl ||
   SIDE_IMAGE_OPTIONS[0].imageUrl;
+
+/** The admin's uploaded side image if there is one, otherwise the chosen preset. */
+export const getSectionSideImage = (section) =>
+  String(section?.sideImageUrl || "").trim() || getSideImageByKey(section?.sideImageKey);
 
 export const getBackgroundColorByValue = (value) =>
   value || BACKGROUND_COLOR_OPTIONS[0].value;

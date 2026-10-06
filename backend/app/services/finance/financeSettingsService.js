@@ -13,6 +13,8 @@ const DEFAULT_FINANCE_SETTINGS = {
   incrementalKmSurcharge: 10,
   deliveryPartnerRatePerKm: 5,
   fixedDeliveryFee: 30,
+  globalDeliveryTimeMinutes: 15,
+  zeroDeliveryTimeMessage: "Instant Delivery",
   handlingFeeStrategy: HANDLING_FEE_STRATEGY.HIGHEST_CATEGORY_FEE,
   globalTaxRate: 0,
   codEnabled: true,
@@ -52,6 +54,12 @@ export function normalizeFinanceSettings(raw = {}) {
     raw.fixedDeliveryFee ?? raw.baseDeliveryCharge ?? customerBaseDeliveryFee,
   );
 
+  const rawMinutes = Number(raw.globalDeliveryTimeMinutes ?? DEFAULT_FINANCE_SETTINGS.globalDeliveryTimeMinutes);
+  const globalDeliveryTimeMinutes =
+    Number.isFinite(rawMinutes) && rawMinutes > 0 ? Math.round(rawMinutes) : 0;
+  const zeroDeliveryTimeMessage =
+    String(raw.zeroDeliveryTimeMessage ?? "").trim() || DEFAULT_FINANCE_SETTINGS.zeroDeliveryTimeMessage;
+
   const handlingFeeStrategy =
     raw.handlingFeeStrategy || DEFAULT_FINANCE_SETTINGS.handlingFeeStrategy;
 
@@ -72,6 +80,8 @@ export function normalizeFinanceSettings(raw = {}) {
     deliveryPartnerRatePerKm,
     fleetCommissionRatePerKm: deliveryPartnerRatePerKm,
     fixedDeliveryFee,
+    globalDeliveryTimeMinutes,
+    zeroDeliveryTimeMessage,
     handlingFeeStrategy,
     globalTaxRate: Number.isFinite(Number(raw.globalTaxRate)) ? Math.max(Number(raw.globalTaxRate), 0) : 0,
     codEnabled: raw.codEnabled ?? DEFAULT_FINANCE_SETTINGS.codEnabled,
@@ -105,10 +115,23 @@ export async function getOrCreateFinanceSettings({ session } = {}) {
 }
 
 export async function updateDeliveryFinanceSettings(payload, { session } = {}) {
-  const normalized = normalizeFinanceSettings(payload || {});
   const query = {};
   const options = { upsert: true, new: true };
   if (session) options.session = session;
+  // Merge with what is stored so fields left out of a partial update keep their value.
+  const current = await Setting.findOne(query, null, session ? { session } : {}).lean();
+  const incoming = { ...(payload || {}) };
+  // Legacy alias keys in the request take priority over the stored canonical keys.
+  if (incoming.pricingMode != null && incoming.deliveryPricingMode == null) {
+    incoming.deliveryPricingMode = incoming.pricingMode;
+  }
+  if (incoming.baseDeliveryCharge != null && incoming.customerBaseDeliveryFee == null) {
+    incoming.customerBaseDeliveryFee = incoming.baseDeliveryCharge;
+  }
+  if (incoming.fleetCommissionRatePerKm != null && incoming.deliveryPartnerRatePerKm == null) {
+    incoming.deliveryPartnerRatePerKm = incoming.fleetCommissionRatePerKm;
+  }
+  const normalized = normalizeFinanceSettings({ ...(current || {}), ...incoming });
 
   const updated = await Setting.findOneAndUpdate(query, { $set: normalized }, options);
   return normalizeFinanceSettings(updated.toObject?.() || updated);

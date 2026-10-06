@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { adminApi } from '../services/adminApi';
+import BannerLinkPicker, { isBannerLinkComplete } from '../components/BannerLinkPicker';
 
 const DISPLAY_TYPES = [
     { id: 'banners', label: 'Banners' },
@@ -237,13 +238,18 @@ const ContentManager = () => {
                 showToast('Please add at least one banner image', 'warning');
                 return;
             }
+            const badLink = items.findIndex(b => !isBannerLinkComplete(b));
+            if (badLink >= 0) {
+                showToast(`Banner ${badLink + 1}: choose where the banner should open (or pick "No link")`, 'warning');
+                return;
+            }
             config = {
                 items: items.map(b => ({
                     imageUrl: b.imageUrl,
-                    title: b.title,
-                    subtitle: b.subtitle,
+                    title: b.title?.trim() || '',
+                    subtitle: b.subtitle?.trim() || '',
                     linkType: b.linkType || 'none',
-                    linkValue: b.linkValue || '',
+                    linkValue: (b.linkValue || '').trim(),
                     status: b.status || 'active',
                 })),
             };
@@ -654,34 +660,20 @@ const ContentManager = () => {
                                                     value={item.title || ''}
                                                     onChange={(e) => updateBannerItem(idx, { title: e.target.value })}
                                                     className="w-full p-2.5 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none"
-                                                    placeholder="Banner title (optional)"
+                                                    placeholder="Banner title (optional, shown on the banner)"
                                                 />
                                                 <input
                                                     value={item.subtitle || ''}
                                                     onChange={(e) => updateBannerItem(idx, { subtitle: e.target.value })}
                                                     className="w-full p-2.5 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none"
-                                                    placeholder="Subtitle (optional)"
+                                                    placeholder="Subtitle (optional, shown under the title)"
                                                 />
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <select
-                                                        value={item.linkType || 'none'}
-                                                        onChange={(e) => updateBannerItem(idx, { linkType: e.target.value })}
-                                                        className="w-full p-2.5 bg-slate-50 rounded-xl text-xs font-black outline-none"
-                                                    >
-                                                        <option value="none">No link</option>
-                                                        <option value="header">Header</option>
-                                                        <option value="category">Category</option>
-                                                        <option value="subcategory">Subcategory</option>
-                                                        <option value="product">Product</option>
-                                                        <option value="url">External URL</option>
-                                                    </select>
-                                                    <input
-                                                        value={item.linkValue || ''}
-                                                        onChange={(e) => updateBannerItem(idx, { linkValue: e.target.value })}
-                                                        className="w-full p-2.5 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none"
-                                                        placeholder={item.linkType === 'url' ? "https://..." : "Slug / ID"}
-                                                    />
-                                                </div>
+                                                <BannerLinkPicker
+                                                    tree={headerCategories}
+                                                    linkType={item.linkType}
+                                                    linkValue={item.linkValue}
+                                                    onChange={(patch) => updateBannerItem(idx, patch)}
+                                                />
                                             </div>
                                             {formData.bannerItems.length > 1 && (
                                                 <button

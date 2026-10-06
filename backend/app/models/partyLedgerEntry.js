@@ -8,7 +8,9 @@ const partyLedgerEntrySchema = new mongoose.Schema(
   {
     seller: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true, index: true },
     partyType: { type: String, enum: ["CUSTOMER", "SUPPLIER"], required: true },
-    party: { type: mongoose.Schema.Types.ObjectId, required: true },
+    // null only for supplier payments on purchases recorded without a supplier
+    // (kept so the cash book still shows the money that went out).
+    party: { type: mongoose.Schema.Types.ObjectId, default: null },
     kind: {
       type: String,
       enum: ["SALE", "SALE_RETURN", "PURCHASE", "PURCHASE_RETURN", "PAYMENT"],

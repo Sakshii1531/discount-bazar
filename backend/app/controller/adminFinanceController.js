@@ -16,6 +16,7 @@ import {
   updateDeliveryFinanceSettings,
 } from "../services/finance/financeSettingsService.js";
 import { createFinanceAuditLog } from "../services/finance/auditLogService.js";
+import { invalidate } from "../services/cacheService.js";
 import {
   financeLedgerQuerySchema,
   payoutProcessSchema,
@@ -170,6 +171,8 @@ export const updateDeliverySettingsController = async (req, res) => {
       return handleResponse(res, 400, validated.message);
     }
     const updated = await updateDeliveryFinanceSettings(validated.value);
+    // Public /settings (used by storefront and seller previews) is cached.
+    await invalidate("cache:platform:settings:*").catch(() => {});
     await createFinanceAuditLog({
       action: FINANCE_AUDIT_ACTION.DELIVERY_SETTINGS_UPDATED,
       actorType: OWNER_TYPE.ADMIN,

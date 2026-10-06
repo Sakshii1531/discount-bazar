@@ -4,6 +4,7 @@ import Seller from "../models/seller.js";
 import handleResponse from "../utils/helper.js";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
+import { normalizeFinanceSettings } from "../services/finance/financeSettingsService.js";
 import {
   DEFAULT_PRODUCT_APPROVAL_CONFIG,
   normalizeProductApprovalConfig,
@@ -51,6 +52,8 @@ const ALLOWED_KEYS = [
   "deliveryPartnerRatePerKm",
   "fleetCommissionRatePerKm",
   "fixedDeliveryFee",
+  "globalDeliveryTimeMinutes",
+  "zeroDeliveryTimeMessage",
   "handlingFeeStrategy",
   "globalTaxRate",
   "codEnabled",
@@ -128,6 +131,8 @@ const updateSettingsSchema = Joi.object({
   deliveryPartnerRatePerKm: Joi.number().min(0),
   fleetCommissionRatePerKm: Joi.number().min(0),
   fixedDeliveryFee: Joi.number().min(0),
+  globalDeliveryTimeMinutes: Joi.number().integer().min(0).max(10080),
+  zeroDeliveryTimeMessage: Joi.string().trim().max(60).allow(""),
   handlingFeeStrategy: Joi.string().valid(
     "highest_category_fee",
     "sum_of_category_fees",
@@ -164,7 +169,7 @@ export const getPublicSettings = async (req, res) => {
       async () => {
         const existing = await Setting.findOne(filter)
           .select(
-            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee handlingFeeStrategy codEnabled onlineEnabled lowStockAlertsEnabled posCommissionEnabled posCouponsEnabled productApproval createdAt",
+            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee globalDeliveryTimeMinutes zeroDeliveryTimeMessage handlingFeeStrategy codEnabled onlineEnabled lowStockAlertsEnabled posCommissionEnabled posCouponsEnabled productApproval createdAt",
           )
           .lean();
         return existing || null;
@@ -179,6 +184,11 @@ export const getPublicSettings = async (req, res) => {
     }
 
     settings.productApproval = normalizeProductApprovalConfig(settings || {});
+    // Same delivery values checkout uses (defaults filled in), so storefront and
+    // seller previews match what the customer is charged.
+    const finance = normalizeFinanceSettings(settings);
+    settings.globalDeliveryTimeMinutes = finance.globalDeliveryTimeMinutes;
+    settings.zeroDeliveryTimeMessage = finance.zeroDeliveryTimeMessage;
 
     return handleResponse(res, 200, "Settings fetched successfully", settings);
   } catch (error) {

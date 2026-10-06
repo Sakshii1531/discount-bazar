@@ -1,10 +1,16 @@
 import OfferSection from "../models/offerSection.js";
+import { decorateProductsWithDelivery } from "../services/deliveryQuoteService.js";
+import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
 import handleResponse from "../utils/helper.js";
 import {
   parseCustomerCoordinates,
   getNearbySellerIdsForCustomer,
 } from "../services/customerVisibilityService.js";
-import { buildKey, getOrSet, getTTL } from "../services/cacheService.js";
+import { buildKey, delPattern, getOrSet, getTTL } from "../services/cacheService.js";
+
+// Storefront offer sections are cached per location; clear them after admin changes.
+const clearPublicOfferSectionCache = () =>
+  delPattern(`${buildKey("offersections", "public")}:*`).catch(() => 0);
 import { getCustomerVisibleFilter } from "../services/productModerationService.js";
 
 export const getPublicOfferSections = async (req, res) => {
@@ -41,7 +47,7 @@ export const getPublicOfferSections = async (req, res) => {
           .populate("sellerIds", "shopName name logo")
           .populate({
             path: "productIds",
-            select: "name slug price salePrice mainImage stock unit sellerId status approvalStatus weight variants",
+            select: "name slug price salePrice mainImage stock unit sellerId status approvalStatus weight variants productDeliveryFee productDeliveryTimeMinutes",
             match: {
               status: "active",
               ...getCustomerVisibleFilter(),
@@ -74,7 +80,15 @@ export const getPublicOfferSections = async (req, res) => {
       getTTL("homepage"),
     );
 
-    return handleResponse(res, 200, "Offer sections fetched", filteredSections);
+    // Final delivery fee/time added after the cache so admin/seller changes show at once.
+    const deliverySettings = await getOrCreateFinanceSettings();
+    const withDelivery = await Promise.all(
+      (filteredSections || []).map(async (section) => ({
+        ...section,
+        productIds: await decorateProductsWithDelivery(section.productIds || [], deliverySettings),
+      })),
+    );
+    return handleResponse(res, 200, "Offer sections fetched", withDelivery);
   } catch (error) {
     return handleResponse(res, 500, error.message);
   }
@@ -99,12 +113,23 @@ export const getAdminOfferSections = async (req, res) => {
   }
 };
 
+// Empty clears the custom image; otherwise it must be an http(s) URL.
+function parseSideImageUrl(value) {
+  const url = String(value ?? "").trim();
+  if (!url) return { url: "" };
+  if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) {
+    return { error: "Side image must be a valid image URL" };
+  }
+  return { url };
+}
+
 export const createOfferSection = async (req, res) => {
   try {
     const {
       title,
       backgroundColor,
       sideImageKey,
+      sideImageUrl,
       categoryIds = [],
       sellerIds = [],
       productIds = [],
@@ -120,11 +145,15 @@ export const createOfferSection = async (req, res) => {
       return handleResponse(res, 400, "At least one category is required");
     }
 
+    const side = parseSideImageUrl(sideImageUrl);
+    if (side.error) return handleResponse(res, 400, side.error);
+
     const count = await OfferSection.countDocuments({});
     const section = await OfferSection.create({
       title: title.trim(),
       backgroundColor: backgroundColor || "#FCD34D",
       sideImageKey: sideImageKey || "hair-care",
+      sideImageUrl: side.url,
       categoryIds: catIds,
       sellerIds: Array.isArray(sellerIds) ? sellerIds.filter(Boolean) : [],
       productIds: Array.isArray(productIds) ? productIds : [],
@@ -132,6 +161,7 @@ export const createOfferSection = async (req, res) => {
       status: status || "active",
     });
 
+    await clearPublicOfferSectionCache();
     return handleResponse(res, 201, "Offer section created", section);
   } catch (error) {
     return handleResponse(res, 400, error.message);
@@ -150,6 +180,11 @@ export const updateOfferSection = async (req, res) => {
       section.backgroundColor = payload.backgroundColor;
     if (payload.sideImageKey !== undefined)
       section.sideImageKey = payload.sideImageKey;
+    if (payload.sideImageUrl !== undefined) {
+      const side = parseSideImageUrl(payload.sideImageUrl);
+      if (side.error) return handleResponse(res, 400, side.error);
+      section.sideImageUrl = side.url;
+    }
     if (Array.isArray(payload.categoryIds))
       section.categoryIds = payload.categoryIds.filter(Boolean);
     if (Array.isArray(payload.sellerIds))
@@ -159,6 +194,7 @@ export const updateOfferSection = async (req, res) => {
     if (payload.status !== undefined) section.status = payload.status;
 
     await section.save();
+    await clearPublicOfferSectionCache();
     return handleResponse(res, 200, "Offer section updated", section);
   } catch (error) {
     return handleResponse(res, 400, error.message);
@@ -170,6 +206,7 @@ export const deleteOfferSection = async (req, res) => {
     const { id } = req.params;
     const deleted = await OfferSection.findByIdAndDelete(id);
     if (!deleted) return handleResponse(res, 404, "Offer section not found");
+    await clearPublicOfferSectionCache();
     return handleResponse(res, 200, "Offer section deleted");
   } catch (error) {
     return handleResponse(res, 500, error.message);
@@ -191,6 +228,7 @@ export const reorderOfferSections = async (req, res) => {
         },
       }));
     if (bulkOps.length) await OfferSection.bulkWrite(bulkOps);
+    await clearPublicOfferSectionCache();
     return handleResponse(res, 200, "Sections reordered");
   } catch (error) {
     return handleResponse(res, 500, error.message);

@@ -66,6 +66,8 @@ export const customerApi = {
 
   // Orders
   // Explicit timeout so checkout never waits forever if the server blocks (e.g. Redis/Bull).
+  // Final delivery fee/time (global + product) for cart products, before an address is chosen.
+  getDeliveryQuote: (productIds) => axiosInstance.post("/products/delivery-quote", { productIds }),
   checkoutPreview: (data) =>
     axiosInstance.post("/orders/checkout/preview", data, { timeout: 120000 }),
   createOrder: (data, idempotencyKey) =>
