@@ -236,6 +236,15 @@ export const updateSettings = async (req, res) => {
       return handleResponse(res, 200, "Settings unchanged", result);
     }
 
+    if (value.codEnabled === false || value.onlineEnabled === false) {
+      const current = (await Setting.findOne(filter).select("codEnabled onlineEnabled").lean()) || {};
+      const codOn = value.codEnabled ?? current.codEnabled ?? true;
+      const onlineOn = value.onlineEnabled ?? current.onlineEnabled ?? true;
+      if (codOn === false && onlineOn === false) {
+        return handleResponse(res, 400, "Keep at least one payment method (Online or Cash on Delivery) enabled");
+      }
+    }
+
     const settings = await Setting.findOneAndUpdate(
       filter,
       { $set: toSet },

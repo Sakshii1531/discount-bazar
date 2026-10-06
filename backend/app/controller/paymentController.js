@@ -1,4 +1,5 @@
 import handleResponse from "../utils/helper.js";
+import { assertPaymentModeEnabled } from "../services/orderPlacementService.js";
 import {
   createPaymentOrderForOrderRef,
   verifyPhonePePaymentStatus,
@@ -28,6 +29,8 @@ function resolvePaymentErrorMessage(error) {
 
 export const createPaymentOrder = async (req, res) => {
   try {
+    // Admin can switch online payment off; no new online payments then.
+    await assertPaymentModeEnabled("ONLINE");
     const payload = validateSchema(createPaymentOrderSchema, req.body || {});
     const result = await createPaymentOrderForOrderRef({
       orderRef: payload.orderRef || payload.orderId,

@@ -170,6 +170,13 @@ export const updateDeliverySettingsController = async (req, res) => {
     if (!validated.isValid) {
       return handleResponse(res, 400, validated.message);
     }
+    // Customers must always have a way to pay.
+    const current = await getOrCreateFinanceSettings();
+    const codOn = validated.value.codEnabled ?? current.codEnabled;
+    const onlineOn = validated.value.onlineEnabled ?? current.onlineEnabled;
+    if (codOn === false && onlineOn === false) {
+      return handleResponse(res, 400, "Keep at least one payment method (Online or Cash on Delivery) enabled");
+    }
     const updated = await updateDeliveryFinanceSettings(validated.value);
     // Public /settings (used by storefront and seller previews) is cached.
     await invalidate("cache:platform:settings:*").catch(() => {});

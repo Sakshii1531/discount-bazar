@@ -101,7 +101,14 @@ const CheckoutPage = () => {
     useWishlist();
   const { showToast } = useToast();
   const { user, isAuthenticated } = useAuth();
-  const { settings } = useSettings();
+  const { settings, refetch: refetchSettings } = useSettings();
+
+  // Payment methods can be switched on/off by the admin at any time; load the
+  // latest settings when checkout opens instead of relying on the app-start copy.
+  useEffect(() => {
+    refetchSettings?.({ forceRefresh: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const wishlistSectionRef = useRef(null);
   const wishlistFetchedRef = useRef(false);

@@ -11,7 +11,9 @@ import {
     History,
     Sparkles,
     RefreshCw,
-    Clock
+    Clock,
+    CreditCard,
+    Banknote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@shared/components/ui/Toast';
@@ -121,7 +123,7 @@ const BillingCharges = () => {
             showToast('Delivery finance settings updated successfully', 'success');
         } catch (error) {
             console.error('Failed to update platform settings', error);
-            showToast('Failed to update fees settings', 'error');
+            showToast(error?.response?.data?.message || 'Failed to update fees settings', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -190,6 +192,62 @@ const BillingCharges = () => {
 
             {/* Main Configuration Content */}
             <div className="max-w-5xl mx-auto space-y-6 text-left">
+                {/* 0. Payment methods customers can use at checkout */}
+                <Card className="border border-slate-200/80 shadow-sm bg-white rounded-2xl overflow-hidden transition-all">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
+                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200/60">
+                            <CreditCard className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900 tracking-tight">Payment Methods</h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                Choose which payment options customers see at checkout. At least one must stay on.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[
+                            { key: 'onlineEnabled', label: 'Online Payment', hint: 'UPI / Cards / NetBanking', Icon: CreditCard },
+                            { key: 'codEnabled', label: 'Cash on Delivery', hint: 'Customer pays the rider on delivery', Icon: Banknote },
+                        ].map(({ key, label, hint, Icon }) => {
+                            const on = config[key] !== false;
+                            const other = key === 'onlineEnabled' ? 'codEnabled' : 'onlineEnabled';
+                            return (
+                                <div key={key} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4">
+                                    <div className="flex items-center gap-3">
+                                        <Icon className={cn("h-5 w-5", on ? "text-emerald-600" : "text-slate-300")} />
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">{label}</p>
+                                            <p className="text-xs text-slate-500">{on ? hint : 'Hidden from customers'}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={on}
+                                        aria-label={`${label} ${on ? 'enabled' : 'disabled'}`}
+                                        data-testid={`toggle-${key}`}
+                                        onClick={() => {
+                                            if (on && config[other] === false) {
+                                                showToast('Keep at least one payment method enabled', 'warning');
+                                                return;
+                                            }
+                                            setConfig((prev) => ({ ...prev, [key]: !on }));
+                                        }}
+                                        className={cn(
+                                            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                                            on ? "bg-emerald-500" : "bg-slate-300"
+                                        )}
+                                    >
+                                        <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform", on ? "translate-x-5" : "translate-x-0.5")} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                        <p className="md:col-span-2 text-xs text-slate-400">Click “Save Changes” at the top to apply.</p>
+                    </div>
+                </Card>
+
                 {/* 1. Main Platform Charges */}
                 <Card className="border border-slate-200/80 shadow-sm bg-white rounded-2xl overflow-hidden transition-all">
                     <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">

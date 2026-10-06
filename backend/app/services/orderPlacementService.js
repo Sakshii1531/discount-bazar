@@ -48,8 +48,28 @@ import { emitNotificationEvent } from "../modules/notifications/notification.emi
 import { emitNewOrderToSeller, emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import * as logger from "./logger.js";
+import { getOrCreateFinanceSettings } from "./finance/financeSettingsService.js";
+
+/** Rejects a payment method the admin has switched off (Fees & Charges). */
+export async function assertPaymentModeEnabled(paymentMode) {
+  const settings = await getOrCreateFinanceSettings();
+  if (paymentMode === "ONLINE" && settings.onlineEnabled === false) {
+    const error = new Error("Online payment is currently unavailable. Please choose Cash on Delivery.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (paymentMode === "COD" && settings.codEnabled === false) {
+    const error = new Error("Cash on Delivery is currently unavailable. Please pay online.");
+    error.statusCode = 400;
+    throw error;
+  }
+}
 
 const IDEMPOTENCY_RECORD_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isFullyWalletPayload(payload) {
+  return String(payload?.paymentMode || "").trim().toUpperCase() === "WALLET";
+}
 
 function normalizePaymentMode(raw) {
   const mode = String(raw || "COD").trim().toUpperCase();
@@ -358,6 +378,11 @@ export async function placeOrderAtomic({
       await storeIdempotencyResult(idempotencyKey, existingResult, normalizedPayload);
     }
     return { ...existingResult, duplicate: true };
+  }
+
+  // Wallet-only orders (fully covered) don't use either method.
+  if (!isFullyWalletPayload(normalizedPayload)) {
+    await assertPaymentModeEnabled(normalizePaymentMode(normalizedPayload.paymentMode));
   }
 
   const session = await mongoose.startSession();
