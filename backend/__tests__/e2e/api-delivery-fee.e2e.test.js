@@ -13,6 +13,7 @@ import { seedWorld } from "./helpers/world.js";
 import { AT_CUSTOMER } from "./helpers/flows.js";
 import Order from "../../app/models/order.js";
 import Product from "../../app/models/product.js";
+import * as fx from "./helpers/fixtures.js";
 
 jest.setTimeout(180000);
 
@@ -139,6 +140,27 @@ describe("customer sees final values", () => {
       deliveryTimeLabel: "35 mins",
       isFreeDelivery: false,
     });
+  });
+});
+
+describe("cart with several products that have their own delivery values", () => {
+  it("charges global + the highest product fee and global + the slowest product time", async () => {
+    // ₹20/10 min, ₹30/20 min, ₹40/30 min with global ₹10 / 15 min → ₹50 and 45 mins (not ₹100 / 75 mins)
+    const made = [];
+    for (const [fee, mins] of [[20, 10], [30, 20], [40, 30]]) {
+      made.push(await fx.createProduct(ctx.seller, ctx.tree, { productDeliveryFee: fee, productDeliveryTimeMinutes: mins }));
+    }
+    const res = await preview(made.map((p) => ({ product: String(p._id), quantity: 2 })));
+    expect(res.status).toBe(200);
+    expect(res.body.result.breakdown).toMatchObject({
+      deliveryFeeCharged: 50,
+      globalDeliveryFee: 10,
+      productDeliveryFeeTotal: 40,
+      deliveryTimeMinutes: 45,
+      deliveryTimeLabel: "45 mins",
+    });
+    const quote = await request(app).post("/api/products/delivery-quote").send({ productIds: made.map((p) => String(p._id)) });
+    expect(quote.body.result).toMatchObject({ deliveryFee: 50, deliveryTimeMinutes: 45 });
   });
 });
 

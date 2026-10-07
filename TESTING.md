@@ -201,7 +201,7 @@ Each fix has a regression test.
 - final value = global + product;
 - a total fee of 0 is free delivery;
 - a total time of 0 shows the admin's message;
-- in a cart, each product's fee is added once and the slowest time is used;
+- in a cart, the highest product fee and the slowest product time are used (plus the global values);
 - across sellers, fees add up and the delivery time is the slowest seller's.
 
 ## Disk space

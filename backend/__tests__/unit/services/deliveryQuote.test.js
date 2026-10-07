@@ -76,7 +76,20 @@ describe("quoteProductDelivery (global + product)", () => {
 });
 
 describe("cart rules", () => {
-  it("sums distinct products' fees once each and takes the slowest time", () => {
+  it("3 products ₹20/₹30/₹40 and 10/20/30 mins → ₹10 + ₹40 and 15 + 30 mins", () => {
+    const part = quoteCartProductDelivery(
+      [
+        { productId: "a", productDeliveryFee: 20, productDeliveryTimeMinutes: 10 },
+        { productId: "b", productDeliveryFee: 30, productDeliveryTimeMinutes: 20 },
+        { productId: "c", productDeliveryFee: 40, productDeliveryTimeMinutes: 30 },
+      ],
+      fixed(10, 15),
+    );
+    expect(10 + part.productDeliveryFeeTotal).toBe(50);
+    expect(part.deliveryTimeMinutes).toBe(45);
+  });
+
+  it("takes the highest product fee and the slowest time", () => {
     const part = quoteCartProductDelivery(
       [
         { productId: "a", productDeliveryFee: 20, productDeliveryTimeMinutes: 20 },
@@ -85,7 +98,7 @@ describe("cart rules", () => {
       ],
       fixed(10, 15),
     );
-    expect(part.productDeliveryFeeTotal).toBe(25);
+    expect(part.productDeliveryFeeTotal).toBe(20);
     expect(part.deliveryTimeMinutes).toBe(60);
     expect(part.deliveryTimeLabel).toBe("60 mins");
   });

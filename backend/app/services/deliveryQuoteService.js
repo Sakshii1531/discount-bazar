@@ -9,7 +9,7 @@
  * Product values come from the product: productDeliveryFee, productDeliveryTimeMinutes.
  *
  * Cart rule (per seller, because every seller ships separately):
- *   fee  = global fee + sum of each distinct product's fee
+ *   fee  = global fee + the highest product fee in the cart
  *   time = highest (global time + product time) among the products
  * A fee of 0 means free delivery. A time of 0 shows the admin's
  * zeroDeliveryTimeMessage (e.g. "Instant Delivery").
@@ -66,8 +66,8 @@ export function quoteProductDelivery(product = {}, settings = {}) {
 }
 
 /**
- * Product-level part of one seller's cart: the sum of distinct products'
- * fees (charged once per product, not per unit) and the slowest product time.
+ * Product-level part of one seller's cart: the highest product fee
+ * (each product counted once) and the slowest product time.
  * `items` need productId, productDeliveryFee and productDeliveryTimeMinutes.
  */
 export function quoteCartProductDelivery(items = [], settings = {}) {
@@ -78,7 +78,8 @@ export function quoteCartProductDelivery(items = [], settings = {}) {
     const key = String(item?.productId ?? "");
     if (seen.has(key)) continue;
     seen.add(key);
-    productDeliveryFeeTotal = round2(productDeliveryFeeTotal + toDeliveryFee(item.productDeliveryFee));
+    // Highest product fee, not the sum: one delivery carries all items.
+    productDeliveryFeeTotal = Math.max(productDeliveryFeeTotal, toDeliveryFee(item.productDeliveryFee));
     maxProductMinutes = Math.max(maxProductMinutes, toDeliveryMinutes(item.productDeliveryTimeMinutes));
   }
   const deliveryTimeMinutes = getGlobalDeliveryTimeMinutes(settings) + maxProductMinutes;
