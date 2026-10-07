@@ -196,6 +196,14 @@ describe("order snapshot", () => {
     expect(milkLine).toMatchObject({ productDeliveryFee: 20, productDeliveryTimeMinutes: 20 });
   });
 
+  it("order details API returns the promised delivery time for the tracking screen", async () => {
+    const res = await request(app).get(`/api/orders/details/${orderId}`).set("Authorization", ctx.auth.customer);
+    expect(res.status).toBe(200);
+    const o = res.body.result.order || res.body.result;
+    expect(o.paymentBreakdown).toMatchObject({ deliveryTimeMinutes: 35, deliveryTimeLabel: "35 mins" });
+    expect(o.createdAt).toBeTruthy();
+  });
+
   it("is not changed by later admin or seller edits", async () => {
     await setDelivery({ fixedDeliveryFee: 99, globalDeliveryTimeMinutes: 90 });
     await setProductDelivery(ctx.milk._id, { productDeliveryFee: 0, productDeliveryTimeMinutes: 0 });

@@ -628,6 +628,23 @@ const OrderDetailPage = () => {
     const targetLocation =
       routePhase === "delivery" ? order?.address?.location : sellerLocation;
 
+    // Promised time saved on the order (global + seller's product time).
+    // Used until the rider is actually heading to the customer with a live route.
+    const promisedMinutes = Number(order?.paymentBreakdown?.deliveryTimeMinutes || 0);
+    const placedAtMs = new Date(order?.createdAt || order?.placedAt || 0).getTime();
+    const onLiveDeliveryLeg = routePhase === "delivery" && Boolean(activeRoutePolyline);
+    if (promisedMinutes > 0 && Number.isFinite(placedAtMs) && placedAtMs > 0 && !onLiveDeliveryLeg) {
+      const promisedArrivalMs = placedAtMs + promisedMinutes * 60 * 1000;
+      const left = Math.max(1, Math.ceil((promisedArrivalMs - clockTick) / 60000));
+      const routeMeters =
+        Number(activeRoutePolyline?.distanceMeters ?? activeRoutePolyline?.distance) * remainingRatio;
+      return {
+        arrivalTimeText: formatArrivalTime(Math.max(promisedArrivalMs, clockTick + 60000)),
+        arrivingInText: formatArrivingIn(left),
+        totalDistanceText: formatDistance(routeMeters || distanceMeters(liveLocation, targetLocation)),
+      };
+    }
+
     let minutes = null;
     const routeDurationSeconds = Number(activeRoutePolyline?.duration) * remainingRatio;
     if (Number.isFinite(routeDurationSeconds) && routeDurationSeconds > 0) {
