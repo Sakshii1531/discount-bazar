@@ -1,4 +1,5 @@
 import Coupon from "../models/coupon.js";
+import { normalizeCouponInput } from "../services/couponRules.js";
 import handleResponse from "../utils/helper.js";
 import Order from "../models/order.js";
 import Cart from "../models/cart.js";
@@ -53,7 +54,9 @@ export const createCoupon = async (req, res) => {
             d.setHours(23, 59, 59, 999);
             data.validTill = d;
         }
-        const coupon = await Coupon.create(data);
+        const checked = await normalizeCouponInput(data);
+        if (checked.error) return handleResponse(res, 400, checked.error);
+        const coupon = await Coupon.create(checked.value);
         return handleResponse(res, 201, "Coupon created successfully", coupon);
     } catch (error) {
         if (error.code === 11000) {
@@ -72,15 +75,21 @@ export const updateCoupon = async (req, res) => {
             d.setHours(23, 59, 59, 999);
             data.validTill = d;
         }
-        const coupon = await Coupon.findByIdAndUpdate(id, data, {
+        const existing = await Coupon.findById(id).lean();
+        if (!existing) {
+            return handleResponse(res, 404, "Coupon not found");
+        }
+        const checked = await normalizeCouponInput(data, existing);
+        if (checked.error) return handleResponse(res, 400, checked.error);
+        const coupon = await Coupon.findByIdAndUpdate(id, { $set: checked.value }, {
             new: true,
             runValidators: true,
         });
-        if (!coupon) {
-            return handleResponse(res, 404, "Coupon not found");
-        }
         return handleResponse(res, 200, "Coupon updated successfully", coupon);
     } catch (error) {
+        if (error.code === 11000) {
+            return handleResponse(res, 400, "Coupon code already exists");
+        }
         return handleResponse(res, 500, error.message);
     }
 };

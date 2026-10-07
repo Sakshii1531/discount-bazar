@@ -22,6 +22,70 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminApi } from '../services/adminApi';
 
+// Each strategy has its own condition; the form only shows what that strategy needs.
+export const COUPON_STRATEGIES = {
+    generic: {
+        label: 'Regular discount',
+        help: 'Works on any order for every customer.',
+    },
+    min_order_value: {
+        label: 'Minimum order value',
+        help: 'Unlocks when the cart total reaches the amount you set.',
+    },
+    bulk_order: {
+        label: 'Bulk order (number of items)',
+        help: 'Unlocks when the cart has at least the number of items you set.',
+    },
+    category_based: {
+        label: 'Category-based',
+        help: 'Works only when the cart has products from the categories you pick.',
+    },
+    monthly_volume: {
+        label: 'VIP – high monthly spenders',
+        help: "Only for customers whose orders this month add up to the amount you set.",
+    },
+    free_delivery: {
+        label: 'Free delivery',
+        help: 'Removes the delivery fee. No discount amount is needed.',
+    },
+};
+
+const EMPTY_FORM = {
+    code: '',
+    title: '',
+    couponType: 'generic',
+    discountType: 'percentage',
+    discountValue: '',
+    minOrderValue: '',
+    maxDiscount: '',
+    minItems: '',
+    applicableCategories: [],
+    monthlyVolumeThreshold: '',
+    usageLimit: '',
+    perUserLimit: '1',
+    validFrom: '',
+    validTill: '',
+    description: '',
+};
+
+/** Plain-language summary of what the coupon will do. */
+export const describeCoupon = (f, categoryNames = {}) => {
+    const kind = f.couponType === 'free_delivery' ? 'free_delivery' : f.discountType;
+    let what;
+    if (kind === 'free_delivery') what = 'free delivery';
+    else if (kind === 'percentage') what = `${f.discountValue || '?'}% off${f.maxDiscount ? ` (up to ₹${f.maxDiscount})` : ''}`;
+    else what = `₹${f.discountValue || '?'} off`;
+    const rules = [];
+    if (f.couponType === 'bulk_order') rules.push(`the cart has ${f.minItems || '?'}+ items`);
+    if (f.couponType === 'category_based') {
+        const names = (f.applicableCategories || []).map((id) => categoryNames[id]).filter(Boolean);
+        rules.push(`the cart has products from ${names.length ? names.join(', ') : '?'}`);
+    }
+    if (f.couponType === 'monthly_volume') rules.push(`the customer has spent ₹${f.monthlyVolumeThreshold || '?'}+ this month`);
+    if (f.couponType === 'min_order_value' || Number(f.minOrderValue) > 0) rules.push(`the cart total is ₹${f.minOrderValue || '?'} or more`);
+    return `Customers get ${what}${rules.length ? ` when ${rules.join(' and ')}` : ' on any order'}.`;
+};
+
 const CouponManagement = () => {
     const { showToast } = useToast();
     const today = new Date().toISOString().split('T')[0];
@@ -42,20 +106,23 @@ const CouponManagement = () => {
 
     const [coupons, setCoupons] = useState([]);
 
-    const [formData, setFormData] = useState({
-        code: '',
-        title: '',
-        couponType: 'generic',
-        discountType: 'percentage',
-        discountValue: '',
-        minOrderValue: '',
-        maxDiscount: '',
-        usageLimit: '',
-        perUserLimit: '1',
-        validFrom: '',
-        validTill: '',
-        description: '',
-    });
+    const [formData, setFormData] = useState(EMPTY_FORM);
+    const [mainCategories, setMainCategories] = useState([]);
+
+    // Category-based coupons match the cart's main (header) categories.
+    useEffect(() => {
+        adminApi
+            .getCategoryTree()
+            .then((res) => {
+                const tree = res.data?.results || res.data?.result || [];
+                setMainCategories(Array.isArray(tree) ? tree.map((h) => ({ _id: h._id, name: h.name })) : []);
+            })
+            .catch(() => setMainCategories([]));
+    }, []);
+    const categoryNames = useMemo(
+        () => Object.fromEntries(mainCategories.map((c) => [String(c._id), c.name])),
+        [mainCategories]
+    );
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -110,59 +177,64 @@ const CouponManagement = () => {
         if (coupon) {
             setEditingCoupon(coupon);
             setFormData({
+                ...EMPTY_FORM,
                 code: coupon.code || '',
                 title: coupon.title || '',
                 couponType: coupon.couponType || 'generic',
                 discountType: coupon.discountType || 'percentage',
-                discountValue: coupon.discountValue ?? '',
-                minOrderValue: coupon.minOrderValue ?? '',
+                discountValue: coupon.discountType === 'free_delivery' ? '' : coupon.discountValue ?? '',
+                minOrderValue: coupon.minOrderValue ? String(coupon.minOrderValue) : '',
                 maxDiscount: coupon.maxDiscount ?? '',
+                minItems: coupon.minItems ? String(coupon.minItems) : '',
+                applicableCategories: (coupon.applicableCategories || []).map((c) => String(c?._id ?? c)),
+                monthlyVolumeThreshold: coupon.monthlyVolumeThreshold ?? '',
                 usageLimit: coupon.usageLimit ?? '',
-                perUserLimit: coupon.perUserLimit ?? '1',
+                perUserLimit: coupon.perUserLimit ?? '',
                 validFrom: coupon.validFrom ? coupon.validFrom.substring(0, 10) : '',
                 validTill: coupon.validTill ? coupon.validTill.substring(0, 10) : '',
                 description: coupon.description || '',
             });
         } else {
             setEditingCoupon(null);
-            setFormData({
-                code: '',
-                title: '',
-                couponType: 'generic',
-                discountType: 'percentage',
-                discountValue: '',
-                minOrderValue: '',
-                maxDiscount: '',
-                usageLimit: '',
-                perUserLimit: '1',
-                validFrom: '',
-                validTill: '',
-                description: '',
-            });
+            setFormData(EMPTY_FORM);
         }
         setIsModalOpen(true);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (formData.discountType === 'percentage' && Number(formData.discountValue) > 100) {
-            showToast('Percentage discount cannot exceed 100%', 'error');
-            return;
-        }
-        if (formData.validTill && formData.validTill < getTomorrow(formData.validFrom)) {
-            showToast('End date must be after start date', 'error');
+        const f = formData;
+        const kind = f.couponType === 'free_delivery' ? 'free_delivery' : f.discountType;
+        const problem =
+            (kind === 'percentage' && !(Number(f.discountValue) > 0 && Number(f.discountValue) <= 100) && 'Percentage discount must be between 1 and 100') ||
+            (kind === 'fixed' && !(Number(f.discountValue) > 0) && 'Enter the discount amount in ₹') ||
+            (f.couponType === 'min_order_value' && !(Number(f.minOrderValue) > 0) && 'Enter the minimum cart total') ||
+            (f.couponType === 'bulk_order' && !(Number.isInteger(Number(f.minItems)) && Number(f.minItems) >= 2) && 'Enter the minimum number of items (2 or more)') ||
+            (f.couponType === 'category_based' && f.applicableCategories.length === 0 && 'Select at least one category') ||
+            (f.couponType === 'monthly_volume' && !(Number(f.monthlyVolumeThreshold) > 0) && 'Enter the monthly spend customers must reach') ||
+            (f.validTill && f.validTill < getTomorrow(f.validFrom) && 'End date must be after start date');
+        if (problem) {
+            showToast(problem, 'error');
             return;
         }
         try {
+            // Only the fields that apply to this strategy and discount kind are sent.
             const payload = {
-                ...formData,
-                discountValue: Number(formData.discountValue),
-                minOrderValue: formData.minOrderValue ? Number(formData.minOrderValue) : 0,
-                maxDiscount: formData.maxDiscount ? Number(formData.maxDiscount) : null,
-                usageLimit: formData.usageLimit ? Number(formData.usageLimit) : null,
-                perUserLimit: formData.perUserLimit ? Number(formData.perUserLimit) : null,
-                validFrom: formData.validFrom,
-                validTill: formData.validTill ? (formData.validTill.length === 10 ? `${formData.validTill}T23:59:59.999Z` : formData.validTill) : '',
+                code: f.code,
+                title: f.title,
+                description: f.description,
+                couponType: f.couponType,
+                discountType: kind,
+                discountValue: kind === 'free_delivery' ? 0 : Number(f.discountValue),
+                maxDiscount: kind === 'percentage' && f.maxDiscount ? Number(f.maxDiscount) : null,
+                minOrderValue: f.minOrderValue ? Number(f.minOrderValue) : 0,
+                minItems: f.couponType === 'bulk_order' ? Number(f.minItems) : 0,
+                applicableCategories: f.couponType === 'category_based' ? f.applicableCategories : [],
+                monthlyVolumeThreshold: f.couponType === 'monthly_volume' ? Number(f.monthlyVolumeThreshold) : null,
+                usageLimit: f.usageLimit ? Number(f.usageLimit) : null,
+                perUserLimit: f.perUserLimit ? Number(f.perUserLimit) : null,
+                validFrom: f.validFrom,
+                validTill: f.validTill ? (f.validTill.length === 10 ? `${f.validTill}T23:59:59.999Z` : f.validTill) : '',
             };
 
             if (editingCoupon?._id) {
@@ -315,7 +387,8 @@ const CouponManagement = () => {
                                             {c.minOrderValue > 0 && (
                                                 <p className="text-[10px] font-bold text-slate-400">Min. Order: ₹{c.minOrderValue}</p>
                                             )}
-                                            <p className="text-[10px] font-bold text-slate-400 capitalize">Type: {c.couponType?.replace(/_/g, ' ') || 'generic'}</p>
+                                            <p className="text-[10px] font-bold text-slate-400">{COUPON_STRATEGIES[c.couponType]?.label || 'Regular discount'}</p>
+                                            <p className="text-[10px] font-semibold text-slate-500 max-w-[260px]" data-testid="coupon-rule">{describeCoupon({ ...c, applicableCategories: (c.applicableCategories || []).map((x) => String(x?._id ?? x)) }, categoryNames)}</p>
                                         </div>
                                     </td>
                                     <td className="px-4 py-6">
@@ -453,139 +526,194 @@ const CouponManagement = () => {
                 title={editingCoupon ? "Modify Promotion" : "New Promotion Protocol"}
             >
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Promo Code</label>
-                            <input
-                                required
-                                value={formData.code}
-                                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                                placeholder="E.G. SUMMER50"
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black uppercase tracking-widest outline-none ring-1 ring-transparent focus:ring-primary/20"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Discount Kind</label>
-                            <select
-                                value={formData.discountType}
-                                onChange={(e) => {
-                                    setFormData({ ...formData, discountType: e.target.value });
-                                }}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                            >
-                                <option value="percentage">Percentage (%)</option>
-                                <option value="fixed">Fixed Amount (₹)</option>
-                                <option value="free_delivery">Free Delivery</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Coupon Strategy</label>
-                        <select
-                            value={formData.couponType}
-                            onChange={(e) => setFormData({ ...formData, couponType: e.target.value })}
-                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                        >
-                            <option value="generic">Generic Discount (Regular / All Customers)</option>
-                            <option value="bulk_order">Bulk Order Discount</option>
-                            <option value="min_order_value">Minimum Order Value Coupon</option>
-                            <option value="free_delivery">Free Delivery Coupon</option>
-                            <option value="category_based">Category-Based Coupon</option>
-                            <option value="monthly_volume">Monthly Volume Coupon (VIP / High Monthly Spenders)</option>
-                        </select>
-                        {formData.couponType === 'generic' ? (
-                            <p className="text-[10px] text-emerald-600 font-medium">
-                                Standard coupon: Applicable to all customers on any regular order without special restrictions.
-                            </p>
-                        ) : formData.couponType === 'monthly_volume' ? (
-                            <p className="text-[10px] text-purple-600 font-medium">
-                                VIP reward: Reserved exclusively for loyal customers who have high monthly shopping volume.
-                            </p>
-                        ) : (
-                            <p className="text-[10px] text-slate-400">
-                                Choose the logic: bulk order, MOV, free delivery, specific categories, or monthly volume buyers.
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Discount Value</label>
-                            <input
-                                required
-                                type="number"
-                                min={0}
-                                onWheel={(e) => e.target.blur()}
-                                onKeyDown={(e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); }}
-                                value={formData.discountValue}
-                                onChange={(e) => {
-                                    let val = e.target.value;
-                                    let newType = formData.discountType;
-                                    if (newType === 'percentage' && Number(val) > 100) {
-                                        newType = 'fixed';
-                                    }
-                                    setFormData({ ...formData, discountValue: val, discountType: newType });
-                                }}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Min Order Requirement</label>
-                            <input
-                                required
-                                type="number"
-                                min={0}
-                                onWheel={(e) => e.target.blur()}
-                                onKeyDown={(e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); }}
-                                value={formData.minOrderValue}
-                                onChange={(e) => setFormData({ ...formData, minOrderValue: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Max Discount (optional)</label>
+                    {(() => {
+                        const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest';
+                        const inputCls = 'w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none ring-1 ring-transparent focus:ring-primary/20';
+                        const noBadKeys = (e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); };
+                        const set = (patch) => setFormData((prev) => ({ ...prev, ...patch }));
+                        const strategy = formData.couponType;
+                        const kind = strategy === 'free_delivery' ? 'free_delivery' : formData.discountType;
+                        const numberInput = (key, props = {}) => (
                             <input
                                 type="number"
                                 min={0}
                                 onWheel={(e) => e.target.blur()}
-                                onKeyDown={(e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); }}
-                                value={formData.maxDiscount}
-                                onChange={(e) => setFormData({ ...formData, maxDiscount: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
+                                onKeyDown={noBadKeys}
+                                value={formData[key]}
+                                onChange={(e) => set({ [key]: e.target.value })}
+                                className={inputCls}
+                                {...props}
                             />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Uses (optional)</label>
-                            <input
-                                type="number"
-                                min={0}
-                                onWheel={(e) => e.target.blur()}
-                                onKeyDown={(e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); }}
-                                value={formData.usageLimit}
-                                onChange={(e) => setFormData({ ...formData, usageLimit: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                            />
-                        </div>
-                    </div>
+                        );
+                        return (
+                            <>
+                                {/* 1. Code + strategy */}
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className={labelCls}>Promo Code *</label>
+                                        <input
+                                            required
+                                            value={formData.code}
+                                            onChange={(e) => set({ code: e.target.value.toUpperCase().replace(/\s/g, '') })}
+                                            placeholder="E.G. SUMMER50"
+                                            className={cn(inputCls, 'uppercase tracking-widest')}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className={labelCls}>Coupon Type *</label>
+                                        <select
+                                            aria-label="Coupon type"
+                                            value={strategy}
+                                            onChange={(e) => {
+                                                const next = e.target.value;
+                                                set({
+                                                    couponType: next,
+                                                    // Leaving "Free delivery" goes back to a normal discount.
+                                                    discountType: next === 'free_delivery' ? 'free_delivery' : formData.discountType === 'free_delivery' ? 'percentage' : formData.discountType,
+                                                });
+                                            }}
+                                            className={inputCls}
+                                        >
+                                            {Object.entries(COUPON_STRATEGIES).map(([value, s]) => (
+                                                <option key={value} value={value}>{s.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <p className="-mt-3 text-[11px] font-semibold text-slate-500" data-testid="coupon-strategy-help">
+                                    {COUPON_STRATEGIES[strategy]?.help}
+                                </p>
 
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Per User Limit</label>
-                            <input
-                                type="number"
-                                min={1}
-                                onWheel={(e) => e.target.blur()}
-                                onKeyDown={(e) => { if (['-', 'e', 'E', '+'].includes(e.key)) e.preventDefault(); }}
-                                value={formData.perUserLimit}
-                                onChange={(e) => setFormData({ ...formData, perUserLimit: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none"
-                            />
-                        </div>
-                    </div>
+                                {/* 2. The condition this strategy needs */}
+                                {strategy !== 'generic' && strategy !== 'free_delivery' && (
+                                    <div className="space-y-3 rounded-2xl border border-slate-100 p-4" data-testid="coupon-condition">
+                                        <p className={labelCls}>When does it apply?</p>
+                                        {strategy === 'min_order_value' && (
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Minimum cart total (₹) *</label>
+                                                {numberInput('minOrderValue', { required: true, placeholder: 'e.g. 499', 'aria-label': 'Minimum cart total' })}
+                                            </div>
+                                        )}
+                                        {strategy === 'bulk_order' && (
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Minimum number of items in cart *</label>
+                                                {numberInput('minItems', { required: true, min: 2, step: 1, placeholder: 'e.g. 10', 'aria-label': 'Minimum items' })}
+                                            </div>
+                                        )}
+                                        {strategy === 'category_based' && (
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Categories *</label>
+                                                <div className="flex flex-wrap gap-2" data-testid="coupon-categories">
+                                                    {mainCategories.length === 0 && <p className="text-xs text-slate-400">No categories found.</p>}
+                                                    {mainCategories.map((c) => {
+                                                        const id = String(c._id);
+                                                        const on = formData.applicableCategories.includes(id);
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                key={id}
+                                                                aria-pressed={on}
+                                                                onClick={() => set({
+                                                                    applicableCategories: on
+                                                                        ? formData.applicableCategories.filter((x) => x !== id)
+                                                                        : [...formData.applicableCategories, id],
+                                                                })}
+                                                                className={cn(
+                                                                    'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all',
+                                                                    on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                                                )}
+                                                            >
+                                                                {c.name}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {strategy === 'monthly_volume' && (
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Customer's spend this month at least (₹) *</label>
+                                                {numberInput('monthlyVolumeThreshold', { required: true, placeholder: 'e.g. 5000', 'aria-label': 'Monthly spend' })}
+                                            </div>
+                                        )}
+                                        {strategy !== 'min_order_value' && (
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Minimum cart total (₹, optional)</label>
+                                                {numberInput('minOrderValue', { placeholder: 'No minimum', 'aria-label': 'Minimum cart total' })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* 3. The discount itself */}
+                                <div className="space-y-3 rounded-2xl border border-slate-100 p-4" data-testid="coupon-discount">
+                                    <p className={labelCls}>What does the customer get?</p>
+                                    {strategy === 'free_delivery' ? (
+                                        <p className="text-xs font-bold text-emerald-700">The delivery fee becomes ₹0 for the order.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className={labelCls}>Discount Kind *</label>
+                                                <select
+                                                    aria-label="Discount kind"
+                                                    value={kind}
+                                                    onChange={(e) => set({ discountType: e.target.value, maxDiscount: e.target.value === 'percentage' ? formData.maxDiscount : '' })}
+                                                    className={inputCls}
+                                                >
+                                                    <option value="percentage">Percentage off (%)</option>
+                                                    <option value="fixed">Flat amount off (₹)</option>
+                                                    <option value="free_delivery">Free delivery</option>
+                                                </select>
+                                            </div>
+                                            {kind === 'percentage' && (
+                                                <div className="space-y-2">
+                                                    <label className={labelCls}>Discount (%) *</label>
+                                                    {numberInput('discountValue', { required: true, min: 1, max: 100, placeholder: 'e.g. 10', 'aria-label': 'Discount value' })}
+                                                </div>
+                                            )}
+                                            {kind === 'fixed' && (
+                                                <div className="space-y-2">
+                                                    <label className={labelCls}>Discount amount (₹) *</label>
+                                                    {numberInput('discountValue', { required: true, min: 1, placeholder: 'e.g. 50', 'aria-label': 'Discount value' })}
+                                                </div>
+                                            )}
+                                            {kind === 'free_delivery' && (
+                                                <p className="self-end pb-3 text-xs font-bold text-emerald-700">Delivery fee becomes ₹0.</p>
+                                            )}
+                                            {kind === 'percentage' && (
+                                                <div className="space-y-2">
+                                                    <label className={labelCls}>Max discount (₹, optional)</label>
+                                                    {numberInput('maxDiscount', { placeholder: 'No cap', 'aria-label': 'Max discount' })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {(strategy === 'generic' || strategy === 'free_delivery') && (
+                                        <div className="space-y-2">
+                                            <label className={labelCls}>Minimum cart total (₹, optional)</label>
+                                            {numberInput('minOrderValue', { placeholder: 'No minimum', 'aria-label': 'Minimum cart total' })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 4. Limits */}
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className={labelCls}>Total uses (optional)</label>
+                                        {numberInput('usageLimit', { min: 1, step: 1, placeholder: 'Unlimited' })}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className={labelCls}>Uses per customer</label>
+                                        {numberInput('perUserLimit', { min: 1, step: 1, placeholder: 'Unlimited' })}
+                                    </div>
+                                </div>
+
+                                <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800" data-testid="coupon-summary">
+                                    {describeCoupon(formData, categoryNames)}
+                                </p>
+                            </>
+                        );
+                    })()}
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
