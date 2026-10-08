@@ -24,6 +24,33 @@ import {
  *   onOpenChange      – (open) => void
  *   onApplyManualCode – () => void — triggered when user clicks CHECK
  */
+const couponHeadline = (coupon) =>
+  coupon.discountType === "free_delivery" || coupon.couponType === "free_delivery"
+    ? "FREE DELIVERY"
+    : coupon.discountType === "percentage"
+      ? `${coupon.discountValue}% OFF`
+      : `₹${coupon.discountValue} OFF`;
+
+const inr = (v) => `₹${Number(v || 0).toLocaleString("en-IN")}`;
+
+/** The coupon's real conditions, read from the coupon itself. */
+export const couponConditions = (coupon) => {
+  const lines = [];
+  if (coupon.couponType === "monthly_volume" && Number(coupon.monthlyVolumeThreshold) > 0) {
+    lines.push(`For customers who spent ${inr(coupon.monthlyVolumeThreshold)} this month`);
+  }
+  if (Number(coupon.minItems) > 0) lines.push(`Add ${coupon.minItems}+ items to the cart`);
+  if (coupon.couponType === "category_based") {
+    const names = (coupon.applicableCategories || []).map((c) => c?.name).filter(Boolean);
+    if (names.length) lines.push(`On products from ${names.join(", ")}`);
+  }
+  if (Number(coupon.minOrderValue) > 0) lines.push(`On orders of ${inr(coupon.minOrderValue)} or more`);
+  if (coupon.discountType === "percentage" && Number(coupon.maxDiscount) > 0) {
+    lines.push(`Max discount ${inr(coupon.maxDiscount)}`);
+  }
+  return lines;
+};
+
 const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
   coupons,
   selectedCoupon,
@@ -50,6 +77,10 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
             See All
           </button>
         </div>
+        <p className="-mt-1 mb-3 text-[11px] font-semibold text-slate-500" data-testid="one-coupon-note">
+          Only one coupon can be used per order
+          {selectedCoupon ? " — applying another replaces the current one." : "."}
+        </p>
         {coupons.length === 0 ? (
           <p className="text-xs text-slate-400 font-medium py-2">
             No coupons available right now.
@@ -82,14 +113,12 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                     )}
                   </div>
                   <p className="text-sm font-black text-slate-800 leading-tight">
-                    {coupon.discountType === "percentage"
-                      ? `${coupon.discountValue}% OFF`
-                      : `₹${coupon.discountValue} OFF`}
-                    {coupon.minOrderValue > 0 && (
-                      <span className="block text-[10px] font-medium text-slate-500">
-                        on orders above ₹{coupon.minOrderValue}
+                    {couponHeadline(coupon)}
+                    {couponConditions(coupon).map((line) => (
+                      <span key={line} className="block text-[10px] font-medium text-slate-500" data-testid="coupon-condition">
+                        {line}
                       </span>
-                    )}
+                    ))}
                   </p>
                   {coupon.description && (
                     <p className="text-[10px] text-slate-500 leading-snug line-clamp-2">
@@ -106,7 +135,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                     <button
                       onClick={() => onApplyCoupon(coupon)}
                       className="mt-auto w-full py-1.5 rounded-xl text-xs font-black bg-primary text-primary-foreground hover:bg-[var(--brand-400)] active:scale-95 transition-all">
-                      Apply
+                      {selectedCoupon ? "Use instead" : "Apply"}
                     </button>
                   )}
                 </div>
@@ -121,7 +150,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Apply Coupon</DialogTitle>
-            <DialogDescription>Browse available offers and save more.</DialogDescription>
+            <DialogDescription>Pick one offer — only one coupon can be used per order.</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto pr-2">
             {coupons.map((coupon) => (
@@ -148,8 +177,15 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                   </div>
                   <div className="flex-1">
                     <p className="font-black text-slate-800 tracking-wider mb-1">
-                      {coupon.code}
+                      {coupon.code} <span className="text-xs text-primary">· {couponHeadline(coupon)}</span>
                     </p>
+                    {couponConditions(coupon).length > 0 && (
+                      <ul className="mb-2 space-y-0.5">
+                        {couponConditions(coupon).map((line) => (
+                          <li key={line} className="text-[11px] font-semibold text-slate-600">• {line}</li>
+                        ))}
+                      </ul>
+                    )}
                     <p className="text-xs text-slate-500 leading-relaxed mb-3">
                       {coupon.description}
                     </p>
@@ -161,7 +197,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                           ? "bg-white text-primary border-2 border-primary cursor-default"
                           : "bg-primary text-primary-foreground hover:bg-[#0b721b]"
                       }`}>
-                      {selectedCoupon?.code === coupon.code ? "Applied" : "Apply Now"}
+                      {selectedCoupon?.code === coupon.code ? "Applied" : selectedCoupon ? "Use this instead" : "Apply Now"}
                     </button>
                   </div>
                 </div>

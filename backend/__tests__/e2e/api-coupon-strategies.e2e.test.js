@@ -121,12 +121,106 @@ describe("each strategy is enforced at checkout", () => {
   it("VIP: refused for a customer below the monthly spend", async () => {
     const res = await preview([milk(2)], "VIP5K");
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/high-volume/);
+    expect(res.body.message).toMatch(/spent ₹5,000 this month. You have spent ₹0 so far — ₹5,000 more/);
   });
 
   it("free delivery: removes the delivery fee and gives no product discount", async () => {
     const res = await preview([milk(1)], "SHIPFREE");
     expect(res.status).toBe(200);
     expect(res.body.result.breakdown).toMatchObject({ deliveryFeeCharged: 0, discountTotal: 0 });
+  });
+});
+
+describe("only one coupon per order", () => {
+  let flat, ship;
+  beforeAll(async () => {
+    flat = (await create({ code: "FLAT50", couponType: "min_order_value", minOrderValue: 300, discountType: "fixed", discountValue: 50 })).body.result;
+    ship = (await create({ code: "SHIP300", couponType: "min_order_value", minOrderValue: 300, discountType: "free_delivery" })).body.result;
+  });
+  const bigCart = () => [milk(6)]; // ₹330
+
+  it("each coupon works on its own", async () => {
+    const a = await preview(bigCart(), "FLAT50");
+    expect(a.body.result.breakdown).toMatchObject({ discountTotal: 50 });
+    expect(a.body.result.breakdown.deliveryFeeCharged).toBeGreaterThan(0);
+    const b = await preview(bigCart(), "SHIP300");
+    expect(b.body.result.breakdown).toMatchObject({ discountTotal: 0, deliveryFeeCharged: 0 });
+  });
+
+  it("sending two codes is rejected", async () => {
+    const res = await request(app)
+      .post("/api/orders/checkout/preview")
+      .set("Authorization", ctx.auth.customer)
+      .send({ items: bigCart(), address: ADDRESS, couponCode: ["FLAT50", "SHIP300"] });
+    expect(res.status).toBe(400);
+  });
+
+  it("a code plus a different coupon id is rejected", async () => {
+    const res = await request(app)
+      .post("/api/orders/checkout/preview")
+      .set("Authorization", ctx.auth.customer)
+      .send({ items: bigCart(), address: ADDRESS, couponCode: "FLAT50", couponId: String(ship._id) });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Only one coupon/);
+  });
+
+  it("an order trying to combine two coupons is refused and uses neither", async () => {
+    const res = await request(app)
+      .post("/api/orders")
+      .set("Authorization", ctx.auth.customer)
+      .send({ items: bigCart(), address: ADDRESS, paymentMode: "COD", timeSlot: "now", couponCode: "SHIP300", couponId: String(flat._id) });
+    expect(res.status).toBe(400);
+    const used = await Coupon.find({ code: { $in: ["FLAT50", "SHIP300"] } }).lean();
+    expect(used.map((c) => c.usedCount)).toEqual([0, 0]);
+  });
+
+  it("an order with one coupon records exactly that one", async () => {
+    const res = await request(app)
+      .post("/api/orders")
+      .set("Authorization", ctx.auth.customer)
+      .send({ items: bigCart(), address: ADDRESS, paymentMode: "COD", timeSlot: "now", couponCode: "SHIP300", couponId: String(ship._id) });
+    expect(res.status).toBeLessThan(300);
+    const used = await Coupon.find({ code: { $in: ["FLAT50", "SHIP300"] } }).lean();
+    expect(Object.fromEntries(used.map((c) => [c.code, c.usedCount]))).toEqual({ FLAT50: 0, SHIP300: 1 });
+  });
+});
+
+describe("customers are told the coupon's real condition", () => {
+  beforeAll(async () => {
+    // Same shape as the live BULKDEAL coupon: ₹10,000 monthly spend + ₹500 extra minimum.
+    await create({ code: "BULKDEAL", couponType: "monthly_volume", monthlyVolumeThreshold: 10000, minOrderValue: 500, discountType: "percentage", discountValue: 4, maxDiscount: 1000 });
+    await create({ code: "BULK40", couponType: "bulk_order", minItems: 40, minOrderValue: 300, discountType: "percentage", discountValue: 2 });
+    await create({ code: "CATONLY", couponType: "category_based", applicableCategories: [String(otherTree.header._id)], minOrderValue: 1000, discountType: "fixed", discountValue: 30 });
+  });
+
+  it("VIP coupon explains the monthly spend first (not the ₹500 minimum)", async () => {
+    const res = await preview([milk(1)], "BULKDEAL");
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/spent ₹10,000 this month/);
+    expect(res.body.message).not.toMatch(/500/);
+  });
+
+  it("bulk coupon explains the item count first, with the cart's count", async () => {
+    const res = await preview([milk(2)], "BULK40");
+    expect(res.body.message).toBe("Add at least 40 items to use this coupon (your cart has 2)");
+  });
+
+  it("category coupon names the categories", async () => {
+    const res = await preview([milk(2)], "CATONLY");
+    expect(res.body.message).toBe(`This coupon works only with products from: ${otherTree.header.name}`);
+  });
+
+  it("the extra minimum is reported once the main condition is met, with the real numbers", async () => {
+    const res = await preview([{ product: String(otherCatProduct._id), quantity: 1 }], "CATONLY");
+    expect(res.body.message).toBe("Minimum order value should be ₹1,000 (your cart is ₹200)");
+  });
+
+  it("the customer coupon list carries every condition, with category names", async () => {
+    const res = await request(app).get("/api/coupons").query({ status: "active" }).set("Authorization", ctx.auth.customer);
+    const list = res.body.result || res.body.results;
+    const vip = list.find((c) => c.code === "BULKDEAL");
+    expect(vip).toMatchObject({ monthlyVolumeThreshold: 10000, minOrderValue: 500 });
+    const cat = list.find((c) => c.code === "CATONLY");
+    expect(cat.applicableCategories[0].name).toBe(otherTree.header.name);
   });
 });

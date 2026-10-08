@@ -628,12 +628,19 @@ const CheckoutPage = () => {
       const res = await customerApi.validateCoupon(payload);
       if (res.data.success) {
         const data = res.data.result;
+        const previous = selectedCoupon?.code;
+        // One coupon per order: applying a new one replaces the current one.
         setSelectedCoupon({
           ...coupon,
           ...data,
         });
         setIsCouponModalOpen(false);
-        showToast(`Coupon ${coupon.code} applied!`, "success");
+        showToast(
+          previous && previous !== coupon.code
+            ? `${coupon.code} applied — replaced ${previous} (only one coupon per order)`
+            : `Coupon ${coupon.code} applied!`,
+          "success",
+        );
       } else {
         showToast(res.data.message || "Unable to apply coupon", "error");
       }
@@ -659,12 +666,19 @@ const CheckoutPage = () => {
       });
       if (res.data.success) {
         const data = res.data.result;
+        const previous = selectedCoupon?.code;
+        const code = manualCode.trim();
         setSelectedCoupon({
-          code: manualCode.trim(),
+          code,
           description: "Applied manually",
           ...data,
         });
-        showToast(`Coupon ${manualCode.trim()} applied!`, "success");
+        showToast(
+          previous && previous !== code
+            ? `${code} applied — replaced ${previous} (only one coupon per order)`
+            : `Coupon ${code} applied!`,
+          "success",
+        );
       } else {
         showToast(res.data.message || "Invalid coupon", "error");
       }
@@ -754,6 +768,13 @@ const CheckoutPage = () => {
         }
       } catch (error) {
         console.error("Checkout preview failed", error);
+        // Cart changed and the applied coupon no longer qualifies: drop it so
+        // prices stay correct, and tell the customer why.
+        const msg = error?.response?.data?.message || "";
+        if (selectedCoupon && error?.response?.status === 400 && /coupon|minimum|items|categor|volume/i.test(msg)) {
+          setSelectedCoupon(null);
+          showToast(`${selectedCoupon.code} removed: ${msg}`, "warning");
+        }
       } finally {
         setIsPreviewLoading(false);
       }

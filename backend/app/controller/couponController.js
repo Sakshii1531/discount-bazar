@@ -39,7 +39,10 @@ export const listCoupons = async (req, res) => {
             }
         }
 
-        const coupons = await Coupon.find(query).sort({ createdAt: -1 }).lean();
+        const coupons = await Coupon.find(query)
+            .populate("applicableCategories", "name")
+            .sort({ createdAt: -1 })
+            .lean();
         return handleResponse(res, 200, "Coupons fetched successfully", coupons);
     } catch (error) {
         return handleResponse(res, 500, error.message);

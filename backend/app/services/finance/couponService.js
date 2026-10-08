@@ -34,6 +34,7 @@
 
 import mongoose from "mongoose";
 import Coupon from "../../models/coupon.js";
+import Category from "../../models/category.js";
 import Order from "../../models/order.js";
 import { roundCurrency } from "../../utils/money.js";
 
@@ -65,7 +66,14 @@ async function loadCoupon({ couponCode, couponId, session }) {
   })();
   if (!query) return null;
   if (session) query.session(session);
-  return query.lean();
+  const coupon = await query.lean();
+  // One coupon per order: a code and an id that point to different coupons
+  // would be an attempt to combine offers.
+  const codeValue = (couponCode || "").trim().toUpperCase();
+  if (coupon && codeValue && couponId && String(coupon.code).toUpperCase() !== codeValue) {
+    throw makeError(400, "Only one coupon can be used per order");
+  }
+  return coupon;
 }
 
 function computeCartSubtotalFromHydrated(hydratedItems = []) {
@@ -219,43 +227,47 @@ export async function computeOrderDiscount({
     0,
   );
 
-  if (coupon.minOrderValue && cartSubtotal < Number(coupon.minOrderValue)) {
-    throw makeError(
-      400,
-      `Minimum order value should be ₹${coupon.minOrderValue}`,
-    );
+  // Check the coupon's own condition first, so the customer is told about the
+  // rule that defines the coupon (with the real numbers), then the optional
+  // extra minimum cart total.
+  const money = (v) => `₹${Number(v || 0).toLocaleString("en-IN")}`;
+
+  if (coupon.couponType === "monthly_volume" && Number(coupon.monthlyVolumeThreshold || 0) > 0) {
+    if (!customerId) {
+      throw makeError(400, `Log in to use this coupon — it is for customers who spent ${money(coupon.monthlyVolumeThreshold)} this month`);
+    }
+    const monthlyVolume = await getMonthlyVolumeForCustomer({ customerId, session, now });
+    if (monthlyVolume < Number(coupon.monthlyVolumeThreshold)) {
+      throw makeError(
+        400,
+        `This coupon is for customers who spent ${money(coupon.monthlyVolumeThreshold)} this month. You have spent ${money(monthlyVolume)} so far — ${money(Number(coupon.monthlyVolumeThreshold) - monthlyVolume)} more to unlock it.`,
+      );
+    }
   }
 
   if (coupon.minItems && totalItems < Number(coupon.minItems)) {
     throw makeError(
       400,
-      `Add at least ${coupon.minItems} items to use this coupon`,
+      `Add at least ${coupon.minItems} items to use this coupon (your cart has ${totalItems})`,
     );
   }
 
   if (!isCategoryEligible(coupon, hydratedItems)) {
+    const cats = await Category.find({ _id: { $in: coupon.applicableCategories || [] } }).select("name").lean();
+    const names = cats.map((c) => c.name).filter(Boolean);
     throw makeError(
       400,
-      "This coupon is valid only on selected categories",
+      names.length
+        ? `This coupon works only with products from: ${names.join(", ")}`
+        : "This coupon is valid only on selected categories",
     );
   }
 
-  if (
-    coupon.couponType === "monthly_volume" &&
-    Number(coupon.monthlyVolumeThreshold || 0) > 0 &&
-    customerId
-  ) {
-    const monthlyVolume = await getMonthlyVolumeForCustomer({
-      customerId,
-      session,
-      now,
-    });
-    if (monthlyVolume < Number(coupon.monthlyVolumeThreshold)) {
-      throw makeError(
-        400,
-        "This coupon is for high-volume buyers only",
-      );
-    }
+  if (coupon.minOrderValue && cartSubtotal < Number(coupon.minOrderValue)) {
+    throw makeError(
+      400,
+      `Minimum order value should be ${money(coupon.minOrderValue)} (your cart is ${money(cartSubtotal)})`,
+    );
   }
 
   // Discount math — fixes H-2 (consistent rounding via `roundCurrency`).
