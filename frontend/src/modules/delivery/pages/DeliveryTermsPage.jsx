@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react';
+import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, ShieldCheck, Bike, Award, DollarSign, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
 
 const DeliveryTermsPage = () => {
   const navigate = useNavigate();
+  // Back stays inside the app even when opened directly.
+  const goBack = useSafeBack("/delivery/auth");
   const { settings } = useSettings();
   const appName = settings?.appName || 'App';
   const companyName = settings?.companyName || appName;
@@ -22,11 +25,7 @@ const DeliveryTermsPage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              if (window.history.length > 1) {
-                navigate(-1);
-              } else {
-                window.close();
-              }
+              goBack();
             }}
             className="p-2 -ml-1 rounded-full hover:bg-slate-100 transition-colors"
           >

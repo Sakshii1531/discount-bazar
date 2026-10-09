@@ -1,4 +1,5 @@
 import React from 'react';
+import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, ScrollText, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
@@ -107,16 +108,14 @@ const renderFormattedContent = (content) => {
 
 const TermsPage = () => {
     const navigate = useNavigate();
+    // Back stays inside the app even when opened directly.
+    const goBack = useSafeBack("/login");
     const { settings } = useSettings();
     const appName = settings?.appName || 'App';
     const companyName = settings?.companyName || appName;
 
     const handleClose = () => {
-        if (window.history.length > 1) {
-            navigate(-1);
-        } else {
-            window.close();
-        }
+        goBack();
     };
 
     return (

@@ -231,6 +231,18 @@ const SafetyPrivacy = () => {
             <span className="font-bold">{appName}</span> values your privacy. Your location is only shared while you are on an active delivery.
           </p>
         </div>
+
+        {/* Public Policy Link */}
+        <div className="text-center pt-1 pb-4">
+          <a
+            href="/delivery/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+          >
+            Read Official Delivery Partner Privacy Policy &rarr;
+          </a>
+        </div>
       </div>
     </div>
   );

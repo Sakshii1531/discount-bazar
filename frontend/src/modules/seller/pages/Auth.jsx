@@ -1594,6 +1594,22 @@ const Auth = () => {
                     {isLogin ? "Register Store" : "Sign In"}
                   </button>
                 </p>
+                <p className="text-[11px] text-slate-400 font-medium text-center mt-1">
+                  By continuing, you agree to the{" "}
+                  <a
+                    href="/terms"
+                    className="text-slate-600 hover:text-black font-bold underline"
+                  >
+                    Terms
+                  </a>{" "}
+                  &{" "}
+                  <a
+                    href="/seller/privacy"
+                    className="text-slate-600 hover:text-black font-bold underline"
+                  >
+                    Seller Privacy Policy
+                  </a>
+                </p>
               </div>
             </motion.div>
           </AnimatePresence>

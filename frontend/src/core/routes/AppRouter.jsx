@@ -37,6 +37,8 @@ const SupportPage = lazy(() => import('../../modules/customer/pages/SupportPage'
 const ChatPage = lazy(() => import('../../modules/customer/pages/ChatPage'));
 const TermsPage = lazy(() => import('../../modules/customer/pages/TermsPage'));
 const DeliveryTermsPage = lazy(() => import('../../modules/delivery/pages/DeliveryTermsPage'));
+const DeliveryPrivacyPage = lazy(() => import('../../modules/delivery/pages/DeliveryPrivacyPage'));
+const SellerPrivacyPage = lazy(() => import('../../modules/seller/pages/SellerPrivacyPage'));
 const PrivacyPage = lazy(() => import('../../modules/customer/pages/PrivacyPage'));
 const AboutPage = lazy(() => import('../../modules/customer/pages/AboutPage'));
 const EditProfilePage = lazy(() => import('../../modules/customer/pages/EditProfilePage'));
@@ -127,6 +129,14 @@ const AppRouter = () => {
                     element: <ApplicationPending />,
                 },
                 {
+                    path: 'seller/privacy',
+                    element: (
+                        <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}>
+                            <SellerPrivacyPage />
+                        </Suspense>
+                    ),
+                },
+                {
                     path: 'admin/auth',
                     element: <AdminAuth />,
                 },
@@ -147,6 +157,14 @@ const AppRouter = () => {
                     element: (
                         <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}>
                             <DeliveryTermsPage />
+                        </Suspense>
+                    ),
+                },
+                {
+                    path: 'delivery/privacy',
+                    element: (
+                        <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}>
+                            <DeliveryPrivacyPage />
                         </Suspense>
                     ),
                 },
@@ -193,6 +211,10 @@ const AppRouter = () => {
                         { path: 'product/:id', element: <ProductDetailPage /> },
                         { path: 'terms', element: <TermsPage /> },
                         { path: 'privacy', element: <PrivacyPage /> },
+                        { path: 'user/privacy', element: <PrivacyPage /> },
+                        { path: 'privacy/user', element: <PrivacyPage /> },
+                        { path: 'privacy/seller', element: <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}><SellerPrivacyPage /></Suspense> },
+                        { path: 'privacy/delivery', element: <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}><DeliveryPrivacyPage /></Suspense> },
                         { path: 'about', element: <AboutPage /> },
                         { path: 'offers', element: <OffersPage /> },
                         { path: 'shop-by-store', element: <ShopByStorePage /> },

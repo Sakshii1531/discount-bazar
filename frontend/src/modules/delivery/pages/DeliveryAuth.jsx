@@ -1530,6 +1530,16 @@ const DeliveryAuth = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+            <p className="mt-5 text-[11px] text-gray-400 font-medium text-center" data-testid="delivery-policy-links">
+              By continuing, you agree to the{" "}
+              <Link to="/delivery/terms" className="text-gray-600 hover:text-black font-bold underline">
+                Terms
+              </Link>{" "}
+              &{" "}
+              <Link to="/delivery/privacy" className="text-gray-600 hover:text-black font-bold underline">
+                Privacy Policy
+              </Link>
+            </p>
           </div>
         </div>
 

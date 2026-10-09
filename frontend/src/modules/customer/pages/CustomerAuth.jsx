@@ -501,8 +501,6 @@ const CustomerAuth = () => {
                                         <div className="flex items-center gap-1.5 underline decoration-gray-200 underline-offset-4">
                                             <a 
                                                 href="/terms"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
                                                 className="text-[10px] font-black uppercase tracking-widest hover:text-gray-900 transition-colors"
                                                 style={{ color: activeCategory.theme }}
                                             >
@@ -511,8 +509,6 @@ const CustomerAuth = () => {
                                             <span className="text-[8px] text-gray-300">•</span>
                                             <a 
                                                 href="/privacy"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
                                                 className="text-[10px] font-black uppercase tracking-widest hover:text-gray-900 transition-colors"
                                                 style={{ color: activeCategory.theme }}
                                             >

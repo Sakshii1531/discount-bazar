@@ -19,6 +19,8 @@ import {
   Smartphone,
   Send,
   Loader2,
+  FileText,
+  ChevronRight,
 } from "lucide-react";
 import { sellerApi } from "../services/sellerApi";
 import { toast } from "sonner";
@@ -604,6 +606,61 @@ const SellerProfile = () => {
                   Sends a test notification to verify audio & push on this device
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Legal & Policies Card */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <div className="h-9 w-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                <Shield className="h-4 w-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-slate-900">Legal & Partner Policies</h4>
+                <p className="text-[11px] text-slate-500 font-medium">Platform compliance, store agreement & data privacy</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <a
+                href="/seller/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-100 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-primary transition-colors">
+                      Seller Privacy Policy
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-medium">Read how your store and customer data is protected</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all" />
+              </a>
+
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-100 transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-primary transition-colors">
+                      Platform Terms of Service
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-medium">Merchant terms, conduct rules and policies</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all" />
+              </a>
             </div>
           </div>
         </div>
