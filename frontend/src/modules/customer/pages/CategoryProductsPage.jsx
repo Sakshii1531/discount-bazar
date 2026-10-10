@@ -1,220 +1,209 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, Heart, Search, Minus, Plus } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useCart } from '../context/CartContext';
-import { useWishlist } from '../context/WishlistContext';
-import { useToast } from '@shared/components/ui/Toast';
+import { ChevronLeft, FolderX, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 
-import ProductCard from '../components/shared/ProductCard';
 import ProductDetailSheet from '../components/shared/ProductDetailSheet';
 import { useProductDetail } from '../context/ProductDetailContext';
 import { customerApi } from '../services/customerApi';
 import MiniCart from '../components/shared/MiniCart';
-import SectionRenderer from "../components/experience/SectionRenderer";
-import { useLocation as useAppLocation } from '../context/LocationContext';
-import { useSettings } from '@core/context/SettingsContext';
-import Lottie from 'lottie-react';
+import CatalogProductGrid, { CatalogSortSelect } from '../components/shared/CatalogProductGrid';
+import { useCatalogProducts } from '../hooks/useCatalogProducts';
+
+const isActive = (node) => node && node.status !== 'inactive';
+
+// Category image, or the first letter when the admin hasn't uploaded one.
+const CategoryIcon = ({ image, name, selected }) => {
+    const [failed, setFailed] = useState(false);
+    if (image && !failed) {
+        return (
+            <img
+                src={applyCloudinaryTransform(image)}
+                alt={name}
+                loading="lazy"
+                onError={() => setFailed(true)}
+                className="w-full h-full object-contain"
+            />
+        );
+    }
+    return (
+        <span className={cn("w-full h-full rounded-xl flex items-center justify-center text-lg font-black", selected ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-400")}>
+            {String(name || '?').trim().charAt(0).toUpperCase()}
+        </span>
+    );
+};
 
 const CategoryProductsPage = () => {
     const { categoryName: catId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentLocation } = useAppLocation();
-    const { settings } = useSettings();
-    const initialSubcategoryId = location.state?.activeSubcategoryId || 'all';
     const { isOpen: isProductDetailOpen } = useProductDetail();
-    const [selectedSubCategory, setSelectedSubCategory] = useState(initialSubcategoryId);
+    const [selectedSubCategory, setSelectedSubCategory] = useState(location.state?.activeSubcategoryId || 'all');
+    const [sort, setSort] = useState('newest');
     const [category, setCategory] = useState(null);
-    const [subCategories, setSubCategories] = useState([{ id: 'all', name: 'All', icon: 'https://cdn-icons-png.flaticon.com/128/2321/2321831.png' }]);
-    const [products, setProducts] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [noServiceData, setNoServiceData] = useState(null);
+    const [treeStatus, setTreeStatus] = useState('loading'); // loading | ready | not-found | error
 
-    // Dynamically load no-service Lottie on mount
-    useEffect(() => {
-        import('@/assets/lottie/animation.json')
-            .then((m) => setNoServiceData(m.default))
-            .catch(() => {});
-    }, []);
-
-    const fetchData = async () => {
-        setIsLoading(true);
+    const loadCategory = useCallback(async () => {
+        setTreeStatus('loading');
         try {
-            const hasValidLocation =
-                Number.isFinite(currentLocation?.latitude) &&
-                Number.isFinite(currentLocation?.longitude);
-
-            // Fetch products and categories in parallel instead of sequentially
-            const [prodRes, catRes] = await Promise.all([
-                hasValidLocation
-                    ? customerApi.getProducts({
-                        categoryId: catId,
-                        lat: currentLocation.latitude,
-                        lng: currentLocation.longitude,
-                    })
-                    : Promise.resolve({ data: { success: true, result: { items: [] } } }),
-                customerApi.getCategories({ tree: true }),
-            ]);
-
-            if (prodRes.data.success) {
-                const rawResult = prodRes.data.result;
-                const dbProds = Array.isArray(prodRes.data.results)
-                    ? prodRes.data.results
-                    : Array.isArray(rawResult?.items)
-                    ? rawResult.items
-                    : Array.isArray(rawResult)
-                    ? rawResult
-                    : [];
-
-                const formattedProds = dbProds.map(p => ({
-                    ...p,
-                    id: p._id,
-                    image:
-                      p.mainImage ||
-                      p.image ||
-                      "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400",
-                    price: p.salePrice || p.price,
-                    originalPrice: p.price,
-                    weight: p.weight || "1 unit",
-                    deliveryTime: p.deliveryTime || null
-                }));
-                setProducts(Array.isArray(formattedProds) ? formattedProds : []);
-            } else {
-                setProducts([]);
+            const catRes = await customerApi.getCategories({ tree: true });
+            if (!catRes.data?.success) throw new Error('Failed to load categories');
+            const tree = catRes.data.results || catRes.data.result || [];
+            let currentCat = null;
+            for (const header of tree) {
+                if (!isActive(header)) continue;
+                const found = (header.children || []).find(c => String(c._id) === String(catId));
+                if (found) {
+                    currentCat = found;
+                    break;
+                }
             }
-
-            if (catRes.data.success) {
-                const tree = catRes.data.results || catRes.data.result || [];
-                let currentCat = null;
-                for (const header of tree) {
-                    const found = (header.children || []).find(c => c._id === catId);
-                    if (found) {
-                        currentCat = found;
-                        break;
-                    }
-                }
-
-                if (currentCat) {
-                    setCategory(currentCat);
-                    const subs = (currentCat.children || []).map(s => ({
-                        id: s._id,
-                        name: s.name,
-                        icon: s.image || 'https://cdn-icons-png.flaticon.com/128/2321/2321801.png'
-                    }));
-                    setSubCategories([{ id: 'all', name: 'All', icon: 'https://cdn-icons-png.flaticon.com/128/2321/2321831.png' }, ...subs]);
-                }
+            if (currentCat && isActive(currentCat)) {
+                setCategory(currentCat);
+                setTreeStatus('ready');
+            } else {
+                setCategory(null);
+                setTreeStatus('not-found');
             }
         } catch (error) {
             console.error("Error fetching category data:", error);
-        } finally {
-            setIsLoading(false);
+            setCategory(null);
+            setTreeStatus('error');
         }
-    };
+    }, [catId]);
 
     useEffect(() => {
-        fetchData();
+        loadCategory();
+    }, [loadCategory]);
+
+    useEffect(() => {
         setSelectedSubCategory(location.state?.activeSubcategoryId || 'all');
-    }, [catId, location.state?.activeSubcategoryId, currentLocation?.latitude, currentLocation?.longitude]);
+    }, [catId, location.state?.activeSubcategoryId]);
 
-    const safeProducts = Array.isArray(products) ? products : [];
-
-    const filteredProducts = safeProducts.filter(p =>
-        selectedSubCategory === 'all' || p.subcategoryId?._id === selectedSubCategory || p.subcategoryId === selectedSubCategory
+    const subCategories = useMemo(
+        () => (category?.children || []).filter(isActive).map(s => ({ id: String(s._id), name: s.name, image: s.image })),
+        [category],
     );
 
-    const productsById = React.useMemo(() => {
-        const map = {};
-        safeProducts.forEach(p => {
-            map[p._id || p.id] = p;
-        });
-        return map;
-    }, [safeProducts]);
+    // A subcategory that no longer exists (or was deactivated) falls back to "All".
+    useEffect(() => {
+        if (treeStatus === 'ready' && selectedSubCategory !== 'all' && !subCategories.some(s => s.id === String(selectedSubCategory))) {
+            setSelectedSubCategory('all');
+        }
+    }, [treeStatus, selectedSubCategory, subCategories]);
+
+    const listing = useCatalogProducts(
+        {
+            categoryId: catId,
+            subcategoryId: selectedSubCategory !== 'all' ? selectedSubCategory : undefined,
+            sort,
+        },
+        { enabled: treeStatus === 'ready' },
+    );
+
+    const selectedSubName = subCategories.find(s => s.id === String(selectedSubCategory))?.name;
+    const sidebarItems = subCategories.length
+        ? [{ id: 'all', name: 'All', image: category?.image }, ...subCategories]
+        : [];
 
     return (
         <div className="flex flex-col min-h-screen bg-white max-w-md md:max-w-none w-full mx-auto relative font-sans md:h-screen md:min-h-0 md:overflow-hidden">
             {/* Header */}
             <header className={cn(
-                "sticky top-0 z-50 bg-white border-b border-gray-50 px-4 py-4 flex items-center justify-between",
+                "sticky top-0 z-50 bg-white border-b border-gray-50 px-4 py-3 flex items-center justify-between gap-3",
                 isProductDetailOpen && "hidden md:flex"
             )}>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                     <button
                         onClick={() => navigate(-1)}
+                        aria-label="Go back"
                         className="p-1 hover:bg-gray-50 rounded-full transition-colors"
                     >
                         <ChevronLeft size={24} className="text-gray-900" />
                     </button>
-                    <h1 className="text-[18px] font-bold text-gray-800 tracking-tight">
-                        {category?.name || catId}
+                    <h1 className="text-[18px] font-bold text-gray-800 tracking-tight truncate">
+                        {category?.name || (treeStatus === 'loading' ? '' : 'Category')}
                     </h1>
                 </div>
-
+                {treeStatus === 'ready' && <CatalogSortSelect value={sort} onChange={setSort} />}
             </header>
 
             <div className="flex flex-1 relative items-start">
-                {(safeProducts.length === 0 && !isLoading) ? (
-                    <div className="w-full flex-1 py-20 px-8 flex flex-col items-center justify-center text-center">
-                        <div className="w-64 h-64 mb-6">
-                            {noServiceData ? (
-                                <Lottie animationData={noServiceData} loop={true} />
-                            ) : (
-                                <div className="w-64 h-64" />
-                            )}
+                {treeStatus === 'loading' ? (
+                    <div className="w-full flex justify-center py-24">
+                        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                ) : treeStatus !== 'ready' ? (
+                    <div className="w-full py-20 px-8 flex flex-col items-center justify-center text-center">
+                        <div className="h-16 w-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-4">
+                            <FolderX className="h-7 w-7 text-slate-300" />
                         </div>
-                        <h3 className="text-3xl font-[1000] text-slate-800 tracking-tighter mb-4 uppercase">
-                            Service <span className="text-primary">Unavailable</span>
+                        <h3 className="text-base font-black text-slate-800 mb-1">
+                            {treeStatus === 'not-found' ? 'This category is not available' : "We couldn't load this category"}
                         </h3>
-                        <p className="text-slate-500 font-bold text-sm max-w-[280px] mb-8 leading-relaxed">
-                            {settings?.appName || 'Our service'} is not available in your area yet. We're expanding fast!
+                        <p className="text-xs font-semibold text-slate-500 max-w-[280px] mb-6">
+                            {treeStatus === 'not-found' ? 'It may have been removed or renamed.' : 'Check your connection and try again.'}
                         </p>
-                        <button 
-                            onClick={fetchData}
-                            className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 active:scale-95 transition-all shadow-xl shadow-black/10"
-                        >
-                            Try Refreshing
-                        </button>
+                        <div className="flex gap-3">
+                            {treeStatus === 'error' && (
+                                <button onClick={loadCategory} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-wider">
+                                    <RefreshCw size={14} /> Try again
+                                </button>
+                            )}
+                            <button onClick={() => navigate('/categories')} className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-wider text-slate-700">
+                                All categories
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <>
-                        {/* Sidebar */}
-                        <aside className="w-[70px] md:w-[110px] lg:w-[130px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto overscroll-contain hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
-                            {subCategories.map((cat) => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setSelectedSubCategory(cat.id)}
-                                    className={cn(
-                                        "flex flex-col items-center py-4 px-1 gap-2 transition-all relative border-l-4",
-                                        selectedSubCategory === cat.id
-                                            ? "bg-[#F7FCF5] border-primary"
-                                            : "border-transparent hover:bg-gray-50"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-14 h-14 rounded-2xl flex items-center justify-center p-1.5 transition-all duration-300",
-                                        selectedSubCategory === cat.id ? "scale-110" : "opacity-100"
-                                    )}>
-                                        <img src={applyCloudinaryTransform(cat.icon)} alt={cat.name} loading="lazy" className="w-full h-full object-contain" />
-                                    </div>
-                                    <span className={cn(
-                                        "text-[10px] text-center font-bold font-sans leading-tight px-1",
-                                        selectedSubCategory === cat.id ? "text-primary" : "text-gray-600"
-                                    )}>
-                                        {cat.name}
-                                    </span>
-                                </button>
-                            ))}
-                        </aside>
+                        {/* Sidebar (only when the category has subcategories) */}
+                        {sidebarItems.length > 0 && (
+                            <aside className="w-[76px] md:w-[110px] lg:w-[130px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto overscroll-contain hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
+                                {sidebarItems.map((cat) => {
+                                    const selected = String(selectedSubCategory) === cat.id;
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => setSelectedSubCategory(cat.id)}
+                                            aria-pressed={selected}
+                                            className={cn(
+                                                "flex flex-col items-center py-4 px-1 gap-2 transition-all relative border-l-4",
+                                                selected
+                                                    ? "bg-[#F7FCF5] border-primary"
+                                                    : "border-transparent hover:bg-gray-50"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "w-14 h-14 rounded-2xl flex items-center justify-center p-1.5 transition-all duration-300",
+                                                selected ? "scale-110" : "opacity-100"
+                                            )}>
+                                                <CategoryIcon image={cat.image} name={cat.name} selected={selected} />
+                                            </div>
+                                            <span className={cn(
+                                                "text-[10px] text-center font-bold font-sans leading-tight px-1 line-clamp-2 break-words w-full",
+                                                selected ? "text-primary" : "text-gray-600"
+                                            )}>
+                                                {cat.name}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </aside>
+                        )}
 
                         {/* Content */}
-                        <main className="flex-1 p-2 md:p-6 pb-24 md:h-[calc(100vh-60px)] md:overflow-y-auto md:overscroll-contain bg-white space-y-4 overflow-x-hidden">
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-x-2 gap-y-3 md:gap-4">
-                                {filteredProducts.map((product) => (
-                                    <ProductCard key={product.id} product={product} compact={true} />
-                                ))}
-                            </div>
+                        <main className="flex-1 min-w-0 p-2 md:p-6 pb-24 md:h-[calc(100vh-60px)] md:overflow-y-auto md:overscroll-contain bg-white space-y-4 overflow-x-hidden">
+                            {selectedSubName && (
+                                <h2 className="text-sm font-black text-slate-800 px-1">{selectedSubName}</h2>
+                            )}
+                            <CatalogProductGrid
+                                listing={listing}
+                                emptyTitle={selectedSubName ? `No products in ${selectedSubName} yet` : `No products in ${category?.name || 'this category'} yet`}
+                                emptyText="Products appear here as soon as stores near you list them."
+                                gridClassName="md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                            />
                         </main>
                     </>
                 )}
@@ -238,4 +227,3 @@ const CategoryProductsPage = () => {
 };
 
 export default CategoryProductsPage;
-

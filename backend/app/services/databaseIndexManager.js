@@ -60,6 +60,10 @@ const INDEX_DEFINITIONS = {
     // P6.1 — backs delivery-partner COD cash summary.
     // Filter shape: { deliveryBoy: <id>, paymentMode: "COD", status: { $ne: "cancelled" } }
     { keys: { deliveryBoy: 1, paymentMode: 1, createdAt: -1 }, options: { name: "idx_deliveryBoy_paymentMode_created", background: true } },
+
+    // Backs productRecommendationService (top products / people also bought).
+    // Filter shape: { "items.product": <id | $in>, createdAt: { $gte }, <delivered> }
+    { keys: { "items.product": 1, createdAt: -1 }, options: { name: "idx_items_product_created", background: true } },
   ],
 
   transactions: [

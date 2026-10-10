@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimation, useDragControls } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
-import { X, ChevronDown, Share2, Heart, Search, Clock, Minus, Plus, ShoppingBag, Star, MessageSquare, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { X, ChevronDown, Share2, Heart, Search, Clock, Minus, Plus, ShoppingBag, Star, MessageSquare, ArrowLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { useProductDetail } from '../../context/ProductDetailContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -15,6 +15,44 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { formatAmount } from "@shared/utils/currency";
 import { getProductDeliveryFeeLabel } from "../../utils/deliveryLabels";
+import { getUnitPriceLabel } from "../../utils/productPricing";
+import { brandPath } from "../../utils/catalogLinks";
+import ProductRecommendations from "./ProductRecommendations";
+import BrandAvatar from "./BrandAvatar";
+
+// Facts shown under "Product Details": only values the product really has.
+const buildProductFacts = (product, supportEmail) => {
+    const policy = product?.returnPolicy;
+    return [
+        { label: 'Shelf Life', value: product?.shelfLife },
+        { label: 'Country of Origin', value: product?.countryOfOrigin },
+        { label: 'FSSAI License', value: product?.fssaiLicense },
+        {
+            label: 'Return Policy',
+            value: policy
+                ? (policy.isReturnable && Number(policy.returnWindowDays) > 0
+                    ? `Returnable within ${policy.returnWindowDays} days`
+                    : 'Not returnable')
+                : '',
+        },
+        { label: 'Customer Care', value: supportEmail },
+    ].filter((f) => String(f.value || '').trim());
+};
+
+// Brand chip that opens the brand's product listing.
+const BrandLink = ({ name, onOpen }) => (
+    <button
+        type="button"
+        onClick={onOpen}
+        data-testid="product-brand-link"
+        className="inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white pl-1 pr-2.5 py-1 hover:border-primary/40 transition-all"
+    >
+        <BrandAvatar name={name} className="h-7 w-7 text-xs flex-shrink-0 rounded-lg" />
+        <span className="text-[12px] font-black text-slate-800 truncate">{name}</span>
+        <span className="text-[10px] font-bold text-primary whitespace-nowrap">View all</span>
+        <ChevronRight size={14} className="text-slate-400 flex-shrink-0" />
+    </button>
+);
 
 const AccordionItem = ({ title, children, id, icon, expandedSections, toggleSection }) => {
     const isOpen = expandedSections.includes(id);
@@ -68,11 +106,12 @@ const ProductDetailSheet = () => {
     const { toggleWishlist: toggleWishlistGlobal, isInWishlist } = useWishlist();
 
     const location = useLocation();
+    const navigate = useNavigate();
     const isWishlistPage = location.pathname === '/wishlist';
     const { showToast } = useToast();
     const { settings } = useSettings();
     const { currentLocation } = useAppLocation();
-    const supportEmail = settings?.supportEmail || 'support@example.com';
+    const supportEmail = settings?.supportEmail || '';
 
     // Controls for sheet animation
     const controls = useAnimation();
@@ -86,6 +125,12 @@ const ProductDetailSheet = () => {
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [localHasReviewed, setLocalHasReviewed] = useState(false);
     const [extendedProduct, setExtendedProduct] = useState(null);
+    // Set when a fresh lookup says the product can no longer be bought here.
+    const [unavailableMessage, setUnavailableMessage] = useState('');
+    const [failedImages, setFailedImages] = useState({});
+    const activeProductIdRef = useRef(null);
+    const desktopScrollRef = useRef(null);
+    const mobileScrollRef = useRef(null);
     const [expandedSections, setExpandedSections] = useState(['description']); // Start with description open
 
     const toggleSection = (section) => {
@@ -107,18 +152,21 @@ const ProductDetailSheet = () => {
         if (selectedProduct.galleryImages && Array.isArray(selectedProduct.galleryImages)) {
             images.push(...selectedProduct.galleryImages);
         }
-        return images.length > 0
-          ? images
-          : [
-              "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400",
-            ];
-    }, [selectedProduct]);
+        return [...new Set(images.filter(Boolean))].filter((img) => !failedImages[img]);
+    }, [selectedProduct, failedImages]);
 
     // Update variant when product changes
     useEffect(() => {
         setNewReview({ rating: 5, comment: '' });
         setLocalHasReviewed(false);
         setReviews([]);
+        setExtendedProduct(null);
+        setUnavailableMessage('');
+        setFailedImages({});
+        activeProductIdRef.current = selectedProduct?.id || selectedProduct?._id || null;
+        // Opening another product from a recommendation row starts at the top.
+        desktopScrollRef.current?.scrollTo?.({ top: 0 });
+        mobileScrollRef.current?.scrollTo?.({ top: 0 });
 
         if (selectedProduct && selectedProduct.variants && selectedProduct.variants.length > 0) {
             setSelectedVariant(selectedProduct.variants[0]);
@@ -146,11 +194,18 @@ const ProductDetailSheet = () => {
             } : {};
 
             const res = await customerApi.getProductById(productId, params);
+            if (String(activeProductIdRef.current) !== String(productId)) return;
             if (res.data.success) {
                 setExtendedProduct(res.data.result);
             }
         } catch (error) {
+            if (String(activeProductIdRef.current) !== String(productId)) return;
             console.error("Fetch extended product error:", error);
+            if (error?.response?.status === 404) {
+                setUnavailableMessage(error.response?.data?.message === "Product not available in your area"
+                    ? "This item is not available at your current location."
+                    : "This item is no longer available.");
+            }
         }
     };
 
@@ -320,9 +375,12 @@ const ProductDetailSheet = () => {
         );
     };
 
+    const stockSource = extendedProduct && String(extendedProduct._id) === String(selectedProduct?.id || selectedProduct?._id)
+        ? extendedProduct
+        : selectedProduct;
     const masterStock =
-        selectedProduct?.stock !== undefined && selectedProduct?.stock !== null
-            ? Math.max(0, Number(selectedProduct.stock))
+        stockSource?.stock !== undefined && stockSource?.stock !== null
+            ? Math.max(0, Number(stockSource.stock))
             : 999;
 
     const isVariantOutOfStock = (v) => {
@@ -336,6 +394,7 @@ const ProductDetailSheet = () => {
 
     const isOutOfStock = useMemo(() => {
         if (!selectedProduct) return false;
+        if (unavailableMessage) return true;
         if (selectedProduct.status === "out_of_stock" || selectedProduct.status === "OUT_OF_STOCK") return true;
         if (selectedProduct.inStock === false || selectedProduct.isOutOfStock === true) return true;
 
@@ -358,7 +417,7 @@ const ProductDetailSheet = () => {
         }
 
         return false;
-    }, [selectedProduct, selectedVariant, masterStock]);
+    }, [selectedProduct, selectedVariant, masterStock, unavailableMessage]);
 
     const availableStock = useMemo(() => {
         if (!selectedProduct || isOutOfStock) return 0;
@@ -425,6 +484,16 @@ const ProductDetailSheet = () => {
     if (!selectedProduct) return null;
 
     const cleanDesc = cleanDescription(selectedProduct?.description);
+    const detailSource = { ...selectedProduct, ...(extendedProduct || {}) };
+    const productFacts = buildProductFacts(detailSource, supportEmail);
+    const brandName = String(detailSource.brand || '').trim();
+    const packLabel = selectedVariant?.name || selectedProduct.weight || '';
+    const unitPriceLabel = getUnitPriceLabel(displayPrice, packLabel);
+    const deliveryLabel = selectedProduct.deliveryTime || currentLocation?.time || '';
+    const ratingCount = ratingSummary.count > 0 ? ratingSummary.count : Number(selectedProduct?.ratingCount) || 0;
+    const ratingAverage = ratingSummary.count > 0 ? Number(ratingSummary.average) : Number(selectedProduct?.ratingAverage) || 0;
+    const openBrand = () => navigate(brandPath(brandName));
+    const markImageFailed = (img) => setFailedImages((prev) => ({ ...prev, [img]: true }));
 
     return (
         <AnimatePresence>
@@ -522,6 +591,12 @@ const ProductDetailSheet = () => {
 
                                         {/* Main image viewer */}
                                         <div className="flex-1 flex items-center justify-center p-6 lg:p-8 relative min-h-[350px]">
+                                            {allImages.length === 0 ? (
+                                                <div className="flex flex-col items-center gap-2 text-slate-300">
+                                                    <ImageOff size={48} />
+                                                    <span className="text-xs font-bold">Image unavailable</span>
+                                                </div>
+                                            ) : (
                                             <AnimatePresence mode="wait">
                                                 <motion.img
                                                     key={activeImageIndex}
@@ -529,11 +604,13 @@ const ProductDetailSheet = () => {
                                                     animate={{ scale: 1, opacity: 1 }}
                                                     exit={{ scale: 0.93, opacity: 0 }}
                                                     transition={{ duration: 0.15 }}
-                                                    src={applyCloudinaryTransform(allImages[activeImageIndex], "f_auto,q_auto:best,w_1200,dpr_auto")}
+                                                    src={applyCloudinaryTransform(allImages[Math.min(activeImageIndex, allImages.length - 1)], "f_auto,q_auto:best,w_1200,dpr_auto")}
                                                     alt={`${selectedProduct.name} ${activeImageIndex + 1}`}
+                                                    onError={() => markImageFailed(allImages[Math.min(activeImageIndex, allImages.length - 1)])}
                                                     className="w-full h-full object-contain mix-blend-multiply drop-shadow-2xl hover:scale-[1.03] transition-transform duration-500 absolute inset-0 m-auto p-12"
                                                 />
                                             </AnimatePresence>
+                                            )}
                                         </div>
                                     </div>
 
@@ -555,11 +632,12 @@ const ProductDetailSheet = () => {
                                 </div>
 
                                 {/* Right: Product Info (scrollable naturally) */}
-                                <div className="flex-1 flex flex-col bg-white overflow-y-auto overscroll-contain custom-scrollbar">
+                                <div ref={desktopScrollRef} className="flex-1 flex flex-col bg-white overflow-y-auto overscroll-contain custom-scrollbar">
                                     <div className="flex-1 px-7 py-6 lg:px-8 lg:py-7 space-y-3">
 
                                         {/* Top badges row */}
                                         <div className="flex items-center gap-2 flex-wrap">
+                                            {deliveryLabel && (
                                             <motion.div
                                                 initial={{ opacity: 0, x: -10 }}
                                                 animate={{ opacity: 1, x: 0 }}
@@ -567,9 +645,10 @@ const ProductDetailSheet = () => {
                                                 className="inline-flex items-center gap-1.5 bg-[#ecfeff] border border-brand-200/50 text-primary px-3 py-1.5 rounded-lg text-[10px] font-[700] uppercase tracking-wider"
                                             >
                                                 <Clock size={12} strokeWidth={2.5} className="text-primary" />
-                                                {selectedProduct.deliveryTime || currentLocation?.time || '10-15 MINS'}
+                                                {deliveryLabel}
                                                 {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ''}
                                             </motion.div>
+                                            )}
                                             {hasDisplayDiscount && (
                                                 <motion.div
                                                     initial={{ opacity: 0, x: -10 }}
@@ -587,8 +666,8 @@ const ProductDetailSheet = () => {
                                                 className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-[10px] font-[700] border border-orange-100/50"
                                             >
                                                 <Star size={10} fill="currentColor" />
-                                                {ratingSummary.count > 0 ? Number(ratingSummary.average).toFixed(1) : (selectedProduct?.ratingAverage ? Number(selectedProduct.ratingAverage).toFixed(1) : '0.0')}
-                                                <span className="text-orange-400 font-medium">({ratingSummary.count > 0 ? ratingSummary.count : (selectedProduct?.ratingCount || 0)})</span>
+                                                {ratingCount > 0 ? ratingAverage.toFixed(1) : 'No ratings yet'}
+                                                {ratingCount > 0 && <span className="text-orange-400 font-medium">({ratingCount})</span>}
                                             </motion.div>
                                         </div>
 
@@ -598,11 +677,17 @@ const ProductDetailSheet = () => {
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: 0.15 }}
                                         >
-                                            <h1 className="text-[19px] lg:text-[22px] font-black text-[#111827] leading-[1.2] tracking-tight mb-1">
+                                            <h1 className="text-[19px] lg:text-[22px] font-black text-[#111827] leading-[1.2] tracking-tight mb-1 break-words">
                                                 {selectedProduct.name}
                                             </h1>
-                                            {selectedProduct.weight && (
-                                                <span className="text-[13px] text-gray-400 font-bold uppercase tracking-wider">{selectedProduct.weight}</span>
+                                            {packLabel && (
+                                                <span className="text-[13px] text-gray-400 font-bold uppercase tracking-wider">{packLabel}</span>
+                                            )}
+                                            {brandName && (
+                                                <div className="mt-2"><BrandLink name={brandName} onOpen={openBrand} /></div>
+                                            )}
+                                            {unavailableMessage && (
+                                                <p className="mt-2 text-xs font-bold text-red-600">{unavailableMessage}</p>
                                             )}
                                         </motion.div>
 
@@ -632,6 +717,9 @@ const ProductDetailSheet = () => {
                                                         <span className="inline-flex w-fit items-center text-[10px] font-[800] text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wide">
                                                             {displayDiscountPercent}% off
                                                         </span>
+                                                    )}
+                                                    {unitPriceLabel && (
+                                                        <span className="text-[11px] font-bold text-slate-500">({unitPriceLabel})</span>
                                                     )}
                                                 </div>
                                                 <div>
@@ -753,18 +841,14 @@ const ProductDetailSheet = () => {
                                             )}
 
                                             {/* Product Details */}
+                                            {productFacts.length > 0 && (
                                             <AccordionItem expandedSections={expandedSections} toggleSection={toggleSection}
                                                 id="details" 
                                                 title="Product Details" 
                                                 icon={<Search size={16} />}
                                             >
                                                 <div className="grid grid-cols-2 gap-3 mt-1">
-                                                    {[
-                                                        { label: 'Shelf Life', value: extendedProduct?.shelfLife || selectedProduct?.shelfLife || '3 Days', emoji: '📅' },
-                                                        { label: 'Country of Origin', value: extendedProduct?.countryOfOrigin || selectedProduct?.countryOfOrigin || 'India', emoji: '🇮🇳' },
-                                                        { label: 'FSSAI License', value: extendedProduct?.fssaiLicense || selectedProduct?.fssaiLicense || '1001234567890', emoji: '🛡️' },
-                                                        { label: 'Customer Care', value: supportEmail, emoji: '📧' }
-                                                    ].map((d) => (
+                                                    {productFacts.map((d) => (
                                                         <div key={d.label} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 group hover:bg-white hover:shadow-sm transition-all">
                                                             <span className="text-[10px] text-slate-400 block mb-0.5 font-bold uppercase tracking-wider">{d.label}</span>
                                                             <span className="font-black text-slate-800 text-[12px] break-all">{d.value}</span>
@@ -772,6 +856,7 @@ const ProductDetailSheet = () => {
                                                     ))}
                                                 </div>
                                             </AccordionItem>
+                                            )}
 
                                             {/* Customer Reviews */}
                                             <AccordionItem expandedSections={expandedSections} toggleSection={toggleSection}
@@ -878,6 +963,11 @@ const ProductDetailSheet = () => {
                                             </AccordionItem>
                                         </div>
 
+                                        <ProductRecommendations
+                                            productId={selectedProduct.id || selectedProduct._id}
+                                            className="pt-4"
+                                        />
+
                                         {/* Bottom spacer */}
                                         <div className="h-6" />
                                     </div>
@@ -950,6 +1040,7 @@ const ProductDetailSheet = () => {
 
                         {/* Scrollable Content */}
                         <div
+                            ref={mobileScrollRef}
                             className={cn(
                                 "flex-1 overflow-x-hidden no-scrollbar pb-24 bg-white",
                                 isExpanded ? "overflow-y-auto" : "overflow-y-hidden"
@@ -967,13 +1058,20 @@ const ProductDetailSheet = () => {
                                         setActiveImageIndex(index);
                                     }}
                                 >
+                                    {allImages.length === 0 && (
+                                        <div className="flex-shrink-0 w-full h-full flex flex-col items-center justify-center gap-2 text-slate-300">
+                                            <ImageOff size={48} />
+                                            <span className="text-xs font-bold">Image unavailable</span>
+                                        </div>
+                                    )}
                                     {allImages.map((img, i) => (
-                                        <div key={i} className="flex-shrink-0 w-full h-full snap-center flex items-center justify-center px-0 sm:px-4">
+                                        <div key={img} className="flex-shrink-0 w-full h-full snap-center flex items-center justify-center px-0 sm:px-4">
                                             <motion.img
                                                 initial={{ scale: 0.8, opacity: 0 }}
                                                 animate={{ scale: 1, opacity: 1 }}
                                                 transition={{ duration: 0.4 }}
                                                 src={applyCloudinaryTransform(img, "f_auto,q_auto:best,w_1200,dpr_auto")}
+                                                onError={() => markImageFailed(img)}
                                                 alt={`${selectedProduct.name} ${i + 1}`}
                                                 className="w-full h-full object-contain mix-blend-multiply drop-shadow-xl"
                                                 style={{ objectPosition: 'center calc(50% - 40px)' }}
@@ -1001,15 +1099,33 @@ const ProductDetailSheet = () => {
                             {/* Product Info Container */}
                             <div className="px-5 pt-2 pb-6">
                                 {/* Delivery Time Badge */}
+                                {deliveryLabel && (
                                 <div className="inline-flex items-center gap-1.5 bg-[#F0FDF4] border border-brand-100 text-primary px-2.5 py-1 rounded-lg text-[10px] font-black uppercase mb-3">
                                     <Clock size={12} strokeWidth={3} />
-                                    {selectedProduct.deliveryTime || currentLocation?.time || "10-15 Mins"}
+                                    {deliveryLabel}
                                     {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ""}
                                 </div>
+                                )}
 
-                                <h2 className="text-xl font-black text-[#1A1A1A] leading-tight mb-2">
+                                <h2 className="text-xl font-black text-[#1A1A1A] leading-tight mb-1 break-words">
                                     {selectedProduct.name}
                                 </h2>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-[12px] font-bold text-slate-500">
+                                    {packLabel && <span className="uppercase tracking-wider">{packLabel}</span>}
+                                    {unitPriceLabel && <span>({unitPriceLabel})</span>}
+                                    {ratingCount > 0 ? (
+                                        <span className="inline-flex items-center gap-1 text-amber-600">
+                                            <Star size={12} className="fill-amber-400 text-amber-400" />
+                                            {ratingAverage.toFixed(1)} <span className="text-slate-400">({ratingCount})</span>
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400">No ratings yet</span>
+                                    )}
+                                </div>
+                                {brandName && <div className="mb-2"><BrandLink name={brandName} onOpen={openBrand} /></div>}
+                                {unavailableMessage && (
+                                    <p className="mb-2 text-xs font-bold text-red-600">{unavailableMessage}</p>
+                                )}
 
                                 {/* Variants Selection (Mobile) */}
                                 {selectedProduct.variants && selectedProduct.variants.length > 0 && (
@@ -1063,18 +1179,14 @@ const ProductDetailSheet = () => {
                                     )}
 
                                     {/* Product Details */}
+                                    {productFacts.length > 0 && (
                                     <AccordionItem expandedSections={expandedSections} toggleSection={toggleSection}
                                         id="details" 
                                         title="Product Details" 
                                         icon={<Search size={18} strokeWidth={2.5} />}
                                     >
                                         <div className="grid grid-cols-2 gap-3 mt-1">
-                                            {[
-                                                { label: 'Shelf Life', value: extendedProduct?.shelfLife || selectedProduct?.shelfLife || '3 Days' },
-                                                { label: 'Country of Origin', value: extendedProduct?.countryOfOrigin || selectedProduct?.countryOfOrigin || 'India' },
-                                                { label: 'FSSAI License', value: extendedProduct?.fssaiLicense || selectedProduct?.fssaiLicense || '1001234567890' },
-                                                { label: 'Customer Care', value: supportEmail }
-                                            ].map((d) => (
+                                            {productFacts.map((d) => (
                                                 <div key={d.label} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                                                     <span className="text-gray-400 block mb-0.5 text-[10px] font-bold uppercase tracking-wider">{d.label}</span>
                                                     <span className="font-black text-slate-800 text-xs break-all">{d.value}</span>
@@ -1082,18 +1194,19 @@ const ProductDetailSheet = () => {
                                             ))}
                                         </div>
                                     </AccordionItem>
+                                    )}
 
                                     {/* Customer Reviews */}
                                     <AccordionItem expandedSections={expandedSections} toggleSection={toggleSection}
                                         id="reviews" 
-                                        title={`Customer Reviews (${reviews.length > 0 ? reviews.length : '120+'})`}
+                                        title={`Customer Reviews (${ratingCount > 0 ? ratingCount : reviews.length})`}
                                         icon={<Star size={18} strokeWidth={2.5} />}
                                     >
                                         <div className="space-y-6 mt-2">
                                             <div className="flex items-center justify-between mb-4">
                                                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-primary rounded-xl text-xs font-black border border-brand-100">
                                                     <Star size={16} fill="currentColor" />
-                                                    {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '4.8'}
+                                                    {ratingCount > 0 ? ratingAverage.toFixed(1) : 'No ratings yet'}
                                                 </div>
                                             </div>
 
@@ -1164,6 +1277,11 @@ const ProductDetailSheet = () => {
                                         </div>
                                     </AccordionItem>
                                 </div>
+
+                                <ProductRecommendations
+                                    productId={selectedProduct.id || selectedProduct._id}
+                                    className="mt-6"
+                                />
 
                                 <div className="h-24" /> {/* Bottom spacer for sticky bar */}
                             </div>

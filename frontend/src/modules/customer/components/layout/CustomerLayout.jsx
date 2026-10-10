@@ -86,14 +86,14 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
     const hideCartRoutes = ['/checkout', '/search', '/chat'];
 
     // If props are passed, use them. Otherwise, use route-based logic.
-    const showHeader = showHeaderProp !== undefined ? showHeaderProp : (!hideHeaderRoutes.includes(path) && !path.startsWith('/category') && !path.startsWith('/orders') && !path.startsWith('/product'));
+    const showHeader = showHeaderProp !== undefined ? showHeaderProp : (!hideHeaderRoutes.includes(path) && !path.startsWith('/category') && !path.startsWith('/brand/') && !path.startsWith('/orders') && !path.startsWith('/product'));
     const showBottomNav = showBottomNavProp !== undefined ? showBottomNavProp : (!hideBottomNavRoutes.includes(path) && !path.startsWith('/product'));
     const showCart = showCartProp !== undefined ? showCartProp : (!hideCartRoutes.includes(path) && !path.startsWith('/orders'));
-    const showFooter = !hideFooterRoutes.includes(path) && !path.startsWith('/product') && !path.startsWith('/category/');
+    const showFooter = !hideFooterRoutes.includes(path) && !path.startsWith('/product') && !path.startsWith('/category/') && !path.startsWith('/brand/');
 
     // Condition to hide the MobileFooterMessage ("India's last minute app") on specific pages
     const hideFooterMessageRoutes = ['/profile', '/profile/edit', '/privacy', '/terms'];
-    const showFooterMessage = showBottomNav && !hideFooterMessageRoutes.includes(path) && !path.startsWith('/category') && !path.startsWith('/product');
+    const showFooterMessage = showBottomNav && !hideFooterMessageRoutes.includes(path) && !path.startsWith('/category') && !path.startsWith('/brand/') && !path.startsWith('/product');
 
     // Hide elements on mobile only when product detail is open
     // On desktop, we want to keep the header visible even if the modal is open
