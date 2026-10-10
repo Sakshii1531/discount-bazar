@@ -25,7 +25,6 @@ import {
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
 import logger from "../services/logger.js";
-import { resolveCategoryName, resolveSellerName } from "../services/entityNameCache.js";
 import {
   PRODUCT_APPROVAL_STATUS,
   getProductApprovalConfig,
@@ -36,11 +35,16 @@ import {
   sanitizeApprovalNote,
   resolveProductApprovalStatus,
 } from "../services/productModerationService.js";
-import { buildSearchRegex } from "../utils/regex.js";
+import { buildSearchRegex, escapeRegex } from "../utils/regex.js";
 import { computePurchaseGst } from "../utils/money.js";
 import { parseAndValidateReturnPolicy } from "../validation/returnPolicyValidation.js";
 import { decorateProductsWithDelivery, quoteCartDelivery } from "../services/deliveryQuoteService.js";
 import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
+import {
+  buildProductRecommendations,
+  enrichCatalogProducts,
+  isValidObjectId,
+} from "../services/productRecommendationService.js";
 
 // Phase 3 P3-5: when search term is reasonably specific and the env flag
 // is enabled, prefer Mongo's `name + tags` text index over case-insensitive
@@ -441,6 +445,13 @@ export const getProducts = async (req, res) => {
     const finalCategoryId = category || categoryId;
     const finalSubcategoryId = subcategory || subcategoryId;
 
+    const badId = [finalHeaderId, finalCategoryId, finalSubcategoryId].find(
+      (value) => value && value !== "all" && !isValidObjectId(value),
+    );
+    if (badId) {
+      return handleResponse(res, 400, `Invalid category id: ${String(badId).slice(0, 64)}`);
+    }
+
     if (finalHeaderId && finalHeaderId !== "all") query.headerId = finalHeaderId;
     if (finalCategoryId && finalCategoryId !== "all") query.categoryId = finalCategoryId;
     if (finalSubcategoryId && finalSubcategoryId !== "all") query.subcategoryId = finalSubcategoryId;
@@ -510,6 +521,14 @@ export const getProducts = async (req, res) => {
     }
 
     if (featured !== undefined) query.isFeatured = featured === "true";
+    // Brand listing: exact (case-insensitive) match on the product's brand field.
+    const brandFilter = String(req.query.brand || "").trim();
+    if (brandFilter) {
+      query.brand = { $regex: `^\\s*${escapeRegex(brandFilter)}\\s*$`, $options: "i" };
+    }
+    if (String(req.query.inStock || "").toLowerCase() === "true") {
+      query.stock = { $gt: 0 };
+    }
     if (req.query.isReturnable !== undefined) {
       query["returnPolicy.isReturnable"] = String(req.query.isReturnable) === "true";
     } else if (req.query.returnPolicy !== undefined) {
@@ -557,7 +576,7 @@ export const getProducts = async (req, res) => {
       const [rawProducts, total] = await Promise.all([
         Product.find(finalQuery)
           .select(
-            "name slug description sku price salePrice stock brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
+            "name slug description sku price salePrice stock brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
           )
           // No .populate() — names resolved via cache-backed entityNameCache
           .sort(sortQuery)
@@ -567,44 +586,8 @@ export const getProducts = async (req, res) => {
         Product.countDocuments(finalQuery),
       ]);
 
-      // Collect unique category IDs (headerId, categoryId, subcategoryId) and seller IDs
-      const categoryIdSet = new Set();
-      const sellerIdSet = new Set();
-      for (const p of rawProducts) {
-        if (p.headerId) categoryIdSet.add(String(p.headerId));
-        if (p.categoryId) categoryIdSet.add(String(p.categoryId));
-        if (p.subcategoryId) categoryIdSet.add(String(p.subcategoryId));
-        if (p.sellerId) sellerIdSet.add(String(p.sellerId));
-      }
-
-      // Resolve names in parallel via cache-backed service
-      const [categoryEntries, sellerEntries] = await Promise.all([
-        Promise.all(
-          [...categoryIdSet].map(async (id) => [id, await resolveCategoryName(id)]),
-        ),
-        Promise.all(
-          [...sellerIdSet].map(async (id) => [id, await resolveSellerName(id)]),
-        ),
-      ]);
-
-      const nameMap = Object.fromEntries([...categoryEntries, ...sellerEntries]);
-
-      // Enrich products to match the shape previously returned by .populate()
-      const products = rawProducts.map((p) => ({
-        ...p,
-        headerId: p.headerId
-          ? { _id: p.headerId, name: nameMap[String(p.headerId)] ?? null }
-          : null,
-        categoryId: p.categoryId
-          ? { _id: p.categoryId, name: nameMap[String(p.categoryId)] ?? null }
-          : null,
-        subcategoryId: p.subcategoryId
-          ? { _id: p.subcategoryId, name: nameMap[String(p.subcategoryId)] ?? null }
-          : null,
-        sellerId: p.sellerId
-          ? { _id: p.sellerId, shopName: nameMap[String(p.sellerId)] ?? null }
-          : null,
-      }));
+      // Names resolved via cache-backed entityNameCache (same shape as .populate())
+      const products = await enrichCatalogProducts(rawProducts);
 
       return {
         items: normalizeProductListModeration(products),
@@ -1366,9 +1349,22 @@ export const deleteProduct = async (req, res) => {
 /* ===============================
    GET SINGLE PRODUCT
 ================================ */
+// Accepts a product ObjectId or slug; returns the id, or null when nothing matches.
+async function resolveProductId(idOrSlug) {
+  const value = String(idOrSlug || "").trim();
+  if (!value) return null;
+  if (isValidObjectId(value)) return value;
+  if (value.length > 200) return null;
+  const found = await Product.findOne({ slug: value.toLowerCase() }).select("_id").lean();
+  return found ? String(found._id) : null;
+}
+
 export const getProductById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = await resolveProductId(req.params.id);
+    if (!id) {
+      return handleResponse(res, 404, "Product not found");
+    }
     const enforceRadius = isCustomerVisibilityRequest(req);
 
     let nearbySellerSet = null;
@@ -1394,7 +1390,7 @@ export const getProductById = async (req, res) => {
       async () =>
         Product.findById(id)
           .select(
-            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
+            "name slug description sku price salePrice mrp stock lowStockAlert brand weight size tags shelfLife countryOfOrigin fssaiLicense returnPolicy ratingAverage ratingCount mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           .populate("headerId", "name")
           .populate("categoryId", "name")
@@ -1451,6 +1447,77 @@ export const getProductById = async (req, res) => {
     );
   } catch (error) {
     return handleResponse(res, 500, error.message);
+  }
+};
+
+/* ===============================
+   PRODUCT RECOMMENDATIONS (Public)
+   Similar products, top products in the category, brands in the category
+   and "people also bought" — one call for the product detail page.
+================================ */
+export const getProductRecommendations = async (req, res) => {
+  try {
+    const id = await resolveProductId(req.params.id);
+    if (!id) {
+      return handleResponse(res, 404, "Product not found");
+    }
+
+    const enforceRadius = isCustomerVisibilityRequest(req);
+    const coords = parseCustomerCoordinates(req.query || {});
+    if (enforceRadius && !coords.valid) {
+      return handleResponse(res, 400, "lat and lng are required for customer product visibility");
+    }
+
+    const product = await Product.findById(id)
+      .select("name brand weight tags headerId categoryId subcategoryId sellerId status approvalStatus mainImage")
+      .lean();
+    const approvalState = product ? resolveProductApprovalStatus(product) : null;
+    if (!product || product.status !== "active" || approvalState !== PRODUCT_APPROVAL_STATUS.APPROVED) {
+      return handleResponse(res, 404, "Product not found");
+    }
+
+    const empty = {
+      productId: id,
+      similar: { items: [] },
+      topInCategory: { basis: "none", scope: null, items: [] },
+      brandsInCategory: { scope: null, items: [] },
+      alsoBought: { source: "none", items: [] },
+      errors: [],
+    };
+
+    let sellerIds = null;
+    if (enforceRadius || coords.valid) {
+      sellerIds = await getNearbySellerIdsForCustomer(coords.lat, coords.lng);
+      if (!sellerIds.length) {
+        return handleResponse(res, 200, "No sellers found in your area", empty);
+      }
+    }
+
+    // Lives under the productList namespace, so every product write that
+    // already clears product lists also clears these.
+    const locationKey = coords.valid
+      ? `${coords.lat.toFixed(4)}:${coords.lng.toFixed(4)}`
+      : "any";
+    const cacheKey = buildKey("catalog", "productList", `reco:${id}:${locationKey}`);
+    const compute = () => buildProductRecommendations(product, { sellerIds });
+    const result = await getOrSet(cacheKey, compute, getTTL("productList"));
+
+    // Delivery fee/time added after the cache, as in the product list.
+    const [similarItems, topItems, alsoBoughtItems] = await Promise.all([
+      decorateProductsWithDelivery(result.similar.items),
+      decorateProductsWithDelivery(result.topInCategory.items),
+      decorateProductsWithDelivery(result.alsoBought.items),
+    ]);
+
+    return handleResponse(res, 200, "Product recommendations fetched", {
+      ...result,
+      similar: { ...result.similar, items: similarItems },
+      topInCategory: { ...result.topInCategory, items: topItems },
+      alsoBought: { ...result.alsoBought, items: alsoBoughtItems },
+    });
+  } catch (error) {
+    logger.error("Product recommendations failed", { scope: "getProductRecommendations", error });
+    return handleResponse(res, 500, "Could not load recommendations");
   }
 };
 

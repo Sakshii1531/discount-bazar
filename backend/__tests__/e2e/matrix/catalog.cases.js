@@ -50,6 +50,19 @@ export default [
     check: (res) => expect(res.body.result).toEqual(expect.objectContaining({ name: "Fresh Milk", price: 60, salePrice: 55 })),
   },
   { route: "GET /api/products/:id", name: "unknown product", params: { id: OID }, query: near, status: 404 },
+  {
+    route: "GET /api/products/:id/recommendations",
+    params: (ctx) => ({ id: ctx.milk._id }),
+    query: near,
+    check: (res) => {
+      const r = res.body.result;
+      expect(r.errors).toEqual([]);
+      // Bread shares the subcategory; the product itself is never recommended.
+      expect(r.similar.items.map((p) => p.name)).toContain("Brown Bread");
+      expect(r.similar.items.map((p) => p.name)).not.toContain("Fresh Milk");
+    },
+  },
+  { route: "GET /api/products/:id/recommendations", name: "unknown product", params: { id: OID }, query: near, status: 404 },
 
   // ── Seller product management ─────────────────────────────────────────────
   {

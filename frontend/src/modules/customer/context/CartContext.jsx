@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { customerApi } from "../services/customerApi";
+import { toast } from "sonner";
 import { useAuth } from "@core/context/AuthContext";
 import { getJSON, setJSON, remove as removeStorage, STORAGE_KEYS } from "@core/utils/storage";
 
@@ -110,6 +111,17 @@ export const CartProvider = ({ children }) => {
         image: product?.mainImage, // Handle mapping for frontend
       };
     });
+  };
+
+  // The backend re-checks stock, availability and price on every cart write;
+  // when it refuses, tell the customer why (the cart is re-fetched after).
+  const notifyCartRejected = (error) => {
+    const status = error?.response?.status;
+    if (status && status < 500) {
+      toast.error(error?.response?.data?.message || "This item could not be added to your cart");
+    } else {
+      toast.error("Could not update your cart. Please try again.");
+    }
   };
 
   const resolveVariantPricing = (product, variantSku = "") => {
@@ -347,6 +359,7 @@ export const CartProvider = ({ children }) => {
       } catch (error) {
         pendingRequestsRef.current -= 1;
         console.error("Error adding to cart on backend", error);
+        notifyCartRejected(error);
         // Re-fetch entire cart to ensure consistency on error
         if (pendingRequestsRef.current === 0) {
           await fetchCart();
@@ -604,6 +617,7 @@ export const CartProvider = ({ children }) => {
       } catch (error) {
         pendingRequestsRef.current -= 1;
         console.error("Error updating quantity on backend", error);
+        notifyCartRejected(error);
         if (pendingRequestsRef.current === 0) {
           await fetchCart();
         }

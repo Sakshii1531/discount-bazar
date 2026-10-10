@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Heart, Plus, Minus, Star } from "lucide-react";
+import { Heart, Plus, Minus, Star, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useWishlist } from "../../context/WishlistContext";
@@ -21,7 +21,7 @@ import { useProductDetail } from "../../context/ProductDetailContext";
 import { getProductDeliveryFeeLabel } from "../../utils/deliveryLabels";
 
 const ProductCard = React.memo(
-  ({ product, badge, className, compact = false, neutralBg = false }) => {
+  ({ product, badge, className, compact = false, neutralBg = false, onProductClick }) => {
     const { toggleWishlist: toggleWishlistGlobal, isInWishlist } =
       useWishlist();
     const { cart, addToCart, updateQuantity, removeFromCart } = useCart();
@@ -29,13 +29,19 @@ const ProductCard = React.memo(
     const { animateAddToCart, animateRemoveFromCart } = useCartAnimation();
     const { currentLocation } = useAppLocation();
 
-    const { openProduct } = useProductDetail();
+    const { openProduct: openProductSheet } = useProductDetail();
+    // Pages without the detail sheet (e.g. the full product page) pass their own handler.
+    const openProduct = onProductClick || openProductSheet;
     const [showHeartPopup, setShowHeartPopup] = React.useState(false);
     
     const location = useLocation();
     const isWishlistPage = location.pathname === '/wishlist';
 
     const imageRef = React.useRef(null);
+    const imageSrc =
+      product?.image || product?.mainImage || (Array.isArray(product?.images) ? product.images[0] : null);
+    const [imageFailed, setImageFailed] = React.useState(false);
+    React.useEffect(() => setImageFailed(false), [imageSrc]);
 
     const defaultVariant = React.useMemo(() => {
       const variants = Array.isArray(product?.variants) ? product.variants : [];
@@ -74,6 +80,19 @@ const ProductCard = React.memo(
         discountPercent: hasDiscount ? Math.round(((variantMrp - variantSale) / variantMrp) * 100) : (displayedOriginal > displayed ? Math.round(((displayedOriginal - displayed) / displayedOriginal) * 100) : 0)
       };
     }, [product]);
+
+    // Single-SKU products: list price vs selling price from the card shape.
+    const basePricing = React.useMemo(() => {
+      const selling = Number(product?.price || 0);
+      const original = Number(product?.originalPrice || 0);
+      const hasDiscount = selling > 0 && original > selling;
+      return {
+        displayPrice: selling,
+        displayOriginalPrice: hasDiscount ? original : null,
+        discountPercent: hasDiscount ? Math.round(((original - selling) / original) * 100) : 0,
+      };
+    }, [product]);
+    const pricing = defaultVariant || basePricing;
 
     const productId = product.id || product._id;
     const variantKey = String(defaultVariant?.key || "").trim();
@@ -187,6 +206,9 @@ const ProductCard = React.memo(
     }, [product, defaultVariant, hasVariants, liveStock]);
 
     const isOutOfStock = availableStock <= 0;
+    const packLabel = defaultVariant?.name || product.weight || "";
+    const ratingCount = Math.max(0, Number(product?.ratingCount) || 0);
+    const ratingAverage = Math.min(5, Math.max(0, Number(product?.ratingAverage) || 0));
 
     const handleAddToCart = React.useCallback(
       (e) => {
@@ -288,7 +310,7 @@ const ProductCard = React.memo(
             </div>
           ) : (badge ||
             product.discount ||
-            defaultVariant?.discountPercent > 0) && (
+            pricing.discountPercent > 0) && (
               <div
                 className={cn(
                   "absolute z-10 bg-primary text-primary-foreground font-[900] rounded-md shadow-sm uppercase tracking-wider flex items-center justify-center",
@@ -298,7 +320,7 @@ const ProductCard = React.memo(
                 )}>
                 {badge ||
                   product.discount ||
-                  `${defaultVariant?.discountPercent}% OFF`}
+                  `${pricing.discountPercent}% OFF`}
               </div>
             )}
 
@@ -342,13 +364,18 @@ const ProductCard = React.memo(
               "block w-full overflow-hidden flex items-center justify-center aspect-square",
               compact || neutralBg ? "bg-white/70" : "bg-white/50"
             )}>
-            <img
-              ref={imageRef}
-              src={applyCloudinaryTransform(product?.image || product?.mainImage || (Array.isArray(product?.images) ? product?.images[0] : null))}
-              alt={product?.name || "Product"}
-              loading="lazy"
-              className={cn("w-full h-full object-cover mix-blend-multiply", isOutOfStock && "opacity-60 grayscale")}
-            />
+            {imageSrc && !imageFailed ? (
+              <img
+                ref={imageRef}
+                src={applyCloudinaryTransform(imageSrc)}
+                alt={product?.name || "Product"}
+                loading="lazy"
+                onError={() => setImageFailed(true)}
+                className={cn("w-full h-full object-cover mix-blend-multiply", isOutOfStock && "opacity-60 grayscale")}
+              />
+            ) : (
+              <ImageOff size={compact ? 22 : 28} className="text-slate-300" aria-label="Image unavailable" />
+            )}
           </div>
         </div>
 
@@ -375,11 +402,24 @@ const ProductCard = React.memo(
             </div>
             <div
               className={cn(
-                "bg-brand-50 text-brand-600 font-bold rounded px-1.5 py-0 tracking-wide",
+                "bg-brand-50 text-brand-600 font-bold rounded px-1.5 py-0 tracking-wide truncate max-w-[60%]",
+                !packLabel && "invisible",
                 compact ? "text-[8px]" : "text-[8px] sm:text-[9px]",
               )}>
-              {defaultVariant?.name || product.weight || "1 unit"}
+              {packLabel}
             </div>
+            {ratingCount > 0 && (
+              <span
+                className={cn(
+                  "ml-auto flex items-center gap-0.5 font-bold text-amber-600",
+                  compact ? "text-[8px]" : "text-[8px] sm:text-[9px]",
+                )}
+                aria-label={`Rated ${ratingAverage.toFixed(1)} out of 5 by ${ratingCount} customers`}>
+                <Star size={compact ? 8 : 9} className="fill-amber-400 text-amber-400" />
+                {ratingAverage.toFixed(1)}
+                <span className="font-medium text-gray-400">({ratingCount})</span>
+              </span>
+            )}
           </div>
 
           <div className={cn(compact ? "h-8" : "h-8 sm:h-9")}>
@@ -400,7 +440,7 @@ const ProductCard = React.memo(
                 "font-semibold",
                 compact ? "text-[8px]" : "text-[9px] sm:text-[10px]",
               )}>
-              {product.deliveryTime || currentLocation?.time || "10-15 mins"}
+              {product.deliveryTime || currentLocation?.time || ""}
             </span>
             {getProductDeliveryFeeLabel(product) && (
               <span
@@ -423,15 +463,15 @@ const ProductCard = React.memo(
                   "font-[1000] text-[#1A1A1A]",
                   compact ? "text-[11px]" : "text-[13px] sm:text-sm",
                 )}>
-                {formatCurrencyInteger(defaultVariant?.displayPrice ?? product.price)}
+                {formatCurrencyInteger(pricing.displayPrice ?? product.price)}
               </span>
-              {defaultVariant?.displayOriginalPrice && (
+              {pricing.displayOriginalPrice && (
                 <span
                   className={cn(
                     "font-medium text-gray-400 line-through leading-none",
                     compact ? "text-[8px]" : "text-[9px] sm:text-[10px]",
                   )}>
-                  {formatCurrencyInteger(defaultVariant.displayOriginalPrice)}
+                  {formatCurrencyInteger(pricing.displayOriginalPrice)}
                 </span>
               )}
             </div>

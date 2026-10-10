@@ -59,7 +59,7 @@ export const getCategories = async (req, res) => {
       const categories = await getOrSet(
         cacheKey,
         async () => {
-          const selectFields = "name slug image iconId type parentId headerColor headerFontColor headerIconColor";
+          const selectFields = "name slug image iconId type parentId status headerColor headerFontColor headerIconColor";
           return Category.find({ type: "header" })
             .select(selectFields)
             .populate({

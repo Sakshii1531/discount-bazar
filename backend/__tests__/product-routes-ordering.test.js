@@ -21,6 +21,9 @@ jest.unstable_mockModule("../app/controller/productController.js", () => ({
   approveProduct: jest.fn((req, res) => res.status(200).json({})),
   rejectProduct: jest.fn((req, res) => res.status(200).json({})),
   getDeliveryQuote: jest.fn((req, res) => res.status(200).json({ route: "delivery-quote" })),
+  getProductRecommendations: jest.fn((req, res) =>
+    res.status(200).json({ route: "recommendations", id: req.params.id }),
+  ),
 }));
 
 jest.unstable_mockModule("../app/controller/productBulkController.js", () => ({
@@ -78,5 +81,15 @@ describe("product routes ordering", () => {
     expect(response.body.route).toBe("by-id");
     expect(response.body.id).toBe("abc123");
     expect(mockGetProductById).toHaveBeenCalledTimes(1);
+  });
+
+  test("GET /:id/recommendations reaches the recommendations handler", async () => {
+    const app = express();
+    app.use("/products", productRoutes);
+
+    const response = await request(app).get("/products/abc123/recommendations");
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ route: "recommendations", id: "abc123" });
+    expect(mockGetProductById).not.toHaveBeenCalled();
   });
 });

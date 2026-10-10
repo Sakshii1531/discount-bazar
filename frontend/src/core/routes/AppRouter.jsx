@@ -44,6 +44,7 @@ const AboutPage = lazy(() => import('../../modules/customer/pages/AboutPage'));
 const EditProfilePage = lazy(() => import('../../modules/customer/pages/EditProfilePage'));
 const OrderDetailPage = lazy(() => import('../../modules/customer/pages/OrderDetailPage'));
 const ProductDetailPage = lazy(() => import('../../modules/customer/pages/ProductDetailPage'));
+const BrandProductsPage = lazy(() => import('../../modules/customer/pages/BrandProductsPage'));
 const CheckoutPage = lazy(() => import('../../modules/customer/pages/CheckoutPage'));
 const PaymentStatusPage = lazy(() => import('../../modules/customer/pages/PaymentStatusPage'));
 const SearchPage = lazy(() => import('../../modules/customer/pages/SearchPage'));
@@ -209,6 +210,7 @@ const AppRouter = () => {
                         { path: 'categories', element: <CategoriesPage /> },
                         { path: 'category/:categoryName', element: <CategoryProductsPage /> },
                         { path: 'product/:id', element: <ProductDetailPage /> },
+                        { path: 'brand/:brandName', element: <BrandProductsPage /> },
                         { path: 'terms', element: <TermsPage /> },
                         { path: 'privacy', element: <PrivacyPage /> },
                         { path: 'user/privacy', element: <PrivacyPage /> },

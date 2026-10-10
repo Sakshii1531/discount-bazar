@@ -10,6 +10,7 @@ import {
     approveProduct,
     rejectProduct,
     getDeliveryQuote,
+    getProductRecommendations,
 } from "../controller/productController.js";
 import { adjustStock, getStockHistory } from "../controller/stockController.js";
 import { bulkUploadProducts } from "../controller/productBulkController.js";
@@ -40,6 +41,7 @@ router.post("/bulk-upload", verifyToken, allowRoles("seller"), requireApprovedSe
 router.get("/moderation", verifyToken, allowRoles("admin"), getModerationProducts);
 router.patch("/moderation/:id/approve", verifyToken, allowRoles("admin"), approveProduct);
 router.patch("/moderation/:id/reject", verifyToken, allowRoles("admin"), rejectProduct);
+router.get("/:id/recommendations", optionalVerifyToken, getProductRecommendations);
 router.get("/:id", optionalVerifyToken, getProductById);
 
 router.post(
