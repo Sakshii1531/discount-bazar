@@ -50,6 +50,9 @@ const PaymentStatusPage = lazy(() => import('../../modules/customer/pages/Paymen
 const SearchPage = lazy(() => import('../../modules/customer/pages/SearchPage'));
 const WalletPage = lazy(() => import('../../modules/customer/pages/WalletPage'));
 const NotificationsPage = lazy(() => import('../../modules/customer/pages/NotificationsPage'));
+const FAQPage = lazy(() => import('../../modules/customer/pages/FAQPage'));
+const RefundPage = lazy(() => import('../../modules/customer/pages/RefundPage'));
+const DeliveryPolicyPage = lazy(() => import('../../modules/customer/pages/DeliveryPolicyPage'));
 
 // Lazy load heavy modules
 const SellerModule = lazy(() => import('../../modules/seller/routes/index'));
@@ -218,6 +221,10 @@ const AppRouter = () => {
                         { path: 'privacy/seller', element: <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}><SellerPrivacyPage /></Suspense> },
                         { path: 'privacy/delivery', element: <Suspense fallback={<div className="flex h-screen items-center justify-center font-outfit">Loading...</div>}><DeliveryPrivacyPage /></Suspense> },
                         { path: 'about', element: <AboutPage /> },
+                        { path: 'faq', element: <FAQPage /> },
+                        { path: 'faqs', element: <FAQPage /> },
+                        { path: 'refund-policy', element: <RefundPage /> },
+                        { path: 'delivery-policy', element: <DeliveryPolicyPage /> },
                         { path: 'offers', element: <OffersPage /> },
                         { path: 'shop-by-store', element: <ShopByStorePage /> },
                         { path: 'wishlist', element: <ProtectedRoute><WishlistPage /></ProtectedRoute> },
@@ -226,7 +233,7 @@ const AppRouter = () => {
                         { path: 'transactions', element: <ProtectedRoute><OrderTransactionsPage /></ProtectedRoute> },
                         { path: 'addresses', element: <ProtectedRoute><AddressesPage /></ProtectedRoute> },
                         { path: 'settings', element: <ProtectedRoute><SettingsPage /></ProtectedRoute> },
-                        { path: 'support', element: <ProtectedRoute><SupportPage /></ProtectedRoute> },
+                        { path: 'support', element: <SupportPage /> },
                         { path: 'chat', element: <ProtectedRoute><ChatPage /></ProtectedRoute> },
                         { path: 'checkout', element: <ProtectedRoute><CheckoutPage /></ProtectedRoute> },
                         { path: 'payment-status', element: <PaymentStatusPage /> },

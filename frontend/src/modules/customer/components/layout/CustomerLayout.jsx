@@ -80,7 +80,7 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
     // Route-based visibility logic
     const path = location.pathname.replace(/\/$/, '') || '/';
 
-    const hideHeaderRoutes = ['/', '/categories', '/orders', '/transactions', '/profile', '/profile/edit', '/wishlist', '/addresses', '/wallet', '/support', '/privacy', '/about', '/terms', '/checkout', '/search', '/chat', '/notifications'];
+    const hideHeaderRoutes = ['/', '/categories', '/orders', '/transactions', '/profile', '/profile/edit', '/wishlist', '/addresses', '/wallet', '/support', '/faq', '/faqs', '/refund-policy', '/delivery-policy', '/privacy', '/about', '/terms', '/checkout', '/search', '/chat', '/notifications'];
     const hideBottomNavRoutes = ['/checkout', '/search', '/chat', '/privacy', '/terms'];
     const hideFooterRoutes = ['/privacy', '/terms'];
     const hideCartRoutes = ['/checkout', '/search', '/chat'];

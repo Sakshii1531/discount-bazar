@@ -57,6 +57,7 @@ const Footer = () => {
                             <li><Link to="/about" className="hover:text-brand-300 transition-colors md:text-base md:font-semibold flex items-center group text-white"><span className="hidden md:block w-0 h-px bg-white group-hover:w-4 group-hover:mr-2 transition-all"></span>About Us</Link></li>
                             <li><Link to="/categories" className="hover:text-brand-300 transition-colors md:text-base md:font-semibold flex items-center group text-white"><span className="hidden md:block w-0 h-px bg-white group-hover:w-4 group-hover:mr-2 transition-all"></span>Categories</Link></li>
                             <li><Link to="/offers" className="hover:text-brand-300 transition-colors md:text-base md:font-semibold flex items-center group text-white"><span className="hidden md:block w-0 h-px bg-white group-hover:w-4 group-hover:mr-2 transition-all"></span>Offers</Link></li>
+                            <li><Link to="/faq" className="hover:text-brand-300 transition-colors md:text-base md:font-semibold flex items-center group text-white"><span className="hidden md:block w-0 h-px bg-white group-hover:w-4 group-hover:mr-2 transition-all"></span>FAQs</Link></li>
                             <li><Link to="/support" className="hover:text-brand-300 transition-colors md:text-base md:font-semibold flex items-center group text-white"><span className="hidden md:block w-0 h-px bg-white group-hover:w-4 group-hover:mr-2 transition-all"></span>Support & Contact</Link></li>
                         </ul>
                     </div>

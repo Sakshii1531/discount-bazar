@@ -143,6 +143,13 @@ const ProfilePage = () => {
                         <div className="divide-y divide-slate-100">
                             <MenuItem
                                 icon={HelpCircle}
+                                label="FAQs"
+                                path="/faq"
+                                color="#10b981"
+                                bg="rgba(16,185,129,0.08)"
+                            />
+                            <MenuItem
+                                icon={HelpCircle}
                                 label="Help & Support"
                                 path="/support"
                                 color="#3b82f6"
