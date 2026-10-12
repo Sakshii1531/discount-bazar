@@ -15,6 +15,14 @@ export const adminCatalogApi = {
     deleteCategory: (id) => axiosInstance.delete(`/admin/categories/${id}`),
     getParentUnits: () => axiosInstance.get('/admin/categories?flat=true'),
 
+    // Brand Management
+    getAdminBrands: (params) => axiosInstance.get('/admin/brands', { params }),
+    getActiveBrands: () => axiosInstance.get('/brands'),
+    createBrand: (formData) => axiosInstance.post('/admin/brands', formData),
+    updateBrand: (id, formData) =>
+        axiosInstance.put(`/admin/brands/${id}`, formData),
+    deleteBrand: (id) => axiosInstance.delete(`/admin/brands/${id}`),
+
     // Product Management
     getProducts: (params) => axiosInstance.get('/products', { params }),
     getProduct: (id) => axiosInstance.get(`/products/${id}`),

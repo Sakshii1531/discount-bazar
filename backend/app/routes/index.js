@@ -5,6 +5,7 @@ import sellerRoute from "./sellerAuth.js";
 import posRoute from "./posRoutes.js";
 import businessRoute from "./businessRoutes.js";
 import categoryRoute from "./categoryRoutes.js";
+import { publicBrandRouter, adminBrandRouter } from "./brandRoutes.js";
 import productRoute from "./productRoutes.js";
 import cartRoute from "./cartRoutes.js";
 import wishlistRoute from "./wishlistRoutes.js";
@@ -43,12 +44,14 @@ const setupRoutes = (app) => {
     //   /categories       → public category browsing (read-only handlers)
     // Same router, two URL surfaces. Do not deduplicate without coordinated frontend changes.
     router.use("/admin/categories", categoryRoute);
+    router.use("/admin/brands", adminBrandRouter);
     router.use("/admin", adminRoute);
     router.use("/seller", sellerRoute);
     router.use("/seller/pos", posRoute);
     router.use("/seller/business", businessRoute);
     router.use("/settings", settingsRoute);
     router.use("/categories", categoryRoute);
+    router.use("/brands", publicBrandRouter);
     router.use("/products", productRoute);
     router.use("/cart", cartRoute);
     router.use("/wishlist", wishlistRoute);

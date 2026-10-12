@@ -30,6 +30,7 @@ import mongoose from "mongoose";
 // Core domain models
 import "../models/admin.js";
 import "../models/cart.js";
+import "../models/brand.js";
 import "../models/category.js";
 import "../models/checkoutGroup.js";
 import "../models/coupon.js";
@@ -92,6 +93,7 @@ export const REQUIRED_MODELS = Object.freeze([
 
   // Catalog
   "Product",
+  "Brand",
   "Category",
   "Coupon",
   "Offer",

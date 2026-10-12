@@ -23,6 +23,7 @@ import {
   Sparkles,
   User,
   Store,
+  BadgeCheck,
 } from "lucide-react";
 
 const Dashboard = React.lazy(() => import("../pages/Dashboard"));
@@ -41,6 +42,7 @@ const SubCategories = React.lazy(
 const CategoryHierarchy = React.lazy(
   () => import("../pages/categories/CategoryHierarchy"),
 );
+const BrandManagement = React.lazy(() => import("../pages/BrandManagement"));
 const ProductManagement = React.lazy(
   () => import("../pages/ProductManagement"),
 );
@@ -112,6 +114,7 @@ const navItems = [
       { label: "Sub-Categories", path: "/admin/categories/sub" },
     ],
   },
+  { label: "Brands", path: "/admin/brands", icon: BadgeCheck, color: "violet" },
   { label: "Products", path: "/admin/products", icon: Box, color: "amber" },
   {
     label: "Marketing Tools",
@@ -294,6 +297,7 @@ const AdminRoutes = () => {
         <Route path="/categories/level2" element={<Level2Categories />} />
         <Route path="/categories/sub" element={<SubCategories />} />
         <Route path="/categories/hierarchy" element={<CategoryHierarchy />} />
+        <Route path="/brands" element={<BrandManagement />} />
         <Route path="/products" element={<ProductManagement />} />
         <Route path="/sellers/active" element={<ActiveSellers />} />
         <Route path="/sellers/active/:id" element={<SellerDetail />} />

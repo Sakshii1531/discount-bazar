@@ -30,7 +30,8 @@ export const createProductSchema = Joi.object({
       }),
     )
     .optional(),
-  brand: trimmedString.max(100).optional(),
+  brand: trimmedString.max(100).allow("").optional(),
+  brandId: objectIdLike.allow("", null).optional(),
   tags: Joi.array().items(trimmedString.max(50)).max(20).optional(),
   returnPolicy: returnPolicyJoiSchema.optional(),
 }).unknown(true); // images may arrive via multer in a different field

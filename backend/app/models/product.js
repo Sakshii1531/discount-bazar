@@ -42,9 +42,17 @@ const productSchema = new mongoose.Schema(
             type: Number,
             default: 5,
         },
+        // Name copy of the linked Brand (kept in sync by the brand controller)
+        // so existing brand filters keep working on a plain string.
         brand: {
             type: String,
             trim: true,
+        },
+        brandId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Brand",
+            default: null,
+            index: true,
         },
         // Item master
         barcode: { type: String, trim: true, index: true, sparse: true },

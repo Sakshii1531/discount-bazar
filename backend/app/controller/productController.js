@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Product from "../models/product.js";
+import Brand, { toBrandNameKey } from "../models/brand.js";
 import Order from "../models/order.js";
 import Review from "../models/review.js";
 import { handleResponse } from "../utils/helper.js";
@@ -296,6 +297,44 @@ function applyDeliveryFields(productData) {
   parse("productDeliveryTimeMinutes", "Product delivery time", { integer: true });
 }
 
+// Links the product to an admin-managed Brand and copies its name into
+// `brand`. `brandId` (from the product form) wins; a bare `brand` name (bulk
+// import, older clients) is matched to an active brand by name and otherwise
+// kept as free text. An inactive brand is only accepted if the product
+// already uses it.
+async function applyBrandFields(productData, existing = null) {
+  const hasBrandId = Object.prototype.hasOwnProperty.call(productData, "brandId");
+  const hasBrand = Object.prototype.hasOwnProperty.call(productData, "brand");
+  if (!hasBrandId && !hasBrand) return;
+
+  const rawId = hasBrandId ? String(productData.brandId ?? "").trim() : "";
+  if (hasBrandId && rawId && rawId !== "null" && rawId !== "undefined") {
+    if (!mongoose.Types.ObjectId.isValid(rawId)) {
+      throw Object.assign(new Error("Invalid brand"), { statusCode: 400 });
+    }
+    const brand = await Brand.findById(rawId).select("name status").lean();
+    const keepsCurrent = existing?.brandId && String(existing.brandId) === rawId;
+    if (!brand || (brand.status !== "active" && !keepsCurrent)) {
+      throw Object.assign(new Error("Please select a brand from the list"), { statusCode: 400 });
+    }
+    productData.brandId = brand._id;
+    productData.brand = brand.name;
+    return;
+  }
+
+  const name = hasBrand ? String(productData.brand ?? "").trim() : "";
+  if (!name) {
+    productData.brandId = null;
+    productData.brand = "";
+    return;
+  }
+  const match = await Brand.findOne({ nameKey: toBrandNameKey(name), status: "active" })
+    .select("name")
+    .lean();
+  productData.brandId = match ? match._id : null;
+  productData.brand = match ? match.name : name;
+}
+
 function applyMediaFields(productData) {
   const explicitMainImage = normalizeUrl(productData.mainImage || productData.mainImageUrl);
   const galleryImages = parseImageList(productData.galleryImages);
@@ -576,7 +615,7 @@ export const getProducts = async (req, res) => {
       const [rawProducts, total] = await Promise.all([
         Product.find(finalQuery)
           .select(
-            "name slug description sku price salePrice stock brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
+            "name slug description sku price salePrice stock brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
           )
           // No .populate() — names resolved via cache-backed entityNameCache
           .sort(sortQuery)
@@ -701,7 +740,7 @@ export const getSellerProducts = async (req, res) => {
     ] = await Promise.all([
       Product.find(query)
         .select(
-          "name slug description sku barcode price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes",
+          "name slug description sku barcode price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes",
         )
         .populate("headerId", "name")
         .populate("categoryId", "name")
@@ -983,6 +1022,7 @@ export const createProduct = async (req, res) => {
     try {
       applyPurchaseGst(productData);
       applyDeliveryFields(productData);
+      await applyBrandFields(productData);
       await assertItemMasterValid(productData, req.user.id);
     } catch (e) {
       return handleResponse(res, e.statusCode || 400, e.message);
@@ -1235,6 +1275,7 @@ export const updateProduct = async (req, res) => {
     try {
       applyPurchaseGst(productData, product);
       applyDeliveryFields(productData);
+      await applyBrandFields(productData, product);
       await assertItemMasterValid(
         {
           ...productData,
@@ -1390,7 +1431,7 @@ export const getProductById = async (req, res) => {
       async () =>
         Product.findById(id)
           .select(
-            "name slug description sku price salePrice mrp stock lowStockAlert brand weight size tags shelfLife countryOfOrigin fssaiLicense returnPolicy ratingAverage ratingCount mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
+            "name slug description sku price salePrice mrp stock lowStockAlert brand brandId weight size tags shelfLife countryOfOrigin fssaiLicense returnPolicy ratingAverage ratingCount mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           .populate("headerId", "name")
           .populate("categoryId", "name")
@@ -1469,7 +1510,7 @@ export const getProductRecommendations = async (req, res) => {
     }
 
     const product = await Product.findById(id)
-      .select("name brand weight tags headerId categoryId subcategoryId sellerId status approvalStatus mainImage")
+      .select("name brand brandId weight tags headerId categoryId subcategoryId sellerId status approvalStatus mainImage")
       .lean();
     const approvalState = product ? resolveProductApprovalStatus(product) : null;
     if (!product || product.status !== "active" || approvalState !== PRODUCT_APPROVAL_STATUS.APPROVED) {
@@ -1647,7 +1688,7 @@ export const getModerationProducts = async (req, res) => {
       await Promise.all([
         Product.find(moderatedQuery)
           .select(
-            "name slug description sku price salePrice stock lowStockAlert brand weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
+            "name slug description sku price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes createdAt",
           )
           .populate("headerId", "name")
           .populate("categoryId", "name")

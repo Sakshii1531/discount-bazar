@@ -20,6 +20,9 @@ export const sellerApi = {
     getCategories: () => axiosInstance.get('/admin/categories'),
     getCategoryTree: () => axiosInstance.get('/admin/categories?tree=true'),
 
+    // Brands (admin-approved, active only)
+    getBrands: () => axiosInstance.get('/brands'),
+
     // Others
     getStats: (range) => axiosInstance.get('/seller/stats', { params: { range } }),
     getOrders: (params) => axiosInstance.get('/orders/seller-orders', { params }),

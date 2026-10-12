@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { sellerApi } from "../services/sellerApi";
+import BrandSelect from "@shared/components/BrandSelect";
 import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
 import ProductDeliverySettings from "../components/product/ProductDeliverySettings";
 import BulkProductUpload from "../components/product/BulkProductUpload";
@@ -214,6 +215,7 @@ const ProductManagement = () => {
     tags: "",
     weight: "",
     brand: "",
+    brandId: "",
     barcode: "",
     size: "",
     colour: "",
@@ -440,6 +442,7 @@ const ProductManagement = () => {
       data.append("subcategoryId", formData.subcategory);
       data.append("status", formData.status);
       data.append("brand", formData.brand);
+      data.append("brandId", formData.brandId || "");
       const firstVar = (Array.isArray(variantsToSubmit) && variantsToSubmit[0]) || {};
       if (firstVar.barcode) data.append("barcode", firstVar.barcode);
       if (firstVar.size) data.append("size", firstVar.size);
@@ -557,6 +560,7 @@ const ProductManagement = () => {
         tags: Array.isArray(item.tags) ? item.tags.join(", ") : item.tags || "",
         weight: item.weight || "",
         brand: item.brand || "",
+        brandId: item.brandId?._id || item.brandId || "",
         barcode: item.barcode || "",
         size: item.size || "",
         colour: item.colour || "",
@@ -612,6 +616,7 @@ const ProductManagement = () => {
         tags: "",
         weight: "",
         brand: "",
+        brandId: "",
         barcode: "",
         size: "",
         colour: "",
@@ -1416,16 +1421,13 @@ const ProductManagement = () => {
                           <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
                             Brand Name
                           </label>
-                          <input
-                            value={formData.brand}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                brand: e.target.value,
-                              })
+                          <BrandSelect
+                            value={formData.brandId}
+                            legacyName={formData.brand}
+                            onChange={(brandId, brand) =>
+                              setFormData((prev) => ({ ...prev, brandId, brand }))
                             }
-                            className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-xl text-sm font-semibold outline-none ring-primary/5 focus:ring-2"
-                            placeholder="e.g. Amul"
+                            className="px-4 py-2.5 bg-slate-100 border-none rounded-xl font-semibold"
                           />
                         </div>
                       </div>
