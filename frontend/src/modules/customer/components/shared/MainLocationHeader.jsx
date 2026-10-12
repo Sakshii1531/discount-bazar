@@ -661,18 +661,13 @@ const MainLocationHeader = ({
           <div className="md:hidden">
             <motion.div
               className="relative z-10 mb-4">
-              <div className="flex items-center justify-between mb-1 pr-28">
+              <div className="mb-1">
                 <span 
                   className="inline-flex items-center rounded-full border border-black/10 bg-white/18 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm"
                   style={{ color: headerFontColor }}
                 >
                   {appName}
                 </span>
-                <CategoriesMegaMenu 
-                  variant="capsule" 
-                  textColor={headerFontColor}
-                  buttonClassName="text-[10px] py-0.5 px-2.5" 
-                />
               </div>
               <div className="flex justify-between items-start">
                 <div className="flex flex-col">

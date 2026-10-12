@@ -133,6 +133,15 @@ const AdminDashboard = () => {
     const recentOrders = statsData?.recentOrders || [];
     const topProducts = statsData?.topProducts || [];
 
+    const totalCategoryCount = categoryData.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0);
+    const topCategoryItem = categoryData.reduce(
+        (max, curr) => ((Number(curr.value) || 0) > (Number(max?.value) || 0) ? curr : max),
+        categoryData[0] || null
+    );
+    const topCategoryShare = totalCategoryCount > 0 && topCategoryItem
+        ? Math.round(((Number(topCategoryItem.value) || 0) / totalCategoryCount) * 100)
+        : 0;
+
     return (
         <div className="ds-section-spacing">
             <PageHeader
@@ -247,8 +256,8 @@ const AdminDashboard = () => {
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <span className="text-2xl font-bold text-gray-900">72%</span>
-                                <span className="text-[10px] text-gray-400 font-semibold uppercase">Growth</span>
+                                <span className="text-2xl font-bold text-gray-900">{topCategoryShare}%</span>
+                                <span className="text-[10px] text-gray-400 font-semibold uppercase">Top Share</span>
                             </div>
                         </div>
                         <div className="space-y-3 mt-4">

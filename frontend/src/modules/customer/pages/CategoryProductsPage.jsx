@@ -36,15 +36,31 @@ const CategoryIcon = ({ image, name, selected }) => {
 
 const CategoryProductsPage = () => {
     const { categoryName: catId } = useParams();
+    const isAll = catId === 'all';
     const navigate = useNavigate();
     const location = useLocation();
     const { isOpen: isProductDetailOpen } = useProductDetail();
     const [selectedSubCategory, setSelectedSubCategory] = useState(location.state?.activeSubcategoryId || 'all');
-    const [sort, setSort] = useState('newest');
+    const [sort, setSort] = useState(isAll ? 'price-asc' : 'newest');
     const [category, setCategory] = useState(null);
     const [treeStatus, setTreeStatus] = useState('loading'); // loading | ready | not-found | error
 
+    useEffect(() => {
+        if (isAll) {
+            setSort('price-asc');
+        }
+    }, [isAll]);
+
     const loadCategory = useCallback(async () => {
+        if (isAll) {
+            setCategory({
+                name: location.state?.title || 'Lowest Price Ever',
+                children: []
+            });
+            setTreeStatus('ready');
+            return;
+        }
+
         setTreeStatus('loading');
         try {
             const catRes = await customerApi.getCategories({ tree: true });
@@ -71,7 +87,7 @@ const CategoryProductsPage = () => {
             setCategory(null);
             setTreeStatus('error');
         }
-    }, [catId]);
+    }, [catId, isAll, location.state?.title]);
 
     useEffect(() => {
         loadCategory();
@@ -95,8 +111,8 @@ const CategoryProductsPage = () => {
 
     const listing = useCatalogProducts(
         {
-            categoryId: catId,
-            subcategoryId: selectedSubCategory !== 'all' ? selectedSubCategory : undefined,
+            categoryId: isAll ? undefined : catId,
+            subcategoryId: (!isAll && selectedSubCategory !== 'all') ? selectedSubCategory : undefined,
             sort,
         },
         { enabled: treeStatus === 'ready' },
@@ -116,14 +132,14 @@ const CategoryProductsPage = () => {
             )}>
                 <div className="flex items-center gap-3 min-w-0">
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
                         aria-label="Go back"
                         className="p-1 hover:bg-gray-50 rounded-full transition-colors"
                     >
                         <ChevronLeft size={24} className="text-gray-900" />
                     </button>
                     <h1 className="text-[18px] font-bold text-gray-800 tracking-tight truncate">
-                        {category?.name || (treeStatus === 'loading' ? '' : 'Category')}
+                        {isAll ? (location.state?.title || 'Lowest Price Ever') : (category?.name || (treeStatus === 'loading' ? '' : 'Category'))}
                     </h1>
                 </div>
                 {treeStatus === 'ready' && <CatalogSortSelect value={sort} onChange={setSort} />}
@@ -202,7 +218,7 @@ const CategoryProductsPage = () => {
                                 listing={listing}
                                 emptyTitle={selectedSubName ? `No products in ${selectedSubName} yet` : `No products in ${category?.name || 'this category'} yet`}
                                 emptyText="Products appear here as soon as stores near you list them."
-                                gridClassName="md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                                gridClassName={isAll ? "" : "md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"}
                             />
                         </main>
                     </>
