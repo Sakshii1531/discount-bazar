@@ -5,11 +5,14 @@ import Order from "../models/order.js";
 import jwt from "jsonwebtoken";
 import handleResponse from "../utils/helper.js";
 import {
+    completeCustomerRegistration,
     issueCustomerOtp,
+    issueRegistrationToken,
     sanitizeCustomer,
     verifyCustomerOtpCode,
 } from "../services/otpAuthService.js";
 import {
+    completeRegistrationSchema,
     sendLoginOtpSchema,
     sendSignupOtpSchema,
     validateSchema,
@@ -64,26 +67,56 @@ export const loginCustomer = async (req, res) => {
 
 /* ===============================
    VERIFY OTP – Login / Signup
+   Existing customers get a session token. New numbers get a short-lived
+   registration token to exchange for an account via /complete-registration.
 ================================ */
 export const verifyCustomerOTP = async (req, res) => {
     try {
         const payload = validateSchema(verifyOtpSchema, req.body || {});
-        const customer = await verifyCustomerOtpCode({
+        const result = await verifyCustomerOtpCode({
             rawPhone: payload.phone,
             otp: payload.otp,
             ipAddress: req.ip,
         });
-        const token = generateToken(customer);
+
+        if (result.isNewUser) {
+            return handleResponse(res, 200, "OTP verified. Please enter your name to finish signing up", {
+                isNewUser: true,
+                registrationToken: issueRegistrationToken(result.phone),
+            });
+        }
 
         return handleResponse(
             res,
             200,
             "Login successful",
             {
-                token,
-                customer: sanitizeCustomer(customer),
+                isNewUser: false,
+                token: generateToken(result.customer),
+                customer: sanitizeCustomer(result.customer),
             }
         );
+    } catch (error) {
+        return handleResponse(res, error.statusCode || 500, error.message);
+    }
+};
+
+/* ===============================
+   COMPLETE REGISTRATION – Name for a verified new number
+================================ */
+export const completeCustomerRegistrationHandler = async (req, res) => {
+    try {
+        const payload = validateSchema(completeRegistrationSchema, req.body || {});
+        const customer = await completeCustomerRegistration({
+            registrationToken: payload.registrationToken,
+            name: payload.name,
+            ipAddress: req.ip,
+        });
+
+        return handleResponse(res, 200, "Account created successfully", {
+            token: generateToken(customer),
+            customer: sanitizeCustomer(customer),
+        });
     } catch (error) {
         return handleResponse(res, error.statusCode || 500, error.message);
     }

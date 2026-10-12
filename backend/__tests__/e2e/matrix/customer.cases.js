@@ -31,6 +31,14 @@ export default [
     status: [400, 401],
     check: (res) => expect(res.body.result?.token).toBeUndefined(),
   },
+  {
+    route: "POST /api/customer/complete-registration",
+    name: "rejects an invalid registration token",
+    body: { registrationToken: "not-a-token", name: "New Shopper" },
+    status: 401,
+    check: (res) => expect(res.body.result?.token).toBeUndefined(),
+  },
+  { route: "POST /api/customer/complete-registration", name: "validates name", body: { registrationToken: "x", name: "N" }, status: 400 },
 
   // ── Profile & transactions ────────────────────────────────────────────────
   {

@@ -14,6 +14,11 @@ export const verifyOtpSchema = Joi.object({
   otp: Joi.string().trim().pattern(/^\d{4,8}$/).required(),
 });
 
+export const completeRegistrationSchema = Joi.object({
+  registrationToken: Joi.string().trim().max(2048).required(),
+  name: Joi.string().trim().min(2).max(80).required(),
+});
+
 export function validateSchema(schema, payload) {
   const { error, value } = schema.validate(payload, {
     abortEarly: false,

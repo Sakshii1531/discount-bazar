@@ -3,6 +3,7 @@ import {
     signupCustomer,
     loginCustomer,
     verifyCustomerOTP,
+    completeCustomerRegistrationHandler,
     getCustomerProfile,
     updateCustomerProfile,
     getCustomerTransactions,
@@ -22,6 +23,7 @@ const smallAuthPayload = createContentLengthGuard(
 router.post("/send-signup-otp", authRouteRateLimiter, otpRouteRateLimiter, smallAuthPayload, signupCustomer);
 router.post("/send-login-otp", authRouteRateLimiter, otpRouteRateLimiter, smallAuthPayload, loginCustomer);
 router.post("/verify-otp", authRouteRateLimiter, otpRouteRateLimiter, smallAuthPayload, verifyCustomerOTP);
+router.post("/complete-registration", authRouteRateLimiter, smallAuthPayload, completeCustomerRegistrationHandler);
 
 // Profile routes
 router.get("/profile", verifyToken, getCustomerProfile);

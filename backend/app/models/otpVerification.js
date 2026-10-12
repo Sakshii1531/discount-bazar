@@ -40,6 +40,16 @@ const otpVerificationSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    lockedUntil: {
+      type: Date,
+      default: null,
+    },
+    // Purpose-specific data captured at send time (e.g. a name supplied by a
+    // legacy customer signup request).
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
   },
   {
     timestamps: true,

@@ -94,6 +94,9 @@ describe('customer: API service', () => {
     await customerApi.verifyOtp({ phone: '1', otp: '1234' });
     expect(lastCall(mockAxios)).toMatchObject({ method: 'post', url: '/customer/verify-otp' });
 
+    await customerApi.completeRegistration({ registrationToken: 't', name: 'Asha' });
+    expect(lastCall(mockAxios)).toMatchObject({ method: 'post', url: '/customer/complete-registration' });
+
     await customerApi.addToCart({ productId: 'p', quantity: 1 });
     expect(lastCall(mockAxios)).toMatchObject({ method: 'post', url: '/cart/add' });
 

@@ -55,6 +55,65 @@ describe("customer: OTP authentication", () => {
     expect(res.body.result?.token).toBeUndefined();
   });
 
+  it("asks a new number for a name after OTP, then logs it in directly next time", async () => {
+    await request(app).post("/api/customer/send-login-otp").send({ phone: "9876543212" });
+    const verify = await request(app)
+      .post("/api/customer/verify-otp")
+      .send({ phone: "9876543212", otp: "1234" });
+    expect(verify.status).toBe(200);
+    expect(verify.body.result).toEqual(
+      expect.objectContaining({ isNewUser: true, registrationToken: expect.any(String) }),
+    );
+    expect(verify.body.result.token).toBeUndefined();
+
+    // The registration token is not a session token.
+    const noProfile = await request(app)
+      .get("/api/customer/profile")
+      .set("Authorization", `Bearer ${verify.body.result.registrationToken}`);
+    expect(noProfile.status).toBe(401);
+
+    const complete = await request(app)
+      .post("/api/customer/complete-registration")
+      .send({ registrationToken: verify.body.result.registrationToken, name: "Asha Rao" });
+    expect(complete.status).toBe(200);
+    expect(complete.body.result.customer.name).toBe("Asha Rao");
+
+    // Retrying completion returns the same account rather than a duplicate.
+    const retry = await request(app)
+      .post("/api/customer/complete-registration")
+      .send({ registrationToken: verify.body.result.registrationToken, name: "Other" });
+    expect(retry.status).toBe(200);
+    expect(retry.body.result.customer._id).toBe(complete.body.result.customer._id);
+    expect(retry.body.result.customer.name).toBe("Asha Rao");
+
+    await request(app).post("/api/customer/send-login-otp").send({ phone: "9876543212" });
+    const login = await request(app)
+      .post("/api/customer/verify-otp")
+      .send({ phone: "9876543212", otp: "1234" });
+    expect(login.status).toBe(200);
+    expect(login.body.result.isNewUser).toBe(false);
+    expect(login.body.result.customer._id).toBe(complete.body.result.customer._id);
+  });
+
+  it("creates no account when a new number stops before entering a name", async () => {
+    await request(app).post("/api/customer/send-login-otp").send({ phone: "9876543213" });
+    await request(app).post("/api/customer/verify-otp").send({ phone: "9876543213", otp: "1234" });
+
+    // Coming back later: OTP again, and the name step is still required.
+    await request(app).post("/api/customer/send-login-otp").send({ phone: "9876543213" });
+    const verify = await request(app)
+      .post("/api/customer/verify-otp")
+      .send({ phone: "9876543213", otp: "1234" });
+    expect(verify.body.result.isNewUser).toBe(true);
+  });
+
+  it("rejects completion with an invalid registration token", async () => {
+    const res = await request(app)
+      .post("/api/customer/complete-registration")
+      .send({ registrationToken: "not-a-token", name: "Asha" });
+    expect(res.status).toBe(401);
+  });
+
   it("blocks protected endpoints without a token", async () => {
     for (const url of ["/api/customer/profile", "/api/cart", "/api/wishlist", "/api/orders/my-orders"]) {
       const res = await request(app).get(url);

@@ -1,10 +1,15 @@
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import Customer from "../models/customer.js";
+import OtpVerification from "../models/otpVerification.js";
 import { sendSmsIndiaHubOtp } from "./smsIndiaHubService.js";
 import { generateOTP, useRealSMS } from "../utils/otp.js";
 import { getRedisClient } from "../config/redis.js";
 import { isValidE164Phone, maskPhone, normalizePhoneNumber } from "../utils/phone.js";
 
+const CUSTOMER_REGISTRATION_PURPOSE = "customer_registration";
+const CUSTOMER_REGISTRATION_TOKEN_TTL_MINUTES = () =>
+  parseInt(process.env.CUSTOMER_REGISTRATION_TOKEN_TTL_MINUTES || "15", 10);
 const OTP_EXPIRY_MINUTES = () => parseInt(process.env.OTP_EXPIRY_MINUTES || "5", 10);
 const OTP_RESEND_COOLDOWN_SECONDS = () =>
   parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS || "60", 10);
@@ -121,96 +126,54 @@ export function normalizeAndValidatePhone(rawPhone) {
   return phone;
 }
 
-export async function issueCustomerOtp({
-  name = "",
-  rawPhone,
-  flow,
-  ipAddress = "unknown",
-}) {
-  const phone = normalizeAndValidatePhone(rawPhone);
-  const now = new Date();
+const CUSTOMER_OTP_FIELDS =
+  "+otpHash +otpExpiresAt +otpFailedAttempts +otpLockedUntil +otpLastSentAt +otpSessionVersion +otp +otpExpiry";
 
-  const sendAllowed = await incrementWindowCounter(`otp:send:phone:${phone}`, {
-    limit: OTP_SEND_LIMIT_PER_WINDOW(),
-    windowSeconds: OTP_SEND_LIMIT_WINDOW_SECONDS(),
-  });
-  if (!sendAllowed) {
-    const err = new Error("Too many OTP requests. Try again later.");
-    err.statusCode = 429;
-    throw err;
-  }
-
-  let customer = await Customer.findOne({ phone }).select(
-    "+otpHash +otpExpiresAt +otpFailedAttempts +otpLockedUntil +otpLastSentAt +otpSessionVersion +otp +otpExpiry",
-  );
-
-  if (flow === "login" && (!customer || !customer.isVerified)) {
-    if (useRealSMS()) {
-      otpAuditLog("customer_otp_login_generic_response", {
-        phone: maskPhone(phone),
-        ipAddress,
-        accountExists: !!customer,
-      });
-      return { sent: true, phone };
-    }
-
-    // In mock/dev mode, allow login OTP issuance so local testing works end-to-end.
-    if (!customer) {
-      customer = await Customer.create({
-        name: name || "Customer",
-        phone,
-        isVerified: false,
-      });
-      customer = await Customer.findById(customer._id).select(
-        "+otpHash +otpExpiresAt +otpFailedAttempts +otpLockedUntil +otpLastSentAt +otpSessionVersion +otp +otpExpiry",
-      );
-    }
-  }
-
-  if (!customer) {
-    customer = await Customer.create({
-      name: name || "Customer",
-      phone,
-      isVerified: false,
-    });
-    customer = await Customer.findById(customer._id).select(
-      "+otpHash +otpExpiresAt +otpFailedAttempts +otpLockedUntil +otpLastSentAt +otpSessionVersion +otp +otpExpiry",
-    );
-  }
-
-  if (customer.otpLockedUntil && customer.otpLockedUntil > now) {
-    const err = new Error("OTP verification is temporarily locked for this number");
+function assertNotLocked(lockedUntil, now, message) {
+  if (lockedUntil && lockedUntil > now) {
+    const err = new Error(message);
     err.statusCode = 423;
     throw err;
   }
+}
 
-  const lastSentAt = customer.otpLastSentAt ? new Date(customer.otpLastSentAt) : null;
-  const cooldownMs = OTP_RESEND_COOLDOWN_SECONDS() * 1000;
-  if (process.env.NODE_ENV === "production" || process.env.ENABLE_RATE_LIMIT_DEV === "true") {
-    if (lastSentAt && now.getTime() - lastSentAt.getTime() < cooldownMs) {
-      const waitSec = Math.ceil((cooldownMs - (now.getTime() - lastSentAt.getTime())) / 1000);
-      const err = new Error(`Please wait ${waitSec}s before requesting another OTP`);
-      err.statusCode = 429;
-      throw err;
-    }
+function assertResendCooldown(lastSentAt, now) {
+  if (process.env.NODE_ENV !== "production" && process.env.ENABLE_RATE_LIMIT_DEV !== "true") {
+    return;
   }
+  if (!lastSentAt) return;
+  const elapsedMs = now.getTime() - new Date(lastSentAt).getTime();
+  const cooldownMs = OTP_RESEND_COOLDOWN_SECONDS() * 1000;
+  if (elapsedMs < cooldownMs) {
+    const waitSec = Math.ceil((cooldownMs - elapsedMs) / 1000);
+    const err = new Error(`Please wait ${waitSec}s before requesting another OTP`);
+    err.statusCode = 429;
+    throw err;
+  }
+}
 
-  // generateOTP() already returns the fixed mock code outside production
-  // (USE_REAL_SMS off); every real login/signup gets a random code.
-  const otp = generateOTP();
-  customer.otpHash = hashOtp(phone, otp);
-  customer.otpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES() * 60 * 1000);
-  customer.otpFailedAttempts = 0;
-  customer.otpLockedUntil = null;
-  customer.otpLastSentAt = now;
-  customer.otpSessionVersion = (customer.otpSessionVersion || 0) + 1;
+function invalidOtpError(statusCode = 400) {
+  const err = new Error("Invalid or expired OTP");
+  err.statusCode = statusCode;
+  return err;
+}
 
-  // Backward compatibility with legacy fields; raw OTP is intentionally not stored.
-  customer.otp = undefined;
-  customer.otpExpiry = undefined;
+function otpMatches(phone, code, expectedHash) {
+  if (!expectedHash) return false;
+  const actual = Buffer.from(hashOtp(phone, code), "hex");
+  const expected = Buffer.from(String(expectedHash), "hex");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
 
-  await customer.save();
+function findRegistrationSession(phone) {
+  return OtpVerification.findOne({
+    purpose: CUSTOMER_REGISTRATION_PURPOSE,
+    channel: "phone",
+    target: phone,
+  }).select("+otpHash +expiresAt");
+}
 
+async function dispatchOtp({ phone, otp, flow, ipAddress }) {
   if (useRealSMS()) {
     try {
       await dispatchCustomerOtpSms({ phone, otp });
@@ -241,10 +204,185 @@ export async function issueCustomerOtp({
       mode: "mock",
     });
   }
+}
+
+/**
+ * Sends an OTP to any valid number.
+ *
+ * Registered (verified) customers keep their OTP state on the account itself.
+ * Every other number gets a pending registration session instead, so no
+ * customer account exists until the number is verified and a name is given.
+ */
+export async function issueCustomerOtp({
+  name = "",
+  rawPhone,
+  flow,
+  ipAddress = "unknown",
+}) {
+  const phone = normalizeAndValidatePhone(rawPhone);
+  const now = new Date();
+
+  const sendAllowed = await incrementWindowCounter(`otp:send:phone:${phone}`, {
+    limit: OTP_SEND_LIMIT_PER_WINDOW(),
+    windowSeconds: OTP_SEND_LIMIT_WINDOW_SECONDS(),
+  });
+  if (!sendAllowed) {
+    const err = new Error("Too many OTP requests. Try again later.");
+    err.statusCode = 429;
+    throw err;
+  }
+
+  const customer = await Customer.findOne({ phone }).select(CUSTOMER_OTP_FIELDS);
+
+  // generateOTP() already returns the fixed mock code outside production
+  // (USE_REAL_SMS off); every real login/registration gets a random code.
+  let otp;
+
+  if (customer?.isVerified) {
+    assertNotLocked(customer.otpLockedUntil, now, "OTP verification is temporarily locked for this number");
+    assertResendCooldown(customer.otpLastSentAt, now);
+
+    otp = generateOTP();
+    customer.otpHash = hashOtp(phone, otp);
+    customer.otpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES() * 60 * 1000);
+    customer.otpFailedAttempts = 0;
+    customer.otpLockedUntil = null;
+    customer.otpLastSentAt = now;
+    customer.otpSessionVersion = (customer.otpSessionVersion || 0) + 1;
+
+    // Backward compatibility with legacy fields; raw OTP is intentionally not stored.
+    customer.otp = undefined;
+    customer.otpExpiry = undefined;
+
+    await customer.save();
+  } else {
+    let session = await findRegistrationSession(phone);
+    assertNotLocked(session?.lockedUntil, now, "OTP verification is temporarily locked for this number");
+    assertResendCooldown(session?.lastSentAt, now);
+
+    otp = generateOTP();
+    if (!session) {
+      session = new OtpVerification({
+        purpose: CUSTOMER_REGISTRATION_PURPOSE,
+        channel: "phone",
+        target: phone,
+      });
+    }
+    session.otpHash = hashOtp(phone, otp);
+    session.expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES() * 60 * 1000);
+    session.verifiedAt = null;
+    session.failedAttempts = 0;
+    session.lockedUntil = null;
+    session.lastSentAt = now;
+    // Legacy signup requests send the name up front; keep it so verification
+    // can finish registration in one step for older app builds.
+    session.metadata = flow === "signup" && name ? { name } : undefined;
+
+    try {
+      await session.save();
+    } catch (error) {
+      if (error?.code === 11000) {
+        // A parallel request created the session first.
+        const err = new Error("Please wait before requesting another OTP");
+        err.statusCode = 429;
+        throw err;
+      }
+      throw error;
+    }
+  }
+
+  await dispatchOtp({ phone, otp, flow, ipAddress });
 
   return { sent: true, phone };
 }
 
+async function verifyRegisteredCustomerOtp({ customer, phone, code, ipAddress, now }) {
+  assertNotLocked(customer.otpLockedUntil, now, "Too many failed attempts. Please try again later.");
+
+  if (!customer.otpHash || !customer.otpExpiresAt || customer.otpExpiresAt <= now) {
+    throw invalidOtpError();
+  }
+
+  if (!otpMatches(phone, code, customer.otpHash)) {
+    customer.otpFailedAttempts = (customer.otpFailedAttempts || 0) + 1;
+
+    if (customer.otpFailedAttempts >= OTP_MAX_FAILED_ATTEMPTS()) {
+      customer.otpLockedUntil = new Date(
+        now.getTime() + OTP_LOCKOUT_MINUTES() * 60 * 1000,
+      );
+    }
+
+    await customer.save();
+    otpAuditLog("customer_otp_verify_failed", {
+      phone: maskPhone(phone),
+      ipAddress,
+      failedAttempts: customer.otpFailedAttempts,
+      lockedUntil: customer.otpLockedUntil || null,
+    });
+
+    throw invalidOtpError(customer.otpLockedUntil ? 423 : 400);
+  }
+
+  customer.otpHash = undefined;
+  customer.otpExpiresAt = undefined;
+  customer.otpFailedAttempts = 0;
+  customer.otpLockedUntil = undefined;
+  customer.otpSessionVersion = (customer.otpSessionVersion || 0) + 1;
+  customer.otp = undefined;
+  customer.otpExpiry = undefined;
+  customer.lastLogin = now;
+
+  await customer.save();
+  return customer;
+}
+
+async function verifyRegistrationOtp({ phone, code, ipAddress, now }) {
+  const session = await findRegistrationSession(phone);
+  if (!session) throw invalidOtpError();
+
+  assertNotLocked(session.lockedUntil, now, "Too many failed attempts. Please try again later.");
+
+  if (!session.otpHash || !session.expiresAt || session.expiresAt <= now) {
+    throw invalidOtpError();
+  }
+
+  if (!otpMatches(phone, code, session.otpHash)) {
+    session.failedAttempts = (session.failedAttempts || 0) + 1;
+
+    if (session.failedAttempts >= OTP_MAX_FAILED_ATTEMPTS()) {
+      session.lockedUntil = new Date(now.getTime() + OTP_LOCKOUT_MINUTES() * 60 * 1000);
+      // Keep the session (and its lock) alive past the TTL index until the lockout ends.
+      if (session.expiresAt < session.lockedUntil) session.expiresAt = session.lockedUntil;
+    }
+
+    await session.save();
+    otpAuditLog("customer_otp_verify_failed", {
+      phone: maskPhone(phone),
+      ipAddress,
+      failedAttempts: session.failedAttempts,
+      lockedUntil: session.lockedUntil || null,
+    });
+
+    throw invalidOtpError(session.lockedUntil ? 423 : 400);
+  }
+
+  // Consume atomically so the same code can't be redeemed twice.
+  const consumed = await OtpVerification.findOneAndDelete({
+    _id: session._id,
+    otpHash: session.otpHash,
+  });
+  if (!consumed) throw invalidOtpError();
+
+  return session;
+}
+
+/**
+ * Verifies an OTP for any number.
+ *
+ * Returns `{ isNewUser: false, customer }` for a registered customer, and
+ * `{ isNewUser: true, phone }` for a number with no completed account; the
+ * caller must then collect a name and call completeCustomerRegistration().
+ */
 export async function verifyCustomerOtpCode({
   rawPhone,
   otp,
@@ -268,64 +406,104 @@ export async function verifyCustomerOtpCode({
     throw err;
   }
 
-  const customer = await Customer.findOne({ phone }).select(
-    "+otpHash +otpExpiresAt +otpFailedAttempts +otpLockedUntil +otpSessionVersion +otp +otpExpiry",
-  );
-  if (!customer) {
-    const err = new Error("Invalid or expired OTP");
-    err.statusCode = 400;
-    throw err;
-  }
-
   const now = new Date();
-  if (customer.otpLockedUntil && customer.otpLockedUntil > now) {
-    const err = new Error("Too many failed attempts. Please try again later.");
-    err.statusCode = 423;
-    throw err;
-  }
+  const customer = await Customer.findOne({ phone }).select(CUSTOMER_OTP_FIELDS);
 
-  if (!customer.otpHash || !customer.otpExpiresAt || customer.otpExpiresAt <= now) {
-    const err = new Error("Invalid or expired OTP");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const isValid = hashOtp(phone, code) === customer.otpHash;
-  if (!isValid) {
-    customer.otpFailedAttempts = (customer.otpFailedAttempts || 0) + 1;
-
-    if (customer.otpFailedAttempts >= OTP_MAX_FAILED_ATTEMPTS()) {
-      customer.otpLockedUntil = new Date(
-        now.getTime() + OTP_LOCKOUT_MINUTES() * 60 * 1000,
-      );
-    }
-
-    await customer.save();
-    otpAuditLog("customer_otp_verify_failed", {
+  if (customer?.isVerified) {
+    const verified = await verifyRegisteredCustomerOtp({ customer, phone, code, ipAddress, now });
+    otpAuditLog("customer_otp_verify_success", {
       phone: maskPhone(phone),
       ipAddress,
-      failedAttempts: customer.otpFailedAttempts,
-      lockedUntil: customer.otpLockedUntil || null,
+      isNewUser: false,
     });
-
-    const err = new Error("Invalid or expired OTP");
-    err.statusCode = customer.otpLockedUntil ? 423 : 400;
-    throw err;
+    return { isNewUser: false, customer: verified };
   }
 
-  customer.isVerified = true;
-  customer.otpHash = undefined;
-  customer.otpExpiresAt = undefined;
-  customer.otpFailedAttempts = 0;
-  customer.otpLockedUntil = undefined;
-  customer.otpSessionVersion = (customer.otpSessionVersion || 0) + 1;
-  customer.otp = undefined;
-  customer.otpExpiry = undefined;
-  customer.lastLogin = now;
-
-  await customer.save();
-
+  const session = await verifyRegistrationOtp({ phone, code, ipAddress, now });
   otpAuditLog("customer_otp_verify_success", {
+    phone: maskPhone(phone),
+    ipAddress,
+    isNewUser: true,
+  });
+
+  const legacyName = session.metadata?.name;
+  if (legacyName) {
+    const created = await createOrActivateCustomer({ phone, name: legacyName });
+    return { isNewUser: false, customer: created };
+  }
+
+  return { isNewUser: true, phone };
+}
+
+function registrationTokenSecret() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+  // Derived key: a registration token must never pass verifyToken() as a login token.
+  return `${process.env.JWT_SECRET}:${CUSTOMER_REGISTRATION_PURPOSE}`;
+}
+
+export function issueRegistrationToken(phone) {
+  return jwt.sign(
+    { phone, purpose: CUSTOMER_REGISTRATION_PURPOSE },
+    registrationTokenSecret(),
+    { expiresIn: `${CUSTOMER_REGISTRATION_TOKEN_TTL_MINUTES()}m` },
+  );
+}
+
+function readRegistrationToken(token) {
+  try {
+    const decoded = jwt.verify(String(token || ""), registrationTokenSecret());
+    if (decoded?.purpose !== CUSTOMER_REGISTRATION_PURPOSE || !decoded.phone) {
+      throw new Error("wrong token purpose");
+    }
+    return normalizeAndValidatePhone(decoded.phone);
+  } catch {
+    const err = new Error("Registration session expired. Please verify your number again.");
+    err.statusCode = 401;
+    throw err;
+  }
+}
+
+/**
+ * Creates the account for a verified number, or returns the existing one.
+ * Safe to call repeatedly: retries and parallel requests for the same number
+ * resolve to a single account (phone is a unique index).
+ */
+async function createOrActivateCustomer({ phone, name }) {
+  const now = new Date();
+  const existing = await Customer.findOne({ phone });
+  if (existing) {
+    // An unverified record is a leftover from the old signup flow; claim it.
+    // A verified one means registration already finished, so keep its name.
+    if (!existing.isVerified) {
+      existing.name = name;
+      existing.isVerified = true;
+    }
+    existing.lastLogin = now;
+    await existing.save();
+    return existing;
+  }
+
+  try {
+    return await Customer.create({ name, phone, isVerified: true, lastLogin: now });
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+    const winner = await Customer.findOne({ phone });
+    if (!winner) throw error;
+    return winner;
+  }
+}
+
+export async function completeCustomerRegistration({
+  registrationToken,
+  name,
+  ipAddress = "unknown",
+}) {
+  const phone = readRegistrationToken(registrationToken);
+  const customer = await createOrActivateCustomer({ phone, name });
+
+  otpAuditLog("customer_registration_completed", {
     phone: maskPhone(phone),
     ipAddress,
   });

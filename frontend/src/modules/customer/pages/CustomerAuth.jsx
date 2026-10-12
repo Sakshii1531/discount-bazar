@@ -94,13 +94,16 @@ const cleanPhoneNumber = (value) => {
     return digits.slice(0, 10);
 };
 
+const FORM_DATA_KEY = 'customer_auth_form_data';
+const REGISTRATION_TOKEN_KEY = 'customer_auth_registration_token';
+
 const CustomerAuth = () => {
-    const [isLogin, setIsLogin] = useState(() => {
-        const saved = sessionStorage.getItem('customer_auth_is_login');
-        return saved !== null ? JSON.parse(saved) : true;
-    });
+    // 'phone' -> 'otp' -> (new numbers only) 'name'
+    const [registrationToken, setRegistrationToken] = useState(
+        () => sessionStorage.getItem(REGISTRATION_TOKEN_KEY) || ''
+    );
+    const [step, setStep] = useState(() => (registrationToken ? 'name' : 'phone'));
     const [isLoading, setIsLoading] = useState(false);
-    const [showOtp, setShowOtp] = useState(false);
     const [timer, setTimer] = useState(0);
     const [carouselIndex, setCarouselIndex] = useState(0);
     const { login, isAuthenticated } = useAuth();
@@ -120,29 +123,35 @@ const CustomerAuth = () => {
     }, [isAuthenticated, navigate, location.state]);
 
     const [formData, setFormData] = useState(() => {
-        const saved = sessionStorage.getItem('customer_auth_form_data');
+        const saved = sessionStorage.getItem(FORM_DATA_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
                 return {
-                    ...parsed,
-                    loginPhone: cleanPhoneNumber(parsed.loginPhone),
-                    signupPhone: cleanPhoneNumber(parsed.signupPhone),
+                    phone: cleanPhoneNumber(parsed.phone || parsed.loginPhone),
+                    otp: '',
+                    name: parsed.name || '',
                 };
             } catch {
                 // Ignore parse errors and fallback
             }
         }
-        return { loginPhone: '', signupPhone: '', otp: '', name: '' };
+        return { phone: '', otp: '', name: '' };
     });
 
     useEffect(() => {
-        sessionStorage.setItem('customer_auth_is_login', JSON.stringify(isLogin));
-    }, [isLogin]);
-
-    useEffect(() => {
-        sessionStorage.setItem('customer_auth_form_data', JSON.stringify(formData));
+        sessionStorage.setItem(FORM_DATA_KEY, JSON.stringify(formData));
     }, [formData]);
+
+    // Keep the verified-number token for this tab so a reload resumes at the
+    // name step. It is short-lived; once it expires the user re-verifies.
+    useEffect(() => {
+        if (registrationToken) {
+            sessionStorage.setItem(REGISTRATION_TOKEN_KEY, registrationToken);
+        } else {
+            sessionStorage.removeItem(REGISTRATION_TOKEN_KEY);
+        }
+    }, [registrationToken]);
 
     // When keyboard opens, scroll the focused input into view within the card
     useEffect(() => {
@@ -187,25 +196,29 @@ const CustomerAuth = () => {
         return () => clearInterval(interval);
     }, [timer]);
 
+    const finishLogin = ({ token, customer }, destination) => {
+        sessionStorage.removeItem(FORM_DATA_KEY);
+        sessionStorage.removeItem(REGISTRATION_TOKEN_KEY);
+        login({ ...customer, token, role: 'customer' });
+        navigate(destination, { replace: true });
+    };
+
     const handleSendOtp = async (e) => {
         e?.preventDefault();
-        const activePhone = cleanPhoneNumber(isLogin ? (formData.loginPhone || '') : (formData.signupPhone || ''));
+        const activePhone = cleanPhoneNumber(formData.phone || '');
         if (activePhone.length !== 10) {
             toast.error('Enter valid 10-digit number');
             return;
         }
         setIsLoading(true);
         try {
-            if (isLogin) {
-                await customerApi.sendLoginOtp({ phone: activePhone });
-            } else {
-                await customerApi.sendSignupOtp({ name: formData.name, phone: activePhone });
-            }
-            setShowOtp(true);
+            await customerApi.sendLoginOtp({ phone: activePhone });
+            setFormData((prev) => ({ ...prev, otp: '' }));
+            setStep('otp');
             setTimer(30);
             toast.success('OTP sent!');
         } catch (error) {
-            toast.error('Failed to send OTP');
+            toast.error(error?.response?.data?.message || 'Failed to send OTP');
         } finally {
             setIsLoading(false);
         }
@@ -213,7 +226,7 @@ const CustomerAuth = () => {
 
     const handleVerifyOtp = async (e) => {
         e.preventDefault();
-        const activePhone = cleanPhoneNumber(isLogin ? (formData.loginPhone || '') : (formData.signupPhone || ''));
+        const activePhone = cleanPhoneNumber(formData.phone || '');
         if (formData.otp.length !== 4) {
             toast.error('Enter 4-digit code');
             return;
@@ -221,16 +234,43 @@ const CustomerAuth = () => {
         setIsLoading(true);
         try {
             const response = await customerApi.verifyOtp({ phone: activePhone, otp: formData.otp });
-            const { token, customer } = response.data.result;
-            sessionStorage.removeItem('customer_auth_is_login');
-            sessionStorage.removeItem('customer_auth_form_data');
-            login({ ...customer, token, role: 'customer' });
+            const result = response.data.result;
+            if (result.isNewUser) {
+                setRegistrationToken(result.registrationToken);
+                setFormData((prev) => ({ ...prev, otp: '' }));
+                setStep('name');
+                return;
+            }
             toast.success('Successfully Logged In!');
-            const from = location.state?.from?.pathname || '/';
-            navigate(from, { replace: true });
+            finishLogin(result, location.state?.from?.pathname || '/');
         } catch (error) {
             const apiMessage = error?.response?.data?.message;
             toast.error(apiMessage || 'Invalid OTP');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCompleteRegistration = async (e) => {
+        e.preventDefault();
+        const name = (formData.name || '').trim();
+        if (name.length < 2) {
+            toast.error('Please enter your name');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const response = await customerApi.completeRegistration({ registrationToken, name });
+            toast.success('Account created!');
+            finishLogin(response.data.result, '/');
+        } catch (error) {
+            const apiMessage = error?.response?.data?.message;
+            if (error?.response?.status === 401) {
+                // Verification expired; start again from the number.
+                setRegistrationToken('');
+                setStep('phone');
+            }
+            toast.error(apiMessage || 'Could not create your account');
         } finally {
             setIsLoading(false);
         }
@@ -383,7 +423,7 @@ const CustomerAuth = () => {
                     {/* Authentication Form Block */}
                     <div className="px-6 pt-0.5 pb-4">
                         <AnimatePresence mode="wait">
-                            {!showOtp ? (
+                            {step === 'phone' ? (
                                 <motion.div
                                     key="main-form"
                                     initial={{ opacity: 0, y: 20 }}
@@ -391,27 +431,9 @@ const CustomerAuth = () => {
                                     exit={{ opacity: 0, x: -20 }}
                                     className="space-y-3"
                                 >
-                                    {/* App Style Tab Switcher */}
-                                    <div className="flex bg-gray-50 rounded-2xl p-1.5 border border-gray-100">
-                                        <button
-                                            onClick={() => setIsLogin(true)}
-                                            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${isLogin ? 'bg-white shadow-sm' : 'text-gray-400'}`}
-                                            style={{ color: isLogin ? activeCategory.theme : undefined }}
-                                        >
-                                            Login
-                                        </button>
-                                        <button
-                                            onClick={() => setIsLogin(false)}
-                                            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${!isLogin ? 'bg-white shadow-sm' : 'text-gray-400'}`}
-                                            style={{ color: !isLogin ? activeCategory.theme : undefined }}
-                                        >
-                                            Sign Up
-                                        </button>
-                                    </div>
-
                                     <div className="space-y-2 text-center">
                                         <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                                            {isLogin ? 'Welcome Back!' : 'Create Account'}
+                                            Login or Sign Up
                                         </h3>
                                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">
                                             OTP will be sent for verification
@@ -419,28 +441,6 @@ const CustomerAuth = () => {
                                     </div>
 
                                     <form onSubmit={handleSendOtp} className="space-y-3">
-                                        {!isLogin && (
-                                            <div className="relative group">
-                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 transition-colors" style={{ color: 'inherit' }}>
-                                                    <User size={18} className="group-focus-within:text-[var(--theme-color)]" style={{ color: 'inherit' }} />
-                                                </div>
-                                                <input
-                                                    required
-                                                    name="name"
-                                                    value={formData.name || ''}
-                                                    maxLength={50}
-                                                    pattern="[a-zA-Z\s]*"
-                                                    placeholder="Full Name"
-                                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold text-gray-800 outline-none focus:bg-white transition-all"
-                                                    style={{ '--theme-color': activeCategory.theme }}
-                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
-                                                    onFocus={(e) => {
-                                                        e.target.style.borderColor = activeCategory.theme;
-                                                    }}
-                                                    onBlur={(e) => e.target.style.borderColor = '#F3F4F6'}
-                                                />
-                                            </div>
-                                        )}
                                         <div className="relative group">
                                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 transition-colors">
                                                 <Phone size={18} />
@@ -455,7 +455,7 @@ const CustomerAuth = () => {
                                                 pattern="[0-9]*"
                                                 autoComplete="tel"
                                                 name="phone"
-                                                value={isLogin ? (formData.loginPhone || '') : (formData.signupPhone || '')}
+                                                value={formData.phone || ''}
                                                 maxLength={16}
                                                 placeholder="Mobile Number"
                                                 className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-20 pr-4 py-3 text-sm font-bold text-gray-800 outline-none focus:bg-white transition-all"
@@ -463,7 +463,7 @@ const CustomerAuth = () => {
                                                     const cleaned = cleanPhoneNumber(e.target.value);
                                                     setFormData((prev) => ({
                                                         ...prev,
-                                                        [isLogin ? 'loginPhone' : 'signupPhone']: cleaned,
+                                                        phone: cleaned,
                                                     }));
                                                 }}
                                                 onPaste={(e) => {
@@ -472,7 +472,7 @@ const CustomerAuth = () => {
                                                     const cleaned = cleanPhoneNumber(pasted);
                                                     setFormData((prev) => ({
                                                         ...prev,
-                                                        [isLogin ? 'loginPhone' : 'signupPhone']: cleaned,
+                                                        phone: cleaned,
                                                     }));
                                                 }}
                                                 onFocus={(e) => {
@@ -517,7 +517,7 @@ const CustomerAuth = () => {
                                         </div>
                                     </div>
                                 </motion.div>
-                            ) : (
+                            ) : step === 'otp' ? (
                                 <motion.div
                                     key="otp-view"
                                     initial={{ opacity: 0, x: 20 }}
@@ -526,14 +526,14 @@ const CustomerAuth = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         <button
-                                            onClick={() => setShowOtp(false)}
+                                            onClick={() => setStep('phone')}
                                             className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center text-gray-400"
                                         >
                                             <ChevronLeft size={20} />
                                         </button>
                                         <div>
                                             <h3 className="text-xl font-black text-gray-900 tracking-tight">Verify Device</h3>
-                                            <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase">+91 {isLogin ? formData.loginPhone : formData.signupPhone}</p>
+                                            <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase">+91 {formData.phone}</p>
                                         </div>
                                     </div>
 
@@ -586,6 +586,68 @@ const CustomerAuth = () => {
                                                     {timer > 0 ? `Resend Code in ${timer}s` : 'Resend Now'}
                                                 </button>
                                             </div>
+                                        </div>
+                                    </form>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="name-view"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className="space-y-6"
+                                >
+                                    <div className="space-y-2 text-center">
+                                        <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                            What's your name?
+                                        </h3>
+                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">
+                                            Number verified · Finish creating your account
+                                        </p>
+                                    </div>
+
+                                    <form onSubmit={handleCompleteRegistration} className="space-y-4">
+                                        <div className="relative group">
+                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 transition-colors">
+                                                <User size={18} />
+                                            </div>
+                                            <input
+                                                required
+                                                autoFocus
+                                                name="name"
+                                                autoComplete="name"
+                                                value={formData.name || ''}
+                                                maxLength={50}
+                                                placeholder="Full Name"
+                                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold text-gray-800 outline-none focus:bg-white transition-all"
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
+                                                onFocus={(e) => {
+                                                    e.target.style.borderColor = activeCategory.theme;
+                                                }}
+                                                onBlur={(e) => e.target.style.borderColor = '#F3F4F6'}
+                                            />
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            disabled={isLoading}
+                                            className="w-full text-white py-3.5 rounded-2xl text-xs font-black tracking-[3px] flex items-center justify-center gap-2 active:scale-95 transition-all uppercase"
+                                            style={{ backgroundColor: activeCategory.theme, boxShadow: `0 14px 30px ${activeCategory.shadow}` }}
+                                        >
+                                            {isLoading ? 'Creating Account...' : 'Continue'}
+                                            <ChevronRight size={18} />
+                                        </button>
+
+                                        <div className="flex justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setRegistrationToken('');
+                                                    setStep('phone');
+                                                }}
+                                                className="text-[10px] font-black uppercase tracking-widest underline text-gray-400"
+                                            >
+                                                Use a different number
+                                            </button>
                                         </div>
                                     </form>
                                 </motion.div>
