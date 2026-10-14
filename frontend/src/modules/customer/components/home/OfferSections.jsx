@@ -125,15 +125,11 @@ const OfferSections = ({ sections, noServiceData }) => {
               <div className="px-4 pt-4 md:px-5 md:pt-5 pb-1">
                 <div className="flex overflow-x-auto gap-3 md:gap-4 pb-0 no-scrollbar snap-x snap-mandatory">
                   {sectionProducts.length === 0 && sectionSellers.length === 0 ? (
-                    <div className="w-full py-10 flex flex-col items-center justify-center text-center">
-                      <div className="w-32 h-32 mb-3">
-                        {noServiceData ? (
-                          <Lottie animationData={noServiceData} loop={true} />
-                        ) : (
-                          <div className="w-32 h-32" />
-                        )}
+                    <div className="w-full py-8 flex flex-col items-center justify-center text-center">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-2">
+                        <Sparkles className="w-6 h-6 text-amber-500 animate-pulse" />
                       </div>
-                      <p className="text-sm md:text-base text-slate-400 font-bold">
+                      <p className="text-xs md:text-sm text-slate-400 font-bold">
                         Looking for the best items in this category...
                       </p>
                     </div>

@@ -160,6 +160,13 @@ const MainLocationHeader = ({
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   const [cartAnimData, setCartAnimData] = useState(null);
 
+  // Lets other screens (e.g. the home empty state) open the location drawer.
+  useEffect(() => {
+    const open = () => setIsLocationOpen(true);
+    window.addEventListener("open-location-drawer", open);
+    return () => window.removeEventListener("open-location-drawer", open);
+  }, []);
+
   // Dynamically load shopping-cart Lottie on mount
   useEffect(() => {
     import("../../../../assets/lottie/shopping-cart.json")

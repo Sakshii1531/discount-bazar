@@ -16,6 +16,10 @@ const STORAGE_KEY = STORAGE_KEYS.LOCATION;
 // after roughly a month so we don't keep serving locations from a previous
 // address indefinitely.
 const LOCATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// Placeholder shown until the user's real location is detected or chosen.
+export const PLACEHOLDER_LOCATION_NAME = "Select delivery location";
+const isRealLocationName = (name) =>
+  !!name && name !== PLACEHOLDER_LOCATION_NAME && !name.includes("Rajshri Palace");
 
 export const LocationProvider = ({ children }) => {
   // Default location (used until user selects or we resolve a saved one)
@@ -32,7 +36,10 @@ export const LocationProvider = ({ children }) => {
   // Address list for drawer UI – will be hydrated from profile API.
   const [savedAddresses, setSavedAddresses] = useState([]);
 
-  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(() => {
+    const stored = getJSON(STORAGE_KEY, null);
+    return !isRealLocationName(stored?.address || stored?.name);
+  });
   const [locationError, setLocationError] = useState(null);
 
   // Update the current location.
@@ -89,10 +96,10 @@ export const LocationProvider = ({ children }) => {
         !("navigator" in window) ||
         !navigator.geolocation
       ) {
-        resolve({
-          ok: false,
-          error: "Geolocation is not supported on this device",
-        });
+        const message = "Geolocation is not supported on this device";
+        setLocationError(message);
+        setIsFetchingLocation(false);
+        resolve({ ok: false, error: message });
         return;
       }
 
@@ -372,12 +379,13 @@ export const LocationProvider = ({ children }) => {
     refreshAddresses();
   }, [refreshAddresses]);
 
-  // On mount: only restore from cache. Do NOT auto-fetch – browsers block the
-  // location prompt unless it's triggered by a user gesture (e.g. tap).
+  // On mount: restore a real cached location, otherwise try to detect it.
+  // The placeholder/default coords are never persisted, so a refresh retries
+  // detection instead of treating the default as the user's location.
   useEffect(() => {
     const parsed = getJSON(STORAGE_KEY, null);
     const addressName = parsed?.address || parsed?.name;
-    if (parsed && addressName && !addressName.includes("Rajshri Palace")) {
+    if (parsed && isRealLocationName(addressName)) {
       updateLocation(
         {
           name: addressName,
@@ -391,14 +399,8 @@ export const LocationProvider = ({ children }) => {
         { persist: false, updateSavedHome: false },
       );
     } else {
-      // If no location is stored (or TTL expired), persist the default
-      // immediately so subsequent reads have something to anchor on.
-      updateLocation(currentLocation, {
-        persist: true,
-        updateSavedHome: false,
-      });
+      fetchAndCacheLocation();
     }
-    // Live fetch happens only when user taps location pill or "Use current location"
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -410,6 +412,7 @@ export const LocationProvider = ({ children }) => {
     refreshAddresses,
     isFetchingLocation,
     locationError,
+    isLocationResolved: isRealLocationName(currentLocation?.name),
     refreshLocation: fetchAndCacheLocation,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [currentLocation, savedAddresses, isFetchingLocation, locationError, refreshAddresses]);
@@ -434,6 +437,7 @@ const defaultLocationContext = {
   savedAddresses: [],
   isFetchingLocation: false,
   locationError: null,
+  isLocationResolved: false,
   updateLocation: () => {},
   requestCurrentLocation: () => {},
   refreshAddresses: async () => [],

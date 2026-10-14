@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { useInViewAnimation } from "@/core/hooks/useInViewAnimation";
-import { Sparkles, Heart, Snowflake, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sparkles, Heart, Snowflake, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 // MUI Icons (shared with admin & icon selector)
 import HomeIcon from "@mui/icons-material/Home";
@@ -169,10 +169,66 @@ const getHomePageDataCacheKey = (location) => {
 const getCachedHomePageData = (location) =>
   homePageDataCache.get(getHomePageDataCacheKey(location)) || null;
 
+const HomeSkeleton = ({ isFetchingLocation }) => (
+  <div className="w-full max-w-[1920px] mx-auto px-4 md:px-8 lg:px-[50px] pt-3 animate-in fade-in duration-300">
+    {isFetchingLocation && (
+      <div className="flex items-center justify-center mb-4">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 border border-slate-200/80 shadow-xs backdrop-blur-xs">
+          <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+          <span className="text-xs font-bold text-slate-700">Detecting your location...</span>
+        </div>
+      </div>
+    )}
+
+    {/* Hero Banner Skeleton */}
+    <div className="w-full h-44 sm:h-52 md:h-64 rounded-2xl md:rounded-3xl bg-slate-200/80 animate-pulse mb-6" />
+
+    {/* Categories Skeleton */}
+    <div className="mb-6">
+      <div className="h-4 w-32 bg-slate-200 rounded-md mb-3 animate-pulse" />
+      <div className="flex gap-3 overflow-hidden pb-1">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-200/70 animate-pulse" />
+            <div className="w-12 h-2.5 bg-slate-200/60 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Product Row Skeleton */}
+    <div className="mb-6 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 border border-slate-100 shadow-xs">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="h-5 w-44 bg-slate-200 rounded-md mb-1.5 animate-pulse" />
+          <div className="h-3 w-28 bg-slate-100 rounded animate-pulse" />
+        </div>
+        <div className="h-7 w-20 bg-slate-100 rounded-full animate-pulse" />
+      </div>
+      <div className="flex gap-3 md:gap-4 overflow-hidden">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className="w-[130px] sm:w-[145px] md:w-[170px] flex-shrink-0 rounded-2xl border border-slate-100 bg-white p-3 shadow-xs"
+          >
+            <div className="w-full aspect-square rounded-xl bg-slate-100 animate-pulse mb-3" />
+            <div className="h-3.5 w-3/4 bg-slate-200/80 rounded animate-pulse mb-1.5" />
+            <div className="h-3 w-1/2 bg-slate-100 rounded animate-pulse mb-3" />
+            <div className="flex items-center justify-between pt-1">
+              <div className="h-4 w-12 bg-slate-200 rounded animate-pulse" />
+              <div className="h-7 w-14 bg-slate-200/70 rounded-lg animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const Home = () => {
   const { scrollY } = useScroll();
   const { isOpen: isProductDetailOpen } = useProductDetail();
-  const { currentLocation } = useLocation();
+  const { currentLocation, isFetchingLocation, isLocationResolved, refreshLocation } = useLocation();
   const { settings } = useSettings();
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
@@ -221,16 +277,17 @@ const Home = () => {
   const [pendingReturn, setPendingReturn] = useState(null);
   const [offerSections, setOfferSections] = useState(() => cachedHomePageData?.offerSections || []);
   const [noServiceData, setNoServiceData] = useState(null);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(() => Boolean(cachedHomePageData));
 
   useEffect(() => {
     productsRef.current = products || [];
   }, [products]);
 
   useEffect(() => {
-    if (products.length === 0 && !isLoading) {
+    if (products.length === 0 && !isLoading && !isFetchingLocation && isLocationResolved) {
       import("@/assets/lottie/animation.json").then((m) => setNoServiceData(m.default)).catch(() => {});
     }
-  }, [products.length, isLoading]);
+  }, [products.length, isLoading, isFetchingLocation, isLocationResolved]);
 
   const applyHomePageData = (data, { cacheKey, persist = true } = {}) => {
     if (!data) return;
@@ -261,6 +318,7 @@ const Home = () => {
       if (cached) {
         applyHomePageData(cached, { cacheKey, persist: false });
         setIsLoading(false);
+        setHasFetchedOnce(true);
         return;
       }
     }
@@ -319,7 +377,7 @@ const Home = () => {
       const sectionsList = sectionsRes?.data?.results || sectionsRes?.data?.result || sectionsRes?.data;
       nextHomeData.offerSections = Array.isArray(sectionsList) ? sectionsList : [];
       applyHomePageData(nextHomeData, { cacheKey });
-    } catch (error) { console.error("Error:", error); } finally { setIsLoading(false); }
+    } catch (error) { console.error("Error:", error); } finally { setIsLoading(false); setHasFetchedOnce(true); }
   };
 
   const hydrateSelectedSectionProducts = async (sections = []) => {
@@ -416,18 +474,37 @@ const Home = () => {
     return null; // Particles were already simplified out earlier
   };
 
+  // Coming-soon only once we know the user's real location and it has no stores.
+  const needsLocation = !isFetchingLocation && !isLocationResolved;
+  const showSkeleton = isFetchingLocation || (!needsLocation && (isLoading || !hasFetchedOnce));
+  const showUnserviceable = !showSkeleton && !needsLocation && products.length === 0;
+
   return (
-    <div className={`min-h-screen pt-[215px] md:pt-[195px] pb-32 md:pb-0 ${products.length === 0 && !isLoading ? "bg-white" : "bg-[#F5F7F8]"}`}>
+    <div className={`min-h-screen pt-[215px] md:pt-[195px] pb-32 md:pb-0 ${showUnserviceable ? "bg-white" : "bg-[#F5F7F8]"}`}>
       <div className={cn("contents", isProductDetailOpen && "hidden md:contents")}>
         <MainLocationHeader categories={categories} activeCategory={activeCategory} onCategorySelect={setActiveCategory} />
       </div>
 
-      {products.length === 0 && !isLoading ? (
+      {showSkeleton ? (
+        <HomeSkeleton isFetchingLocation={isFetchingLocation} />
+      ) : needsLocation ? (
+        <div className="flex flex-col items-center justify-center pt-20 pb-48 px-8">
+          <span className="flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-6">
+            <MapPin className="w-9 h-9 text-primary" />
+          </span>
+          <h3 className="text-xl md:text-2xl font-extrabold text-slate-800 text-center">Where should we deliver?</h3>
+          <p className="mt-2 text-slate-500 text-sm md:text-base text-center max-w-sm">Allow location access or pick your address to see stores and offers near you.</p>
+          <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+            <button onClick={() => refreshLocation?.()} className="flex-1 px-6 py-3.5 bg-primary text-white font-bold rounded-2xl text-sm transition-all active:scale-95">Use current location</button>
+            <button onClick={() => window.dispatchEvent(new Event("open-location-drawer"))} className="flex-1 px-6 py-3.5 bg-white text-primary border border-primary font-bold rounded-2xl text-sm transition-all active:scale-95">Enter address</button>
+          </div>
+        </div>
+      ) : showUnserviceable ? (
         <div className="flex flex-col items-center justify-center pt-24 pb-48">
           <div className="w-64 h-64 md:w-96 md:h-96 mb-8">{noServiceData && <Lottie animationData={noServiceData} loop={true} />}</div>
           <h3 className="text-3xl md:text-5xl font-black text-slate-800 text-center uppercase">Service <span className="text-primary">Unavailable</span></h3>
           <p className="text-slate-500 font-bold max-w-md text-center px-10 text-sm md:text-lg opacity-80">Ah! We haven't reached your neighborhood yet.</p>
-          <button onClick={() => window.location.reload()} className="mt-12 px-10 py-4 bg-primary text-white font-black rounded-[24px] uppercase text-[13px] tracking-widest transition-all active:scale-95">Check Again</button>
+          <button onClick={() => window.dispatchEvent(new Event("open-location-drawer"))} className="mt-12 px-10 py-4 bg-primary text-white font-black rounded-[24px] uppercase text-[13px] tracking-widest transition-all active:scale-95">Change Location</button>
         </div>
       ) : (
         <>
@@ -450,7 +527,7 @@ const Home = () => {
           <PromoMarquee />
           <QuickCategorySlider categories={effectiveQuickCategories} onCategoryClick={(id) => navigate(`/category/${id}`)} />
           <LowestPriceSection products={products} onSeeAll={() => navigate("/category/all", { state: { title: "Lowest Price Ever" } })} />
-          <OfferSections sections={offerSections} noServiceData={noServiceData} />
+          <OfferSections sections={offerSections} />
 
           {sectionsForRenderer.length > 0 && (
             <div className="container mx-auto px-4 md:px-8 lg:px-[50px] py-10 md:py-16">
