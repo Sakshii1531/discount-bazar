@@ -1197,17 +1197,27 @@ export const updateProduct = async (req, res) => {
       productData.sku = await ensureUniqueSku(rawSku, product._id);
 
       // Sellers cannot change inventory stock via product edit; stock is managed via Stock Management
-      if (role === "seller" && Array.isArray(product.variants) && product.variants.length > 0) {
-        productData.variants = productData.variants.map((variant, idx) => {
-          const existingVariant = product.variants.find(
+      // Newly added variants (no match by _id/SKU) take the opening stock the seller entered.
+      if (role === "seller") {
+        const savedVariants = Array.isArray(product.variants) && product.variants.length > 0
+          ? product.variants
+          : // Legacy single-variant product: its stock lives on the product itself
+            [{ sku: product.sku, stock: product.stock }];
+        const sameSku = (a, b) =>
+          a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+        productData.variants = productData.variants.map((variant) => {
+          const existingVariant = savedVariants.find(
             (ev) =>
-              (variant._id && String(ev._id) === String(variant._id)) ||
-              (variant.sku && ev.sku && String(ev.sku).trim().toLowerCase() === String(variant.sku).trim().toLowerCase())
-          ) || product.variants[idx];
+              (variant._id && ev._id && String(ev._id) === String(variant._id)) ||
+              sameSku(variant.sku, ev.sku)
+          );
 
           return {
             ...variant,
-            stock: existingVariant ? Number(existingVariant.stock || 0) : Number(variant.stock || 0),
+            stock: existingVariant
+              ? Number(existingVariant.stock || 0)
+              : Math.max(0, Number(variant.stock) || 0),
           };
         });
       }

@@ -134,7 +134,7 @@ describe("sellerVerificationService", () => {
       expect.objectContaining({
         from: "Noyo <no-reply@example.com>",
         to: "seller@example.com",
-        subject: "Verify your seller signup email",
+        subject: "Verify your Discount Bazar seller account",
       }),
     );
 

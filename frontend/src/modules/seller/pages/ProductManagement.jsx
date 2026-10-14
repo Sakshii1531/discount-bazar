@@ -410,7 +410,7 @@ const ProductManagement = () => {
       const data = new FormData();
       data.append("name", formData.name);
       data.append("slug", formData.slug);
-      let variantsToSubmit = (formData.variants || []).map((v, idx) => ({
+      let variantsToSubmit = (formData.variants || []).map(({ isSaved, ...v }, idx) => ({
         ...v,
         sku: v.sku && String(v.sku).trim() ? String(v.sku).trim().toUpperCase() : makeSku(formData.name, idx + 1),
       }));
@@ -430,7 +430,7 @@ const ProductManagement = () => {
           );
           return {
             ...v,
-            stock: original ? Number(original.stock ?? 0) : Number(v.stock ?? 0),
+            stock: original ? Number(original.stock ?? 0) : Math.max(0, Number(v.stock) || 0),
           };
         });
         computedStock = variantsToSubmit.reduce((sum, v) => sum + Math.max(0, Number(v.stock) || 0), 0);
@@ -580,6 +580,7 @@ const ProductManagement = () => {
         variants: (item.variants && item.variants.length > 0) ? item.variants.map(v => ({
           ...v,
           id: v._id || Date.now(),
+          isSaved: true,
           size: v.size || "",
           colour: v.colour || "",
           barcode: v.barcode || "",
@@ -587,6 +588,7 @@ const ProductManagement = () => {
         })) : [
           {
             id: Date.now(),
+            isSaved: true,
             name: "",
             size: item.size || "",
             colour: item.colour || "",
@@ -1834,33 +1836,40 @@ const ProductManagement = () => {
                                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
                                     Stock
                                   </label>
-                                  {editingItem && (
+                                  {editingItem && v.isSaved ? (
                                     <span className="text-[9px] font-bold text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded-md">
                                       Locked
                                     </span>
-                                  )}
+                                  ) : editingItem ? (
+                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded-md">
+                                      Opening stock
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <input
                                   type="number"
                                   min="0"
+                                  onKeyDown={(e) =>
+                                    ["-", "+", "e", "E", "."].includes(e.key) && e.preventDefault()
+                                  }
                                   value={v.stock}
-                                  disabled={Boolean(editingItem)}
+                                  disabled={Boolean(editingItem && v.isSaved)}
                                   title={
-                                    editingItem
-                                      ? "Stock cannot be changed in Edit. Use Stock Management to update inventory."
+                                    editingItem && v.isSaved
+                                      ? "Stock of an existing variant can't be changed here. Use Stock Management to update inventory."
                                       : ""
                                   }
                                   onChange={(e) => {
-                                    if (editingItem) return;
+                                    if (editingItem && v.isSaved) return;
                                     const val = e.target.value;
                                     if (val !== "" && Number(val) < 0) return;
                                     const news = [...formData.variants];
-                                    news[i].stock = val;
+                                    news[i] = { ...news[i], stock: val };
                                     setFormData({ ...formData, variants: news });
                                   }}
                                   placeholder="0"
                                   className={`w-full px-3.5 py-2 rounded-xl text-xs outline-none transition-all border ${
-                                    editingItem
+                                    editingItem && v.isSaved
                                       ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200"
                                       : "bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-800 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10"
                                   }`}
