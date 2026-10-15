@@ -11,7 +11,7 @@ import CashDay from "../models/cashDay.js";
 import Supplier from "../models/supplier.js";
 import PosCustomer from "../models/posCustomer.js";
 import { listParties } from "./businessService.js";
-import { roundCurrency as r2 } from "../utils/money.js";
+import { roundCurrency as r2, purchaseBaseCost } from "../utils/money.js";
 
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
 import { dayStart, dayEnd, todayKey, getSellerTz } from "./businessTime.js";
@@ -29,9 +29,12 @@ const sellerSales = (sellerId, from, to) => ({
   $or: [{ orderSource: "POS" }, { orderSource: { $ne: "POS" }, workflowStatus: "DELIVERED" }],
 });
 
+// Unit cost excl. GST, so products saved with GST-inclusive costs are valued like the rest.
+const baseCostOf = (p) => purchaseBaseCost(p.purchaseCost, p.gstPercent, p.purchaseGstType);
+
 async function costMap(sellerId) {
-  const prods = await Product.find({ sellerId }).select("purchaseCost").lean();
-  return new Map(prods.map((p) => [String(p._id), Number(p.purchaseCost || 0)]));
+  const prods = await Product.find({ sellerId }).select("purchaseCost gstPercent purchaseGstType").lean();
+  return new Map(prods.map((p) => [String(p._id), baseCostOf(p)]));
 }
 
 function orderCost(order, costs) {
@@ -122,11 +125,11 @@ const lowStockQuery = (sellerId) => ({
 });
 
 async function stockReport(sellerId) {
-  const prods = await Product.find({ sellerId }).select("name barcode sku brand size colour stock purchaseCost price salePrice lowStockAlert").sort({ name: 1 }).lean();
+  const prods = await Product.find({ sellerId }).select("name barcode sku brand size colour stock purchaseCost gstPercent purchaseGstType price salePrice lowStockAlert").sort({ name: 1 }).lean();
   const rows = prods.map((p) => ({
     ...p,
     sellPrice: p.salePrice > 0 ? p.salePrice : p.price,
-    stockValue: r2((p.stock || 0) * (p.purchaseCost || 0)),
+    stockValue: r2((p.stock || 0) * baseCostOf(p)),
   }));
   return { rows, totals: { count: rows.length, units: rows.reduce((s, x) => s + (x.stock || 0), 0), value: r2(rows.reduce((s, x) => s + x.stockValue, 0)) } };
 }

@@ -11,7 +11,7 @@ import Expense from "../models/expense.js";
 import CashEntry from "../models/cashEntry.js";
 import CashDay from "../models/cashDay.js";
 import { emitProductStockUpdate } from "./orderSocketEmitter.js";
-import { roundCurrency } from "../utils/money.js";
+import { roundCurrency, convertPurchaseCost, computePurchaseGst } from "../utils/money.js";
 import { assertDayOpen, getSellerTz, dateKeyOf } from "./businessTime.js";
 
 const err = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -162,7 +162,9 @@ async function nameItems(sellerId, priced, session) {
     if (!prod) throw err(404, "One or more products not in your catalog");
     if (p.variantSku && !(prod.variants || []).some((v) => v.sku === p.variantSku)) throw err(404, "Variant not found");
     if (!p.variantSku && (prod.variants || []).length > 1) throw err(400, `Select a variant for ${prod.name}`);
-    return { ...p, name: p.variantSku ? `${prod.name} (${p.variantSku})` : prod.name };
+    // A single-variant product keeps its stock on that variant, so book against it.
+    const variantSku = p.variantSku || (prod.variants?.length === 1 ? prod.variants[0].sku || "" : "");
+    return { ...p, variantSku, name: variantSku ? `${prod.name} (${variantSku})` : prod.name };
   });
 }
 
@@ -173,6 +175,19 @@ function qtyMap(items) {
     m.set(k, (m.get(k) || 0) + i.quantity);
   });
   return m;
+}
+
+// Units already sent back to the supplier against a bill, keyed like qtyMap.
+async function returnedQty(sellerId, billId, session) {
+  const rets = await PurchaseReturn.find({ seller: sellerId, purchaseBill: billId }).select("items").session(session).lean();
+  return qtyMap(rets.flatMap((r) => r.items));
+}
+
+// The same supplier invoice must not be booked twice (doubles stock and dues).
+async function assertUniqueBillNo(sellerId, supplierId, billNo, session, exceptId = null) {
+  const q = { seller: sellerId, supplier: supplierId || null, billNo, status: { $ne: "CANCELLED" } };
+  if (exceptId) q._id = { $ne: exceptId };
+  if (await PurchaseBill.exists(q).session(session)) throw err(409, `Bill no. ${billNo} is already recorded for this supplier`);
 }
 
 // Supplier given: it must belong to this seller. Empty means "no supplier".
@@ -199,12 +214,32 @@ const clearBillLedger = (bill, session) =>
   PartyLedgerEntry.deleteMany({ seller: bill.seller, refModel: "PurchaseBill", refId: bill._id }, { session });
 
 // Latest purchase cost becomes the product's cost price (used for P&L snapshots at sale time).
+// The bill line may be entered incl. or excl. GST; the product's purchaseCost follows the
+// product's own GST type/rate, so the cost is converted (same pre-GST base) and the stored
+// breakdown is recomputed, as productController does on a normal product save.
 async function applyCostUpdate(items, sellerId, session) {
+  const prods = await Product.find({ _id: { $in: items.map((i) => i.product) }, sellerId })
+    .select("gstPercent purchaseGstType").session(session).lean();
+  const byId = new Map(prods.map((p) => [String(p._id), p]));
   for (const i of items) {
+    const prod = byId.get(String(i.product));
+    if (!prod) continue;
+    const to = { rate: prod.gstPercent || 0, type: prod.purchaseGstType || "EXCLUSIVE" };
+    const cost = convertPurchaseCost(i.cost, { rate: i.gstPercent, type: i.purchaseGstType }, to);
+    const b = computePurchaseGst(cost, to.rate, to.type);
     if (i.variantSku) {
-      await Product.updateOne({ _id: i.product, sellerId, "variants.sku": i.variantSku }, { $set: { "variants.$.purchaseCost": i.cost } }, { session });
+      await Product.updateOne({ _id: i.product, sellerId, "variants.sku": i.variantSku }, {
+        $set: {
+          "variants.$.purchaseCost": cost,
+          "variants.$.purchaseBasePrice": b.basePrice,
+          "variants.$.purchaseGstAmount": b.gstAmount,
+          "variants.$.purchaseFinalPrice": b.finalPrice,
+        },
+      }, { session });
     } else {
-      await Product.updateOne({ _id: i.product, sellerId }, { $set: { purchaseCost: i.cost } }, { session });
+      await Product.updateOne({ _id: i.product, sellerId }, {
+        $set: { purchaseCost: cost, purchaseBasePrice: b.basePrice, purchaseGstAmount: b.gstAmount, purchaseFinalPrice: b.finalPrice },
+      }, { session });
     }
   }
 }
@@ -225,6 +260,7 @@ export async function createPurchaseBill(sellerId, p) {
   await assertDayOpen(sellerId, p.billDate || new Date());
   return inTxn(async (session) => {
     const supplierId = await resolveSupplierId(sellerId, p.supplierId, session);
+    await assertUniqueBillNo(sellerId, supplierId, p.billNo, session);
     const t = priceItems(p.items);
     const items = await nameItems(sellerId, t.priced, session);
     const paid = Math.min(p.amountPaid || 0, t.total);
@@ -254,12 +290,18 @@ export async function updatePurchaseBill(sellerId, id, p) {
     if (bill.status === "CANCELLED") throw err(409, "Cancelled bill cannot be edited");
     await assertDayOpen(sellerId, bill.billDate);
     if (p.billDate) await assertDayOpen(sellerId, p.billDate);
+    const supplierId = p.supplierId !== undefined ? await resolveSupplierId(sellerId, p.supplierId, session) : bill.supplier;
+    await assertUniqueBillNo(sellerId, supplierId, p.billNo || bill.billNo, session, bill._id);
     const t = priceItems(p.items);
     const items = await nameItems(sellerId, t.priced, session);
     const emits = [];
     if (bill.status === "CONFIRMED") {
       const oldQ = qtyMap(bill.items);
       const newQ = qtyMap(items);
+      // Units already returned to the supplier can't be removed from the bill again.
+      for (const [key, q] of await returnedQty(sellerId, bill._id, session)) {
+        if ((newQ.get(key) || 0) < q) throw err(409, `${q} unit(s) of an item were already returned against this bill; quantity cannot go below that`);
+      }
       const diff = new Map();
       for (const key of new Set([...oldQ.keys(), ...newQ.keys()])) diff.set(key, (newQ.get(key) || 0) - (oldQ.get(key) || 0));
       // Apply reductions first so a failing guard aborts before any increase.
@@ -271,7 +313,7 @@ export async function updatePurchaseBill(sellerId, id, p) {
       await applyCostUpdate(items, sellerId, session);
       await clearBillLedger(bill, session);
     }
-    if (p.supplierId !== undefined) bill.supplier = await resolveSupplierId(sellerId, p.supplierId, session);
+    bill.supplier = supplierId;
     if (p.billNo) bill.billNo = p.billNo;
     if (p.billDate) bill.billDate = p.billDate;
     bill.items = items;
@@ -294,6 +336,10 @@ export async function cancelPurchaseBill(sellerId, id) {
     if (!bill) throw err(404, "Bill not found");
     if (bill.status === "CANCELLED") throw err(409, "Already cancelled");
     await assertDayOpen(sellerId, bill.billDate);
+    // Cancelling would reverse the full quantity again on top of the returns.
+    if (await PurchaseReturn.exists({ seller: sellerId, purchaseBill: bill._id }).session(session)) {
+      throw err(409, "This bill has purchase returns, so it cannot be cancelled. Edit the bill instead.");
+    }
     const emits = [];
     if (bill.status === "CONFIRMED") {
       await applyQtyMap(qtyMap(bill.items), -1, { sellerId, type: "Correction", note: `Purchase bill ${bill.billNo} cancelled`, session, emits });
@@ -314,11 +360,33 @@ export async function listPurchaseBills(sellerId, { from, to, supplierId } = {})
 }
 
 /* ---------------- purchase returns ---------------- */
+// A return against a bill reverses that bill's lines: each item takes the GST rate and
+// incl./excl. type it was bought at, the supplier is the bill's, and the quantity can't
+// exceed what was bought minus what was already returned.
+async function billReturnLines(sellerId, billId, items, session) {
+  const bill = await PurchaseBill.findOne({ _id: billId, seller: sellerId }).select("status supplier items").session(session).lean();
+  if (!bill) throw err(404, "Purchase bill not found");
+  if (bill.status !== "CONFIRMED") throw err(409, "Only confirmed bills can have returns");
+  const lines = items.map((i) => {
+    const line = bill.items.find((b) => String(b.product) === String(i.productId) && (b.variantSku || "") === (i.variantSku || ""));
+    if (!line) throw err(400, "Returned item is not on this purchase bill");
+    return { ...i, gstPercent: line.gstPercent || 0, purchaseGstType: line.purchaseGstType || "EXCLUSIVE" };
+  });
+  const bought = qtyMap(bill.items);
+  const done = await returnedQty(sellerId, bill._id, session);
+  for (const [key, q] of qtyMap(lines.map((l) => ({ product: l.productId, variantSku: l.variantSku, quantity: l.quantity })))) {
+    const left = (bought.get(key) || 0) - (done.get(key) || 0);
+    if (q > left) throw err(409, left > 0 ? `Only ${left} unit(s) left to return on this bill` : "This item has already been fully returned");
+  }
+  return { lines, supplier: bill.supplier || null };
+}
+
 export async function createPurchaseReturn(sellerId, p) {
   await assertDayOpen(sellerId, p.date || new Date());
   return inTxn(async (session) => {
-    const supplierId = await resolveSupplierId(sellerId, p.supplierId, session);
-    const t = priceItems(p.items);
+    const fromBill = p.purchaseBillId ? await billReturnLines(sellerId, p.purchaseBillId, p.items, session) : null;
+    const supplierId = fromBill ? fromBill.supplier : await resolveSupplierId(sellerId, p.supplierId, session);
+    const t = priceItems(fromBill ? fromBill.lines : p.items);
     const items = await nameItems(sellerId, t.priced, session);
     const emits = [];
     const returnNo = `PR-${Date.now().toString(36).toUpperCase()}`;

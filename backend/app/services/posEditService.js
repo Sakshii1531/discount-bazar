@@ -8,7 +8,7 @@ import { applyStock } from "./businessService.js";
 import { assertDayOpen } from "./businessTime.js";
 import { freezeFinancialSnapshot } from "./finance/orderFinanceService.js";
 import { emitProductStockUpdate } from "./orderSocketEmitter.js";
-import { roundCurrency } from "../utils/money.js";
+import { roundCurrency, purchaseBaseCost } from "../utils/money.js";
 import { resolvePosPayment } from "./posPayment.js";
 
 const err = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -54,7 +54,7 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       const oldByKey = new Map(oldItems.map((i) => [keyOf(i.product, i.variantSlot), i]));
       const productIds = payload.items.map((i) => i.productId);
       const products = await Product.find({ _id: { $in: productIds }, sellerId })
-        .select("name mainImage purchaseCost gstPercent variants.sku variants.purchaseCost")
+        .select("name mainImage purchaseCost gstPercent purchaseGstType variants.sku variants.purchaseCost")
         .session(session).lean();
       const pMap = new Map(products.map((p) => [String(p._id), p]));
 
@@ -73,7 +73,7 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
           price: line.price,
           variantSlot: line.variantSku || undefined,
           image: prev?.image ?? (p.mainImage || ""),
-          costPrice: prev?.costPrice ?? Number(variant?.purchaseCost || p.purchaseCost || 0),
+          costPrice: prev?.costPrice ?? purchaseBaseCost(variant?.purchaseCost || p.purchaseCost, p.gstPercent, p.purchaseGstType),
           gstPercent: prev?.gstPercent ?? Number(p.gstPercent || 0),
           returnPolicy: prev?.returnPolicy || { isReturnable: false, returnWindowDays: 0, returnReasons: [] },
           returnStatus: "none",

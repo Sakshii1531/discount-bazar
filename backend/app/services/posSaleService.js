@@ -25,7 +25,7 @@ import { emitNewOrderToSeller, emitProductStockUpdate } from "./orderSocketEmitt
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import { isLowStockAlertsEnabled } from "./lowStockAlertService.js";
-import { roundCurrency } from "../utils/money.js";
+import { roundCurrency, purchaseBaseCost } from "../utils/money.js";
 import { assertDayOpen } from "./businessTime.js";
 import PosCustomer from "../models/posCustomer.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
@@ -251,7 +251,7 @@ function buildPosBreakdown({
 async function hydratePosItems({ sellerId, payloadItems, session = null }) {
   const productIds = payloadItems.map((item) => item.productId);
   const query = Product.find({ _id: { $in: productIds }, sellerId })
-    .select("_id name mainImage sellerId headerId purchaseCost gstPercent variants.sku variants.purchaseCost");
+    .select("_id name mainImage sellerId headerId purchaseCost gstPercent purchaseGstType variants.sku variants.purchaseCost");
   if (session) query.session(session);
   const products = await query.lean();
   const productMap = new Map(products.map((p) => [String(p._id), p]));
@@ -270,10 +270,12 @@ async function hydratePosItems({ sellerId, payloadItems, session = null }) {
       price: item.price,
       variantSku: item.variantSku || "",
       image: product.mainImage || "",
-      costPrice: Number(
+      // Cost snapshot excl. GST (product cost may be saved GST-inclusive)
+      costPrice: purchaseBaseCost(
         (item.variantSku && (product.variants || []).find((v) => v.sku === item.variantSku)?.purchaseCost) ||
-          product.purchaseCost ||
-          0,
+          product.purchaseCost,
+        product.gstPercent,
+        product.purchaseGstType,
       ),
       gstPercent: item.gstPercent !== undefined ? Number(item.gstPercent) : Number(product.gstPercent || 0),
       headerCategoryId: product.headerId ? String(product.headerId) : "",

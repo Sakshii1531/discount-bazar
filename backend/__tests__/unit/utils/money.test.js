@@ -9,6 +9,8 @@ import {
   percentOf,
   clampMoney,
   computePurchaseGst,
+  convertPurchaseCost,
+  purchaseBaseCost,
   ceilKm,
 } from "../../../app/utils/money.js";
 
@@ -106,6 +108,62 @@ describe("utils/money", () => {
       } catch (err) {
         expect(err.statusCode).toBe(400);
       }
+    });
+  });
+
+  describe("convertPurchaseCost", () => {
+    const EX = (rate) => ({ rate, type: "EXCLUSIVE" });
+    const IN = (rate) => ({ rate, type: "INCLUSIVE" });
+
+    it("keeps the cost as-is when conventions match", () => {
+      expect(convertPurchaseCost(100, EX(18), EX(18))).toBe(100);
+      expect(convertPurchaseCost(118, IN(18), IN(18))).toBe(118);
+      expect(convertPurchaseCost(100, EX(5), EX(18))).toBe(100);
+    });
+
+    it("converts an inclusive line cost onto an exclusive product", () => {
+      expect(convertPurchaseCost(118, IN(18), EX(18))).toBe(100);
+    });
+
+    it("converts an exclusive line cost onto an inclusive product", () => {
+      expect(convertPurchaseCost(100, EX(18), IN(18))).toBe(118);
+    });
+
+    it("keeps the pre-GST base when rates differ", () => {
+      expect(convertPurchaseCost(112, IN(12), IN(18))).toBe(118);
+      expect(convertPurchaseCost(100, EX(12), IN(5))).toBe(105);
+    });
+
+    it("treats missing type/rate as exclusive at 0%", () => {
+      expect(convertPurchaseCost(99.999, {}, {})).toBe(100);
+      expect(convertPurchaseCost(50, IN(0), EX(0))).toBe(50);
+    });
+
+    it("round-trips through computePurchaseGst to the same base", () => {
+      const cost = convertPurchaseCost(236, IN(18), IN(18));
+      expect(computePurchaseGst(cost, 18, "INCLUSIVE").basePrice).toBe(200);
+      const ex = convertPurchaseCost(236, IN(18), EX(18));
+      expect(computePurchaseGst(ex, 18, "EXCLUSIVE").finalPrice).toBe(236);
+    });
+  });
+
+  describe("purchaseBaseCost", () => {
+    it("strips GST from an inclusive cost", () => {
+      expect(purchaseBaseCost(118, 18, "INCLUSIVE")).toBe(100);
+      expect(purchaseBaseCost(105, 5, "inclusive")).toBe(100);
+    });
+
+    it("returns exclusive costs unchanged", () => {
+      expect(purchaseBaseCost(100, 18, "EXCLUSIVE")).toBe(100);
+      expect(purchaseBaseCost(100, 18)).toBe(100);
+    });
+
+    it("never throws on bad data", () => {
+      expect(purchaseBaseCost(undefined, 18, "INCLUSIVE")).toBe(0);
+      expect(purchaseBaseCost("abc", 18, "INCLUSIVE")).toBe(0);
+      expect(purchaseBaseCost(-5, 18, "EXCLUSIVE")).toBe(0);
+      expect(purchaseBaseCost(50, "x", "INCLUSIVE")).toBe(50);
+      expect(purchaseBaseCost(50, 0, "INCLUSIVE")).toBe(50);
     });
   });
 

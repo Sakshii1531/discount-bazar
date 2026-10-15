@@ -614,6 +614,18 @@ const DashboardTab = ({ onNavigateTab }) => {
 /* ---------- Purchases ---------- */
 const emptyLine = { productId: "", variantSku: "", quantity: 1, cost: "", gstPercent: 0, purchaseGstType: "EXCLUSIVE" };
 
+// Product cost is stored in the product's own incl./excl. GST terms; re-express it in the
+// line's terms (same pre-GST base) so a prefilled cost prices correctly on the bill.
+const toLineCost = (cost, product, line) => {
+    if (cost === "" || cost === null || cost === undefined || !Number.isFinite(Number(cost))) return cost;
+    const incl = (t) => String(t || "").toUpperCase() === "INCLUSIVE";
+    const pRate = Number(product?.gstPercent) || 0;
+    const lRate = Number(line.gstPercent) || 0;
+    if (incl(product?.purchaseGstType) === incl(line.purchaseGstType) && (pRate === lRate || !incl(line.purchaseGstType))) return cost;
+    const base = incl(product?.purchaseGstType) ? Number(cost) / (1 + pRate / 100) : Number(cost);
+    return Math.round((incl(line.purchaseGstType) ? base * (1 + lRate / 100) : base) * 100) / 100;
+};
+
 const PurchasesTab = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -945,19 +957,19 @@ const PurchasesTab = () => {
                 const singleVar = p.variants?.length === 1 ? p.variants[0] : null;
                 // Quantity is units purchased on this bill, not the product's current stock
                 next.quantity = patch.quantity ?? 1;
-                next.cost = p.purchaseCost ?? next.cost;
                 next.gstPercent = p.gstPercent ?? 0;
-                next.purchaseGstType = p.purchaseGstType || "EXCLUSIVE";
-                if (singleVar && singleVar.purchaseCost !== undefined && singleVar.purchaseCost !== "") {
-                    next.cost = singleVar.purchaseCost;
-                }
+                // Product default only until the seller picks incl./excl. on this line themselves
+                if (!next.gstTypeSet) next.purchaseGstType = p.purchaseGstType || "EXCLUSIVE";
+                const prodCost = singleVar && singleVar.purchaseCost !== undefined && singleVar.purchaseCost !== ""
+                    ? singleVar.purchaseCost
+                    : p.purchaseCost;
+                if (prodCost !== undefined && prodCost !== null) next.cost = toLineCost(prodCost, p, next);
             }
         }
         if (patch.variantSku) {
             const p = productsRef.current.find((x) => x._id === next.productId);
             const v = p?.variants?.find((x) => x.sku === patch.variantSku);
-            if (v && v.purchaseCost !== undefined && v.purchaseCost !== "") next.cost = v.purchaseCost;
-            if (p?.purchaseGstType) next.purchaseGstType = p.purchaseGstType;
+            if (v && v.purchaseCost !== undefined && v.purchaseCost !== "") next.cost = toLineCost(v.purchaseCost, p, next);
         }
         return next;
     }));
@@ -983,7 +995,7 @@ const PurchasesTab = () => {
         items: lines.filter((l) => l.productId).map((l) => ({
             productId: l.productId,
             variantSku: l.variantSku || "",
-            quantity: Number(l.quantity) || 1,
+            quantity: Number(l.quantity),
             cost: Number(l.cost),
             gstPercent: Number(l.gstPercent) || 0,
             purchaseGstType: l.purchaseGstType || "EXCLUSIVE",
@@ -1001,6 +1013,19 @@ const PurchasesTab = () => {
         if (validItems.length === 0) {
             toast.error("Please add at least one product to the bill");
             return;
+        }
+        if (!form.billNo.trim()) {
+            toast.error("Please enter the bill / invoice number");
+            return;
+        }
+        for (const [n, l] of validItems.entries()) {
+            const qty = Number(l.quantity);
+            const gst = Number(l.gstPercent || 0);
+            const p = productsRef.current.find((x) => x._id === l.productId);
+            if (p?.variants?.length > 1 && !l.variantSku) return toast.error(`Line ${n + 1}: choose a variant`);
+            if (!Number.isInteger(qty) || qty < 1) return toast.error(`Line ${n + 1}: quantity must be a whole number of at least 1`);
+            if (l.cost === "" || l.cost === null || l.cost === undefined || !(Number(l.cost) >= 0)) return toast.error(`Line ${n + 1}: enter the purchase cost`);
+            if (!(gst >= 0 && gst <= 100)) return toast.error(`Line ${n + 1}: GST % must be between 0 and 100`);
         }
         setBusy(true);
         try {
@@ -1027,16 +1052,45 @@ const PurchasesTab = () => {
                 cost: i.cost,
                 gstPercent: i.gstPercent,
                 purchaseGstType: i.purchaseGstType || "EXCLUSIVE",
+                // Saved choice: re-picking the product must not reset it
+                gstTypeSet: true,
             };
         }));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
+    // Return form for one line of a confirmed bill; the line can be switched in the form.
+    const returnLine = (b, idx) => {
+        const it = b.items[idx];
+        return {
+            productId: it.product?._id || it.product,
+            variantSku: it.variantSku || "",
+            name: it.name,
+            cost: it.cost,
+            gstPercent: it.gstPercent || 0,
+            purchaseGstType: it.purchaseGstType || "EXCLUSIVE",
+            maxQty: it.quantity,
+        };
+    };
+    const openReturn = (b) => setRet({ supplierId: b.supplier?._id || null, billId: b._id, bill: b, lineIdx: 0, quantity: 1, reason: "", ...returnLine(b, 0) });
+
     const submitReturn = async () => {
+        const qty = Number(ret.quantity);
+        if (!Number.isInteger(qty) || qty < 1) return toast.error("Return quantity must be a whole number of at least 1");
+        if (qty > ret.maxQty) return toast.error(`Only ${ret.maxQty} unit(s) of this item are on the bill`);
+        if (ret.cost === "" || !(Number(ret.cost) >= 0)) return toast.error("Enter the cost price");
         try {
             await businessApi.createPurchaseReturn({
                 supplierId: ret.supplierId || null, purchaseBillId: ret.billId, reason: ret.reason,
-                items: [{ productId: ret.productId, variantSku: ret.variantSku, quantity: Number(ret.quantity), cost: Number(ret.cost) }],
+                items: [{
+                    productId: ret.productId,
+                    variantSku: ret.variantSku,
+                    quantity: Number(ret.quantity),
+                    cost: Number(ret.cost),
+                    // Same GST basis as the bill line, so the return reverses it exactly
+                    gstPercent: Number(ret.gstPercent) || 0,
+                    purchaseGstType: ret.purchaseGstType || "EXCLUSIVE",
+                }],
             });
             toast.success("Purchase return recorded — stock reduced");
             setRet(null);
@@ -1209,7 +1263,7 @@ const PurchasesTab = () => {
                                         <label className="text-[10px] font-bold text-slate-600">GST %</label>
                                         <button
                                             type="button"
-                                            onClick={() => setLine(i, { purchaseGstType: l.purchaseGstType === "INCLUSIVE" ? "EXCLUSIVE" : "INCLUSIVE" })}
+                                            onClick={() => setLine(i, { purchaseGstType: l.purchaseGstType === "INCLUSIVE" ? "EXCLUSIVE" : "INCLUSIVE", gstTypeSet: true })}
                                             className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors whitespace-nowrap ${
                                                 l.purchaseGstType === "INCLUSIVE"
                                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
@@ -1282,17 +1336,35 @@ const PurchasesTab = () => {
             {ret && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 space-y-4">
                     <div>
-                        <p className="font-black text-sm text-amber-950">Purchase Return — {ret.name}</p>
+                        <p className="font-black text-sm text-amber-950">Purchase Return — Bill #{ret.bill?.billNo}</p>
                         <p className="text-xs text-amber-800/80 mt-0.5">Return damaged or expired stock to the supplier. This reduces inventory and adjusts supplier balance.</p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-amber-950 mb-1">Item *</label>
+                            <select
+                                className={inputCls}
+                                value={ret.lineIdx}
+                                onChange={(e) => {
+                                    const idx = Number(e.target.value);
+                                    setRet({ ...ret, lineIdx: idx, quantity: 1, ...returnLine(ret.bill, idx) });
+                                }}
+                            >
+                                {(ret.bill?.items || []).map((it, idx) => (
+                                    <option key={idx} value={idx}>{it.name} (×{it.quantity})</option>
+                                ))}
+                            </select>
+                        </div>
                         <div>
                             <label className="block text-xs font-bold text-amber-950 mb-1">Return Quantity (Pieces/Kg) *</label>
-                            <input className={inputCls} type="number" min="1" value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} placeholder="Return quantity" />
+                            <input className={inputCls} type="number" min="1" max={ret.maxQty} value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} placeholder="Return quantity" />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-amber-950 mb-1">Cost Price (₹ per unit) *</label>
                             <input className={inputCls} type="number" min="0" step="0.01" value={ret.cost} onChange={(e) => setRet({ ...ret, cost: e.target.value })} placeholder="Cost price ₹" />
+                            <p className="text-[10px] text-amber-800/80 mt-1">
+                                GST {ret.gstPercent || 0}% · {ret.purchaseGstType === "INCLUSIVE" ? "cost incl. GST" : "cost excl. GST"} (as on the bill)
+                            </p>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-amber-950 mb-1">Reason for Return *</label>
@@ -1370,7 +1442,7 @@ const PurchasesTab = () => {
                                     <HiOutlinePencilSquare className="h-3.5 w-3.5" /> Edit
                                 </button>
                                 {b.status === "CONFIRMED" && (
-                                    <button className={ghostBtn} onClick={() => setRet({ supplierId: b.supplier?._id, billId: b._id, productId: b.items[0].product, variantSku: b.items[0].variantSku || "", name: b.items[0].name, quantity: 1, cost: b.items[0].cost, reason: "" })}>
+                                    <button className={ghostBtn} onClick={() => openReturn(b)}>
                                         <HiOutlineArrowUturnLeft className="h-3.5 w-3.5" /> Return Item
                                     </button>
                                 )}

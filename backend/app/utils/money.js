@@ -78,6 +78,40 @@ export function computePurchaseGst(purchasePrice, gstRate, gstType = "EXCLUSIVE"
   return { basePrice: roundCurrency(price), gstAmount, finalPrice: addMoney(price, gstAmount) };
 }
 
+/**
+ * Re-express a unit purchase cost from one GST convention in another, keeping the
+ * pre-GST base the same. Used when a purchase-bill line (entered incl./excl. GST)
+ * becomes the product's purchaseCost, which follows the product's own GST type.
+ *   from/to: { rate, type: "INCLUSIVE" | "EXCLUSIVE" }
+ */
+export function convertPurchaseCost(cost, from = {}, to = {}) {
+  const isIncl = (t) => String(t || "").toUpperCase() === "INCLUSIVE";
+  const price = Number(cost) || 0;
+  const fromRate = Number(from.rate) || 0;
+  const toRate = Number(to.rate) || 0;
+  // Same convention: keep the entered figure exactly (no rounding round-trip).
+  if (isIncl(from.type) === isIncl(to.type) && (fromRate === toRate || !isIncl(from.type))) {
+    return roundCurrency(price);
+  }
+  const base = isIncl(from.type) ? price / (1 + fromRate / 100) : price;
+  return roundCurrency(isIncl(to.type) ? base * (1 + toRate / 100) : base);
+}
+
+/**
+ * Pre-GST unit cost of a product (or variant) cost, for COGS / stock value.
+ * Computed from the raw cost + the product's GST type/rate rather than the stored
+ * breakdown, which may be missing on older or bulk-imported products. Never throws.
+ */
+export function purchaseBaseCost(cost, rate, type) {
+  const price = Number(cost);
+  if (!Number.isFinite(price) || price <= 0) return 0;
+  const r = Number(rate);
+  if (String(type || "").toUpperCase() === "INCLUSIVE" && Number.isFinite(r) && r > 0) {
+    return roundCurrency(price / (1 + r / 100));
+  }
+  return roundCurrency(price);
+}
+
 export function ceilKm(valueKm) {
   const num = Number(valueKm || 0);
   if (!Number.isFinite(num) || num <= 0) return 0;
