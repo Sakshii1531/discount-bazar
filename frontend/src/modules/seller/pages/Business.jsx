@@ -6,6 +6,7 @@ import { businessApi } from "../services/businessApi";
 import { posApi } from "../services/posApi";
 import { sellerApi } from "../services/sellerApi";
 import PurchaseProductSearch from "../components/business/PurchaseProductSearch";
+import PurchaseProductEditModal from "../components/business/PurchaseProductEditModal";
 import { formatPriceInteger } from "@shared/utils/currency";
 import {
     HiOutlineSquares2X2,
@@ -641,6 +642,7 @@ const PurchasesTab = () => {
     const [busy, setBusy] = useState(false);
     const [ret, setRet] = useState(null);
     const [invoiceBill, setInvoiceBill] = useState(null);
+    const [editProductId, setEditProductId] = useState(null);
     const [dbCategories, setDbCategories] = useState([]);
     const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
     const [targetLineIndex, setTargetLineIndex] = useState(null);
@@ -974,6 +976,43 @@ const PurchasesTab = () => {
         return next;
     }));
 
+    // After editing a product from a bill line: refresh the catalog and carry the values the
+    // seller changed (cost, GST %, GST type) into this bill's lines for that product.
+    const handleProductEdited = async (updated) => {
+        const id = editProductId;
+        const before = productsRef.current.find((x) => x._id === id);
+        let list = productsRef.current;
+        try {
+            list = unwrap(await posApi.getCatalog({})) || list;
+        } catch { /* keep the current list; merged below */ }
+        let after = list.find((x) => x._id === id);
+        if (!after) {
+            after = { ...before, ...(updated || {}) };
+            list = [...list, after];
+        }
+        productsRef.current = list;
+        setProducts(list);
+
+        const costOf = (p, sku) => {
+            const v = sku ? p?.variants?.find((x) => x.sku === sku) : null;
+            return v && v.purchaseCost !== undefined && v.purchaseCost !== "" ? v.purchaseCost : p?.purchaseCost;
+        };
+        setLines((ls) => ls.map((l) => {
+            if (l.productId !== id) return l;
+            const next = { ...l };
+            if (Number(after.gstPercent || 0) !== Number(before?.gstPercent || 0)) next.gstPercent = after.gstPercent ?? 0;
+            if ((after.purchaseGstType || "EXCLUSIVE") !== (before?.purchaseGstType || "EXCLUSIVE") && !l.gstTypeSet) {
+                next.purchaseGstType = after.purchaseGstType || "EXCLUSIVE";
+            }
+            const newCost = costOf(after, l.variantSku);
+            if (newCost !== undefined && newCost !== null && Number(newCost) !== Number(costOf(before, l.variantSku))) {
+                next.cost = toLineCost(newCost, after, next);
+            }
+            return next;
+        }));
+        setEditProductId(null);
+    };
+
     // Product picked via search / barcode scan. A product found by server search may not be
     // in the loaded list yet, so add it first; a scanned variant barcode also selects that variant.
     const selectLineProduct = (i, product, variantSku = "") => {
@@ -1188,13 +1227,24 @@ const PurchasesTab = () => {
                                 <div className="col-span-2 md:col-span-1">
                                     <div className="flex items-center justify-between md:hidden mb-1">
                                         <label className="text-[10px] font-bold text-slate-600">Product Name *</label>
-                                        <button
-                                            type="button"
-                                            onClick={() => openQuickAddProduct(i)}
-                                            className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
-                                        >
-                                            <HiOutlinePlus className="h-3 w-3" /> New
-                                        </button>
+                                        <div className="flex items-center gap-3">
+                                            {prod && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditProductId(prod._id)}
+                                                    className="text-[10px] font-bold text-slate-600 hover:underline flex items-center gap-0.5"
+                                                >
+                                                    <HiOutlinePencilSquare className="h-3 w-3" /> Edit
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => openQuickAddProduct(i)}
+                                                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                                            >
+                                                <HiOutlinePlus className="h-3 w-3" /> New
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <PurchaseProductSearch
@@ -1205,6 +1255,18 @@ const PurchasesTab = () => {
                                             onSelect={(p, variantSku) => selectLineProduct(i, p, variantSku)}
                                             onClear={() => setLine(i, { productId: "", variantSku: "", quantity: 1, cost: "" })}
                                         />
+                                        {prod && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditProductId(prod._id)}
+                                                className="hidden md:flex shrink-0 px-2.5 py-2.5 rounded-xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 active:scale-95 text-xs font-bold transition-all cursor-pointer items-center gap-1"
+                                                title="Edit this product"
+                                                aria-label={`Edit ${prod.name}`}
+                                            >
+                                                <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                                                <span className="hidden xl:inline text-xs">Edit</span>
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => openQuickAddProduct(i)}
@@ -1459,6 +1521,15 @@ const PurchasesTab = () => {
                     </div>
                 )}
             </div>
+
+            {editProductId && products.some((x) => x._id === editProductId) && (
+                <PurchaseProductEditModal
+                    key={editProductId}
+                    product={products.find((x) => x._id === editProductId)}
+                    onClose={() => setEditProductId(null)}
+                    onSaved={handleProductEdited}
+                />
+            )}
 
             {/* Purchase Invoice Modal */}
             {invoiceBill && (

@@ -521,8 +521,10 @@ const PosTerminal = () => {
             ) : activeTab === "sales" ? (
                 <SalesHistory shopName={user?.shopName || user?.name} seller={user} />
             ) : activeTab === "sale" ? (
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-                    <div className="space-y-3">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
+                    {/* minmax(0,1fr) + min-w-0: a plain 1fr column grows to its widest content (the
+                        category chip row), pushing the products and bill past the right edge. */}
+                    <div className="space-y-3 min-w-0">
                         <SearchBar value={searchTerm} onChange={setSearchTerm} onSubmit={handleBarcodeSubmit} />
                         <CategoryFilterBar
                             categories={knownCategories}
@@ -536,7 +538,9 @@ const PosTerminal = () => {
                         />
                     </div>
 
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] flex flex-col">
+                    {/* Desktop: pinned under the top bar (top-24) and capped to the space between it and the
+                        layout's bottom padding, so the line list scrolls inside and totals + Checkout stay visible. */}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col overflow-hidden">
                         <CartPanel
                             cart={cart}
                             onUpdateQuantity={updateQuantity}

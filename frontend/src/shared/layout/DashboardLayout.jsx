@@ -860,8 +860,10 @@ const DashboardLayout = ({ children, navItems, title }) => {
         navigate("/seller/returns");
     };
 
+    // Wrappers use overflow-x: clip (not hidden) so they don't become scroll containers,
+    // which would break position: sticky in pages (e.g. the POS bill panel).
     return (
-        <div className="min-h-screen mesh-gradient-light relative overflow-x-hidden">
+        <div className="min-h-screen mesh-gradient-light relative overflow-x-hidden supports-[overflow:clip]:overflow-x-clip">
             {/* Background Blobs for depth */}
             <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] -z-10 animate-pulse pointer-events-none"></div>
             <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-500/5 rounded-full blur-[120px] -z-10 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
@@ -872,9 +874,9 @@ const DashboardLayout = ({ children, navItems, title }) => {
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
             />
-            <div className={cn("transition-all duration-300 overflow-x-hidden max-w-full", (role === "admin" || role === "seller") ? "pl-0 md:pl-72" : "pl-72")}>
+            <div className={cn("transition-all duration-300 overflow-x-hidden supports-[overflow:clip]:overflow-x-clip max-w-full", (role === "admin" || role === "seller") ? "pl-0 md:pl-72" : "pl-72")}>
                 <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
-                <main className={cn("p-4 md:p-6 min-h-screen overflow-x-hidden max-w-full", (role === "admin" || role === "seller") ? "pt-20 md:pt-24 pb-24 md:pb-6" : "pt-20")}>
+                <main className={cn("p-4 md:p-6 min-h-screen overflow-x-hidden supports-[overflow:clip]:overflow-x-clip max-w-full", (role === "admin" || role === "seller") ? "pt-20 md:pt-24 pb-24 md:pb-6" : "pt-20")}>
                     <div className="w-full pb-12">
                         {role === "seller" && pushPermission !== "granted" && !isPermissionBannerDismissed && (
                             <div className="mb-4 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white rounded-2xl p-4 shadow-lg shadow-red-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-red-500/20">

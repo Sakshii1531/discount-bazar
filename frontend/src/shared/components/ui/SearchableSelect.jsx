@@ -1,8 +1,16 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Search, ChevronDown, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DISPLAY_LIMIT = 200;
+// Room the menu wants below the trigger before it opens upwards instead.
+const MENU_MIN_SPACE = 260;
+const MENU_GAP = 6;
+const VIEWPORT_MARGIN = 8;
+const SEARCH_HEADER_HEIGHT = 52;
+const LIST_MAX_HEIGHT = 240;
+const LIST_MIN_HEIGHT = 96;
 
 const SearchableSelect = ({
   options = [],
@@ -18,8 +26,15 @@ const SearchableSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
   const searchInputRef = useRef(null);
   const listRef = useRef(null);
+  // Fixed-position menu rendered on document.body, so scroll areas and
+  // overflow-hidden cards/modals can't clip it. Inside a Radix dialog the menu
+  // stays inline: the dialog blocks pointer events and closes on outside clicks.
+  const [portalled, setPortalled] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
 
   // Normalize options to { id, label }
   const normalizedOptions = useMemo(() => {
@@ -48,14 +63,45 @@ const SearchableSelect = ({
     );
   }, [normalizedOptions, searchTerm]);
 
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
+    const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
+    const openUp = below < MENU_MIN_SPACE && above > below;
+    const room = (openUp ? above : below) - SEARCH_HEADER_HEIGHT;
+    setMenuPos({
+      left: rect.left,
+      width: rect.width,
+      top: openUp ? undefined : rect.bottom + MENU_GAP,
+      bottom: openUp ? window.innerHeight - rect.top + MENU_GAP : undefined,
+      listMaxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(LIST_MAX_HEIGHT, room)),
+    });
+  }, []);
+
   const handleToggle = () => {
     if (!disabled) {
       if (!isOpen) {
         setSearchTerm("");
+        const usePortal = !containerRef.current?.closest('[role="dialog"]');
+        setPortalled(usePortal);
+        if (usePortal) updateMenuPosition();
       }
       setIsOpen((prev) => !prev);
     }
   };
+
+  useLayoutEffect(() => {
+    if (!isOpen || !portalled) return undefined;
+    // Follow the trigger while any ancestor scrolls or the window resizes.
+    window.addEventListener("scroll", updateMenuPosition, true);
+    window.addEventListener("resize", updateMenuPosition);
+    return () => {
+      window.removeEventListener("scroll", updateMenuPosition, true);
+      window.removeEventListener("resize", updateMenuPosition);
+    };
+  }, [isOpen, portalled, updateMenuPosition]);
 
   // When dropdown opens, focus search input
   useEffect(() => {
@@ -72,7 +118,9 @@ const SearchableSelect = ({
     if (!isOpen) return;
 
     const handlePointerDown = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      const inTrigger = containerRef.current?.contains(e.target);
+      const inMenu = menuRef.current?.contains(e.target);
+      if (!inTrigger && !inMenu) {
         setIsOpen(false);
       }
     };
@@ -120,6 +168,8 @@ const SearchableSelect = ({
     return sliced;
   }, [filteredOptions, selectedOption]);
 
+  const renderMenu = (menu) => (portalled ? createPortal(menu, document.body) : menu);
+
   return (
     <div
       ref={containerRef}
@@ -128,6 +178,7 @@ const SearchableSelect = ({
     >
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={handleToggle}
@@ -181,10 +232,19 @@ const SearchableSelect = ({
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && (
+      {isOpen && (!portalled || menuPos) && renderMenu(
         <div
-          className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50 flex flex-col animate-in fade-in-0 zoom-in-95 duration-100"
-          style={{ overscrollBehavior: "contain" }}
+          ref={menuRef}
+          className={cn(
+            "bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-100",
+            portalled ? "fixed z-[1000]" : "absolute left-0 right-0 top-full mt-1.5 z-50"
+          )}
+          style={{
+            overscrollBehavior: "contain",
+            ...(portalled && menuPos
+              ? { left: menuPos.left, width: menuPos.width, top: menuPos.top, bottom: menuPos.bottom }
+              : {}),
+          }}
         >
           {/* Search Field Header */}
           <div className="p-2 border-b border-gray-100 bg-gray-50/50">
@@ -216,7 +276,8 @@ const SearchableSelect = ({
           {/* Options List */}
           <div
             ref={listRef}
-            className="max-h-60 overflow-y-auto py-1 overscroll-contain"
+            className={cn("overflow-y-auto py-1 overscroll-contain", !portalled && "max-h-60")}
+            style={portalled && menuPos ? { maxHeight: menuPos.listMaxHeight } : undefined}
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >

@@ -14,12 +14,17 @@ const BrandSelect = ({ value = "", legacyName = "", onChange, className, disable
   const [brands, setBrands] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // Bumped by "Retry" to fetch the list again after a failed load.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     loadActiveBrands()
       .then((list) => {
-        if (!cancelled) setBrands(list);
+        if (!cancelled) {
+          setBrands(list);
+          setLoadError(false);
+        }
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -30,7 +35,13 @@ const BrandSelect = ({ value = "", legacyName = "", onChange, className, disable
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    setIsLoading(true);
+    setLoadError(false);
+    setAttempt((n) => n + 1);
+  };
 
   const options = useMemo(() => {
     const opts = brands.map((b) => ({ id: b._id, label: b.name }));
@@ -50,7 +61,7 @@ const BrandSelect = ({ value = "", legacyName = "", onChange, className, disable
   }, [value, legacyName, brands]);
 
   const unmatchedLegacy =
-    !isLoading && !value && legacyName &&
+    !isLoading && !loadError && !value && legacyName &&
     !brands.some((b) => nameKey(b.name) === nameKey(legacyName));
 
   const handleChange = (id) => {
@@ -75,6 +86,14 @@ const BrandSelect = ({ value = "", legacyName = "", onChange, className, disable
         }
         className={className}
       />
+      {loadError && !isLoading && (
+        <p className="text-[11px] text-rose-600 ml-1">
+          Couldn&apos;t load brands.{" "}
+          <button type="button" onClick={retry} className="font-bold underline hover:text-rose-700">
+            Retry
+          </button>
+        </p>
+      )}
       {unmatchedLegacy && (
         <p className="text-[11px] text-amber-600 ml-1">
           Current brand "{legacyName}" isn't in the approved list. Select a brand or clear it.

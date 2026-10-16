@@ -29,8 +29,8 @@ const CartPanel = ({
     const halfPercent = taxPercent > 0 ? Math.round((taxPercent / 2) * 100) / 100 : 0;
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <div className="flex flex-col flex-1 min-h-0">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 shrink-0">
                 <HiOutlineShoppingCart className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-black text-slate-900">Current Sale</h3>
                 <span className="ml-auto text-xs font-bold text-slate-400">{cart.length} item{cart.length === 1 ? "" : "s"}</span>
@@ -46,7 +46,7 @@ const CartPanel = ({
                 )}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2 space-y-2">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400 py-10">
                         <HiOutlineShoppingCart className="h-9 w-9 mb-2" />
@@ -121,7 +121,7 @@ const CartPanel = ({
                 )}
             </div>
 
-            <div className="border-t border-slate-100 p-4 bg-white">
+            <div className="border-t border-slate-100 p-4 bg-white shrink-0">
                 {/* GST / Tax Pricing Mode & Custom Tax */}
                 <div className="mb-3 space-y-2">
                     <div className="flex items-center justify-between">
