@@ -85,6 +85,7 @@ const HeaderCategories = () => {
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
+  const latestFetchRef = useRef(0);
 
   // Lock body scroll (Lenis smooth scroll) when any modal is open
   useEffect(() => {
@@ -130,11 +131,15 @@ const HeaderCategories = () => {
   }, [searchTerm, pageSize]);
 
   const fetchCategories = async (requestedPage = 1) => {
+    const fetchId = ++latestFetchRef.current;
     setIsLoading(true);
     try {
       const params = { type: "header", page: requestedPage, limit: pageSize };
-      if (searchTerm) params.search = searchTerm;
+      const query = searchTerm.trim();
+      if (query) params.search = query;
       const res = await adminApi.getCategories(params);
+      // Ignore responses for searches the user has already typed past.
+      if (fetchId !== latestFetchRef.current) return;
       if (res.data.success) {
         const payload = res.data.result || {};
         const list = Array.isArray(payload.items) ? payload.items : [];
@@ -145,9 +150,11 @@ const HeaderCategories = () => {
         setPage(typeof payload.page === "number" ? payload.page : requestedPage);
       }
     } catch (error) {
-      toast.error("Failed to fetch header categories");
+      if (fetchId === latestFetchRef.current) {
+        toast.error("Failed to fetch header categories");
+      }
     } finally {
-      setIsLoading(false);
+      if (fetchId === latestFetchRef.current) setIsLoading(false);
     }
   };
 

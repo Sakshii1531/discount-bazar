@@ -178,11 +178,21 @@ const Level2Categories = () => {
     }
   };
 
+  // Helper to find parent name
+  const getParentName = (parentId) => {
+    const id = parentId?._id || parentId;
+    const parent = headerCategories.find((h) => (h._id || h.id) === id);
+    return parent ? parent.name : "Unknown";
+  };
+
   const filteredCategories = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
     const filtered = categories.filter((cat) => {
-      const matchesSearch = String(cat.name || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase().trim());
+      const matchesSearch =
+        !query ||
+        [cat.name, cat.slug, getParentName(cat.parentId)].some((field) =>
+          String(field || "").toLowerCase().includes(query),
+        );
       const matchesHeader =
         filterHeader === "all" ||
         (cat.parentId && cat.parentId._id === filterHeader) ||
@@ -208,7 +218,7 @@ const Level2Categories = () => {
           return bTime - aTime;
       }
     });
-  }, [categories, searchTerm, filterHeader, sortBy]);
+  }, [categories, headerCategories, searchTerm, filterHeader, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCategories.length / pageSize));
 
@@ -330,13 +340,6 @@ const Level2Categories = () => {
     setIsAddModalOpen(true);
   };
 
-  // Helper to find parent name
-  const getParentName = (parentId) => {
-    const id = parentId?._id || parentId;
-    const parent = headerCategories.find((h) => (h._id || h.id) === id);
-    return parent ? parent.name : "Unknown";
-  };
-
   const sortedHeaderOptions = useMemo(() => {
     return [...headerCategories]
       .map((h) => ({
@@ -345,6 +348,11 @@ const Level2Categories = () => {
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [headerCategories]);
+
+  const headerFilterOptions = useMemo(
+    () => [{ id: "all", label: "All Header Categories" }, ...sortedHeaderOptions],
+    [sortedHeaderOptions],
+  );
 
   const handleSelect = (id) => {
     setSelectedItems((prev) => {
@@ -427,17 +435,14 @@ const Level2Categories = () => {
           </div>
           <div className="flex items-center gap-2 min-w-[200px]">
             <Filter className="text-gray-400 w-5 h-5" />
-            <select
+            <SearchableSelect
+              options={headerFilterOptions}
               value={filterHeader}
-              onChange={(e) => setFilterHeader(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
-              <option value="all">All Header Categories</option>
-              {headerCategories.map((h) => (
-                <option key={h._id || h.id} value={h._id || h.id}>
-                  {h.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFilterHeader(val || "all")}
+              placeholder="All Header Categories"
+              searchPlaceholder="Search header category..."
+              emptyMessage="No header categories found"
+            />
           </div>
           <div className="flex items-center gap-2 min-w-[180px]">
             <select

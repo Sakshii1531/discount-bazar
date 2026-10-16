@@ -193,10 +193,14 @@ const SubCategories = () => {
   };
 
   const filteredCategories = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
     const filtered = categories.filter((cat) => {
-      const matchesSearch = String(cat.name || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase().trim());
+      const parentInfo = query ? getParentInfo(cat.parentId) : null;
+      const matchesSearch =
+        !query ||
+        [cat.name, cat.slug, parentInfo.name, parentInfo.headerName].some(
+          (field) => String(field || "").toLowerCase().includes(query),
+        );
       const matchesParent =
         filterLevel2 === "all" ||
         (cat.parentId && cat.parentId._id === filterLevel2) ||
@@ -222,7 +226,7 @@ const SubCategories = () => {
           return bTime - aTime;
       }
     });
-  }, [categories, searchTerm, filterLevel2, sortBy]);
+  }, [categories, level2Categories, headerCategories, searchTerm, filterLevel2, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCategories.length / pageSize));
 
@@ -257,6 +261,11 @@ const SubCategories = () => {
       })
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [level2Categories, headerCategories]);
+
+  const parentFilterOptions = useMemo(
+    () => [{ id: "all", label: "All Level 2 Categories" }, ...sortedParentCategoryOptions],
+    [sortedParentCategoryOptions],
+  );
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -423,17 +432,14 @@ const SubCategories = () => {
           </div>
           <div className="flex items-center gap-2 min-w-[200px]">
             <Filter className="text-gray-400 w-5 h-5" />
-            <select
+            <SearchableSelect
+              options={parentFilterOptions}
               value={filterLevel2}
-              onChange={(e) => setFilterLevel2(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
-              <option value="all">All Level 2 Categories</option>
-              {level2Categories.map((c) => (
-                <option key={c._id || c.id} value={c._id || c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFilterLevel2(val || "all")}
+              placeholder="All Level 2 Categories"
+              searchPlaceholder="Search parent category..."
+              emptyMessage="No parent categories found"
+            />
           </div>
           <div className="flex items-center gap-2 min-w-[180px]">
             <select

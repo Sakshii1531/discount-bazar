@@ -11,6 +11,25 @@ const VIEWPORT_MARGIN = 8;
 const SEARCH_HEADER_HEIGHT = 52;
 const LIST_MAX_HEIGHT = 240;
 const LIST_MIN_HEIGHT = 96;
+const MENU_MIN_Z_INDEX = 1000;
+
+// Highest z-index among the element's ancestors, so a portalled menu opened
+// from inside a modal (e.g. z-[99999]) is stacked above that modal.
+const getAncestorZIndex = (el) => {
+  let max = 0;
+  for (let node = el; node && node !== document.body; node = node.parentElement) {
+    const z = parseInt(window.getComputedStyle(node).zIndex, 10);
+    if (!Number.isNaN(z)) max = Math.max(max, z);
+  }
+  return max;
+};
+
+const normalizeText = (text) =>
+  String(text ?? "")
+    .toLowerCase()
+    .replace(/[>/|,_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const SearchableSelect = ({
   options = [],
@@ -35,6 +54,7 @@ const SearchableSelect = ({
   // stays inline: the dialog blocks pointer events and closes on outside clicks.
   const [portalled, setPortalled] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
+  const [menuZIndex, setMenuZIndex] = useState(MENU_MIN_Z_INDEX);
 
   // Normalize options to { id, label }
   const normalizedOptions = useMemo(() => {
@@ -54,13 +74,15 @@ const SearchableSelect = ({
     return normalizedOptions.find((opt) => String(opt.id) === String(value));
   }, [normalizedOptions, value]);
 
-  // Filter options based on search query
+  // Filter options based on search query: every typed word must appear in the
+  // label, so "electronics laptop" matches "Electronics > Laptops".
   const filteredOptions = useMemo(() => {
-    const trimmed = searchTerm.trim().toLowerCase();
-    if (!trimmed) return normalizedOptions;
-    return normalizedOptions.filter((opt) =>
-      opt.label.toLowerCase().includes(trimmed)
-    );
+    const tokens = normalizeText(searchTerm).split(" ").filter(Boolean);
+    if (tokens.length === 0) return normalizedOptions;
+    return normalizedOptions.filter((opt) => {
+      const label = normalizeText(opt.label);
+      return tokens.every((token) => label.includes(token));
+    });
   }, [normalizedOptions, searchTerm]);
 
   const updateMenuPosition = useCallback(() => {
@@ -86,7 +108,10 @@ const SearchableSelect = ({
         setSearchTerm("");
         const usePortal = !containerRef.current?.closest('[role="dialog"]');
         setPortalled(usePortal);
-        if (usePortal) updateMenuPosition();
+        if (usePortal) {
+          setMenuZIndex(Math.max(MENU_MIN_Z_INDEX, getAncestorZIndex(containerRef.current) + 1));
+          updateMenuPosition();
+        }
       }
       setIsOpen((prev) => !prev);
     }
@@ -237,12 +262,12 @@ const SearchableSelect = ({
           ref={menuRef}
           className={cn(
             "bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-100",
-            portalled ? "fixed z-[1000]" : "absolute left-0 right-0 top-full mt-1.5 z-50"
+            portalled ? "fixed" : "absolute left-0 right-0 top-full mt-1.5 z-50"
           )}
           style={{
             overscrollBehavior: "contain",
             ...(portalled && menuPos
-              ? { left: menuPos.left, width: menuPos.width, top: menuPos.top, bottom: menuPos.bottom }
+              ? { left: menuPos.left, width: menuPos.width, top: menuPos.top, bottom: menuPos.bottom, zIndex: menuZIndex }
               : {}),
           }}
         >
