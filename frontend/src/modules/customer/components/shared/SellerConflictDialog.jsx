@@ -58,7 +58,7 @@ const SellerConflictDialog = () => {
                         id="seller-conflict-clear-and-add"
                         onClick={confirmSellerSwitch}
                         disabled={isReplacingCart}
-                        className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black text-[14px] transition-all active:scale-95"
+                        className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[14px] transition-all active:scale-95"
                     >
                         {isReplacingCart ? (
                             <span className="flex items-center gap-2">

@@ -34,7 +34,7 @@ const banners = [
         image: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=2070&auto=format&fit=crop", // Changed Image
         badge: "New Stock",
         badgeIcon: Star,
-        badgeColor: "bg-black  text-primary-foreground",
+        badgeColor: "bg-black  text-white",
         title: "Healthy",
         highlight: "Choices",
         highlightColor: "text-brand-300",
@@ -106,7 +106,7 @@ const Hero = () => {
                                             {banner.subtitle}
                                         </p>
 
-                                        <Button className="bg-white text-primary hover:bg-[#ecfeff] hover:scale-105 active:scale-95 font-bold px-6 py-5 md:px-8 md:py-7 rounded-xl md:rounded-2xl text-sm md:text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all w-auto">
+                                        <Button className="bg-white text-primary hover:bg-brand-50 hover:scale-105 active:scale-95 font-bold px-6 py-5 md:px-8 md:py-7 rounded-xl md:rounded-2xl text-sm md:text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all w-auto">
                                             {banner.cta} <ArrowRight className="ml-2 w-4 h-4 md:w-5 md:h-5 transition-transform group-hover:translate-x-1" />
                                         </Button>
                                     </div>

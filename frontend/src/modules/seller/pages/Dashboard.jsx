@@ -156,7 +156,7 @@ const Dashboard = () => {
       description: "List a new item in your store",
       icon: Plus,
       path: "/seller/products/add",
-      variant: "primary", // dark bg, white text
+      variant: "primary", // brand bg, readable text (--primary-foreground)
     },
     {
       title: "Process Orders",
@@ -314,7 +314,7 @@ const Dashboard = () => {
               onClick={() => navigate(action.path)}
               className={cn(
                 "p-6 rounded-xl text-left transition-all duration-200 shadow-sm hover:shadow-md border-2",
-                isPrimary && "bg-primary border-primary text-white hover:bg-primary/90 hover:border-primary/90",
+                isPrimary && "bg-primary border-primary text-primary-foreground hover:bg-primary/90 hover:border-primary/90",
                 action.variant === "outline" && "bg-white border-slate-200 text-slate-900 hover:border-primary hover:bg-primary/5",
                 isEmerald && "bg-white border-slate-200 text-slate-900 hover:border-brand-500 hover:bg-brand-50"
               )}
@@ -322,30 +322,30 @@ const Dashboard = () => {
               <div className="flex items-start gap-4">
                 <div className={cn(
                   "p-2 rounded-lg",
-                  isPrimary ? "bg-white/20" : isEmerald ? "bg-brand-50" : "bg-slate-100"
+                  isPrimary ? "bg-primary-foreground/20" : isEmerald ? "bg-brand-50" : "bg-slate-100"
                 )}>
                   <action.icon className={cn(
                     "h-5 w-5",
-                    isPrimary ? "text-white" : isEmerald ? "text-brand-600" : "text-slate-700"
+                    isPrimary ? "text-primary-foreground" : isEmerald ? "text-brand-600" : "text-slate-700"
                   )} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className={cn(
                     "font-semibold text-sm",
-                    isPrimary ? "text-white" : "text-slate-900"
+                    isPrimary ? "text-primary-foreground" : "text-slate-900"
                   )}>
                     {action.title}
                   </h3>
                   <p className={cn(
                     "text-xs mt-1",
-                    isPrimary ? "text-white/90" : "text-slate-600"
+                    isPrimary ? "text-primary-foreground/90" : "text-slate-600"
                   )}>
                     {action.description}
                   </p>
                 </div>
                 <ArrowUpRight className={cn(
                   "h-4 w-4 shrink-0",
-                  isPrimary ? "text-white/70" : "text-slate-600"
+                  isPrimary ? "text-primary-foreground/70" : "text-slate-600"
                 )} />
               </div>
             </button>

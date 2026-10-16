@@ -1034,7 +1034,7 @@ const OrderDetailPage = () => {
               </div>
               <button
                 onClick={handleRetryPayment}
-                className="bg-black  hover:bg-brand-700 text-primary-foreground px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-wide shrink-0"
+                className="bg-black  hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-wide shrink-0"
               >
                 Pay Now <ArrowRight size={14} />
               </button>

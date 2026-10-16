@@ -32,7 +32,7 @@ const ErrorPage = () => {
                 <div className="grid grid-cols-1 gap-3">
                     <Button 
                         onClick={() => window.location.reload()}
-                        className="h-14 rounded-2xl bg-primary hover:bg-[#0a701a] text-white font-bold text-lg shadow-lg shadow-brand-600/20 gap-2"
+                        className="h-14 rounded-2xl bg-primary hover:bg-brand-700 text-primary-foreground font-bold text-lg shadow-lg shadow-brand-600/20 gap-2"
                     >
                         <RotateCcw size={20} /> Try Again
                     </Button>

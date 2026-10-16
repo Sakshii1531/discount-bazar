@@ -22,6 +22,21 @@ export function shiftHex(hex, amount) {
 
 const DEFAULT_BASE = "var(--primary)";
 
+const isHex = (c) => typeof c === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c);
+
+// Same shading as shiftHex / mixHexWithWhite, but also for CSS colours the JS
+// can't read (e.g. "var(--primary)", the admin brand colour): the browser mixes them.
+function shade(base, amount) {
+  if (isHex(base)) return shiftHex(base, amount);
+  const pct = Math.min(100, Math.round((Math.abs(amount) / 255) * 100));
+  return `color-mix(in srgb, ${base}, ${amount < 0 ? "black" : "white"} ${pct}%)`;
+}
+
+function tint(base, t) {
+  if (isHex(base)) return mixHexWithWhite(base, t);
+  return `color-mix(in srgb, ${base}, white ${Math.round(t * 100)}%)`;
+}
+
 /** Blend hex toward white (t=0 base, t≈1 near-white). */
 export function mixHexWithWhite(hex, t) {
   if (!hex || typeof hex !== "string" || !hex.startsWith("#")) {
@@ -46,7 +61,7 @@ export function mixHexWithWhite(hex, t) {
 /** Search field surface: tinted header theme, a bit darker than near-white. */
 export function buildSearchBarBackgroundColor(baseHeaderColor) {
   const base = baseHeaderColor || DEFAULT_BASE;
-  return mixHexWithWhite(base, 0.7);
+  return tint(base, 0.7);
 }
 
 /**
@@ -54,22 +69,22 @@ export function buildSearchBarBackgroundColor(baseHeaderColor) {
  */
 export function buildHeaderGradient(baseHeaderColor) {
   const base = baseHeaderColor || DEFAULT_BASE;
-  return `linear-gradient(to bottom, ${shiftHex(base, -18)} 0%, ${shiftHex(base, 20)} 54%, ${shiftHex(base, 165)} 100%)`;
+  return `linear-gradient(to bottom, ${shade(base, -18)} 0%, ${shade(base, 20)} 54%, ${shade(base, 165)} 100%)`;
 }
 
 /** Solid fill for floating cart pill: header mid tone, slightly darker. */
 export function buildMiniCartColor(baseHeaderColor) {
   const base = baseHeaderColor || DEFAULT_BASE;
-  const mid = shiftHex(base, 20);
-  return shiftHex(mid, -26);
+  const mid = shade(base, 20);
+  return shade(mid, -26);
 }
 
 /** Gradient for floating mini cart pill (same palette as header, horizontal). */
 export function buildMiniCartGradient(baseHeaderColor) {
   const base = baseHeaderColor || DEFAULT_BASE;
-  const top = shiftHex(base, -12);
-  const mid = shiftHex(base, 20);
-  const deep = shiftHex(mid, -32);
+  const top = shade(base, -12);
+  const mid = shade(base, 20);
+  const deep = shade(mid, -32);
   return `linear-gradient(135deg, ${top} 0%, ${mid} 48%, ${deep} 100%)`;
 }
 

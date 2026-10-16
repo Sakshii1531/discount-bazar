@@ -47,7 +47,7 @@ const OtpInputExample = () => {
 
               <button
                 onClick={() => setShowOtpInput(true)}
-                className="w-full h-12 bg-black  hover:bg-brand-700 text-primary-foreground font-bold rounded-xl transition-colors"
+                className="w-full h-12 bg-black  hover:bg-brand-700 text-white font-bold rounded-xl transition-colors"
               >
                 Show OTP Input
               </button>

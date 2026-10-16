@@ -149,7 +149,7 @@ const SafetyPrivacy = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddContact}
-                    className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-bold transition-opacity hover:opacity-90"
+                    className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold transition-opacity hover:opacity-90"
                   >
                     Save Contact
                   </button>

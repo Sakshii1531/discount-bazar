@@ -295,7 +295,7 @@ const OtpInput = ({ orderId, isReturn = false, isReturnDrop = false, onSuccess, 
         <button
           onClick={handleGenerateOtp}
           disabled={isLoading || isGenerating}
-          className="w-full h-10 rounded-xl font-semibold text-primary-foreground bg-black  hover:bg-brand-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full h-10 rounded-xl font-semibold text-white bg-black  hover:bg-brand-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isGenerating ? (
             <>

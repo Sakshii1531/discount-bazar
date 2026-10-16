@@ -132,7 +132,7 @@ const OrdersPage = () => {
                         <p className="text-slate-500 text-sm mb-6 max-w-[260px]">
                             When you place an order, it will appear here so you can track it easily.
                         </p>
-                        <Link to="/" className="bg-primary hover:bg-[#0a6d19] text-white px-7 py-2.5 rounded-full font-semibold text-sm shadow-sm transition-colors">
+                        <Link to="/" className="bg-primary hover:bg-brand-700 text-primary-foreground px-7 py-2.5 rounded-full font-semibold text-sm shadow-sm transition-colors">
                             Start Shopping
                         </Link>
                     </div>

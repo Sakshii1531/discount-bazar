@@ -188,7 +188,7 @@ const Topbar = ({ onMenuClick }) => {
                             <img src={logoUrl} alt={appName} className="h-full w-full object-contain" />
                         </div>
                     ) : (
-                        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-white font-black text-sm shadow-md">
+                        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black text-sm shadow-md">
                             {appName.charAt(0)}
                         </div>
                     )}
@@ -251,7 +251,7 @@ const Topbar = ({ onMenuClick }) => {
                     }}
                     className="flex items-center space-x-2.5 p-1 pr-3 hover:bg-gray-50 rounded-xl transition-all duration-300 group ring-1 ring-transparent hover:ring-gray-100 shadow-sm hover:shadow-md"
                 >
-                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
+                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
                         {user?.name?.[0] || 'A'}
                     </div>
                     <div>

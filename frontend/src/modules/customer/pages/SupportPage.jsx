@@ -231,7 +231,7 @@ const SupportPage = () => {
                                     <Button
                                         type="submit"
                                         disabled={ticketLoading}
-                                        className="w-full h-14 bg-primary hover:bg-[#0b721b] text-white text-lg font-black rounded-2xl shadow-xl shadow-brand-100 transition-all active:scale-95"
+                                        className="w-full h-14 bg-primary hover:bg-brand-700 text-primary-foreground text-lg font-black rounded-2xl shadow-xl shadow-brand-100 transition-all active:scale-95"
                                     >
                                         {ticketLoading ? (
                                             <div className="flex items-center gap-2 text-center w-full justify-center">

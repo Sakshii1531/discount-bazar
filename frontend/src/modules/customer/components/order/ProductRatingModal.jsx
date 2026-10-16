@@ -268,7 +268,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
                           onClick={() => toggleTag(tag)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                             isSelected
-                              ? "bg-primary text-white border-primary shadow-sm"
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                           } disabled:opacity-70`}
                         >
@@ -351,7 +351,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
                   type="button"
                   disabled={submitting}
                   onClick={handleSubmit}
-                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-primary text-white hover:opacity-90 shadow-md transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-primary text-primary-foreground hover:opacity-90 shadow-md transition-all disabled:opacity-50"
                 >
                   {submitting ? "Submitting..." : "Submit Rating"}
                 </button>

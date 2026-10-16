@@ -525,7 +525,7 @@ const OrdersList = () => {
                                                         e.stopPropagation();
                                                         handleStatusUpdate(order._id, 'packed');
                                                     }}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-black  text-primary-foreground rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-lg shadow-brand-100"
+                                                    className="flex items-center gap-2 px-4 py-2 bg-black  text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-lg shadow-brand-100"
                                                 >
                                                     <Package className="h-3.5 w-3.5" />
                                                     MARK PACKED

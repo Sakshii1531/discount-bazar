@@ -56,7 +56,7 @@ const unwrap = (res) => res?.data?.results ?? res?.data?.result ?? res?.data?.da
 const errMsg = (e) => e?.response?.data?.message || e?.message || "Something went wrong";
 
 const inputCls = "w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all";
-const btnCls = "px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-bold shadow-xs hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5";
+const btnCls = "px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-xs hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5";
 const ghostBtn = "px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5";
 
 const fmtCell = (k, v) => {
@@ -534,7 +534,7 @@ const DashboardTab = ({ onNavigateTab }) => {
                         <button
                             type="button"
                             onClick={() => onNavigateTab("purchases")}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
                         >
                             <HiOutlineShoppingBag className="h-4 w-4" />
                             <span>Create Purchase Bill</span>
@@ -2208,7 +2208,7 @@ const PartiesTab = () => {
                             className={cn(
                                 "w-full sm:w-auto h-[42px] px-6 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs",
                                 isFormValid && !isSubmitting
-                                    ? "bg-primary text-white hover:bg-primary/90 active:scale-95 cursor-pointer"
+                                    ? "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 cursor-pointer"
                                     : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
                             )}
                             title={!isFormValid ? "Please enter a valid name and phone to enable" : ""}

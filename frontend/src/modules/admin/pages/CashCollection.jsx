@@ -637,7 +637,7 @@ const CashCollection = () => {
                         <div className="pt-2 flex gap-3">
                             <button
                                 onClick={() => { setSelectedRider(null); handleSettlement(selectedRider); }}
-                                className="flex-1 py-4 bg-black  hover:bg-brand-700 text-primary-foreground rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-brand-100 transition-all active:scale-[0.98]"
+                                className="flex-1 py-4 bg-black  hover:bg-brand-700 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-brand-100 transition-all active:scale-[0.98]"
                             >
                                 Trigger Settlement
                             </button>

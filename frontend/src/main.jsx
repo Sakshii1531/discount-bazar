@@ -3,11 +3,16 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { ensureStorageSchema } from '@core/utils/storage';
+import { applyCachedThemeColors } from '@core/context/SettingsDefaults';
 
 // Wipe legacy persisted blobs from previous schema versions on the very first
 // load after a deploy. Runs synchronously before React mounts so no component
 // can ever read stale state from a bumped schema version.
 ensureStorageSchema();
+
+// Last known admin brand colours, so pages don't flash the default colour
+// until /settings answers (SettingsContext then applies the fresh values).
+applyCachedThemeColors();
 
 // Lock mobile screen orientation to portrait if supported
 const tryLockPortrait = () => {

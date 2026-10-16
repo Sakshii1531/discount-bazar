@@ -90,6 +90,12 @@ function flattenForMongoSet(prefix, value, target) {
 }
 
 /** Joi schema for validating settings update payload */
+const hexColor = Joi.string()
+  .trim()
+  .allow("")
+  .pattern(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+  .messages({ "string.pattern.base": "{#label} must be a hex colour like #08f7a7" });
+
 const updateSettingsSchema = Joi.object({
   appName: Joi.string().allow("").max(200),
   supportEmail: Joi.string().email().allow("").max(200),
@@ -99,8 +105,9 @@ const updateSettingsSchema = Joi.object({
   timezone: Joi.string().allow("").max(100),
   logoUrl: Joi.string().allow("").max(2000),
   faviconUrl: Joi.string().allow("").max(2000),
-  primaryColor: Joi.string().allow("").max(50),
-  secondaryColor: Joi.string().allow("").max(50),
+  // Brand colours become CSS variables in every app: hex only ("" = default).
+  primaryColor: hexColor,
+  secondaryColor: hexColor,
   companyName: Joi.string().allow("").max(200),
   taxId: Joi.string().allow("").max(100),
   address: Joi.string().allow("").max(500),

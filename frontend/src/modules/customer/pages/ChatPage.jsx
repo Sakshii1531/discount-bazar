@@ -491,7 +491,7 @@ const ChatPage = () => {
           </button>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="h-10 w-10 bg-primary rounded-full flex items-center justify-center text-white font-black text-sm shadow-sm ring-2 ring-white overflow-hidden">
+              <div className="h-10 w-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-black text-sm shadow-sm ring-2 ring-white overflow-hidden">
                 {brandLogoUrl && !logoFailed ? (
                   <img
                     src={brandLogoUrl}

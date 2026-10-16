@@ -255,7 +255,7 @@ const CustomerDetail = () => {
 
                 {/* Quick Stats */}
                 <div className="space-y-4">
-                    <Card className="p-6 !bg-black  text-primary-foreground rounded-xl border-none shadow-lg shadow-brand-200 relative overflow-hidden group">
+                    <Card className="p-6 !bg-black  text-white rounded-xl border-none shadow-lg shadow-brand-200 relative overflow-hidden group">
                         <div className="relative z-10">
                             <p className="text-[10px] font-black opacity-90 uppercase tracking-widest mb-1">Lifetime Value</p>
                             <h4 className="text-3xl font-black text-white">₹{formatAmount(customer.totalSpent || 0)}</h4>
@@ -438,7 +438,7 @@ const CustomerDetail = () => {
                         <div className="space-y-4">
                             <button
                                 onClick={() => setIsNotifModalOpen(true)}
-                                className="w-full py-4 bg-black  hover:bg-brand-500 text-primary-foreground rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-brand-900/20 flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-black  hover:bg-brand-500 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-brand-900/20 flex items-center justify-center gap-2"
                             >
                                 <MessageSquare className="h-4 w-4" />
                                 SEND NOTIFICATION
@@ -478,7 +478,7 @@ const CustomerDetail = () => {
                             />
                         </div>
                     </div>
-                    <button type="submit" className="w-full py-4 bg-black  hover:bg-brand-500 text-primary-foreground rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-lg active:scale-95">
+                    <button type="submit" className="w-full py-4 bg-black  hover:bg-brand-500 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-lg active:scale-95">
                         SAVE CHANGES
                     </button>
                 </form>

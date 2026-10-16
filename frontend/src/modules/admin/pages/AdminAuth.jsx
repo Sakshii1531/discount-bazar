@@ -237,7 +237,7 @@ const AdminAuth = () => {
                                 <button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="w-full bg-black  text-primary-foreground rounded-[24px] py-4 text-base font-black shadow-2xl shadow-brand-200 hover:bg-brand-700 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                                    className="w-full bg-black  text-white rounded-[24px] py-4 text-base font-black shadow-2xl shadow-brand-200 hover:bg-brand-700 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                                 >
                                     {isLoading ? (
                                         <motion.div

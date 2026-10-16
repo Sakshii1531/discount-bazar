@@ -343,7 +343,7 @@ const DeliveryChatSupport = () => {
                 <div
                   className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-xs shadow-2xs leading-relaxed ${
                     isMe
-                      ? "bg-primary text-white rounded-br-xs"
+                      ? "bg-primary text-primary-foreground rounded-br-xs"
                       : "bg-white text-gray-800 border border-gray-100 rounded-bl-xs"
                   }`}
                 >
@@ -442,10 +442,10 @@ const DeliveryChatSupport = () => {
           <button
             type="submit"
             disabled={(!inputText.trim() && !selectedImageFile) || isSending}
-            className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-all shadow-sm ${
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${
               (!inputText.trim() && !selectedImageFile) || isSending
-                ? "bg-gray-300 cursor-not-allowed"
-                : "bg-primary hover:bg-primary/90 active:scale-95"
+                ? "bg-gray-300 text-white cursor-not-allowed"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
             }`}
           >
             {isSending ? (

@@ -163,7 +163,7 @@ const FAQPage = () => {
                 {/* Hero / Banner */}
                 <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-emerald-500/10 rounded-3xl p-6 md:p-8 border border-primary/20 relative overflow-hidden">
                     <div className="relative z-10 max-w-xl">
-                        <span className="inline-block text-[10px] font-black uppercase tracking-widest bg-primary text-white px-2.5 py-0.5 rounded-full mb-3">
+                        <span className="inline-block text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full mb-3">
                             Help Center
                         </span>
                         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-2">
@@ -198,7 +198,7 @@ const FAQPage = () => {
                                 className={cn(
                                     "px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
                                     selectedCategory === cat
-                                        ? "bg-primary text-white shadow-sm"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
                                         : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
                                 )}
                             >
@@ -269,7 +269,7 @@ const FAQPage = () => {
                             )}
                             <Link
                                 to="/support"
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all shadow-xs"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl transition-all shadow-xs"
                             >
                                 <MessageCircle size={14} /> Help &amp; Support
                             </Link>

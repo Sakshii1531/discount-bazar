@@ -203,7 +203,7 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
                 <span className="text-xs font-bold">New total: ₹{total.toLocaleString("en-IN")}</span>
                 <button type="button" onClick={() => setOpen(false)} className="ml-auto text-xs font-bold text-slate-500">Cancel</button>
                 <button type="button" disabled={saving || !kept.length || splitInvalid} onClick={save}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-primary text-white disabled:opacity-50">
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
                     {saving ? "Saving…" : "Save changes"}
                 </button>
             </div>

@@ -32,7 +32,7 @@ class ErrorBoundary extends Component {
                         <div className="space-y-3">
                             <button
                                 onClick={() => window.location.reload()}
-                                className="w-full bg-primary hover:bg-[#0a6d1a] text-white font-semibold py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-100"
+                                className="w-full bg-primary hover:bg-brand-700 text-primary-foreground font-semibold py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-100"
                             >
                                 <RefreshCw className="w-5 h-5" />
                                 Refresh Page

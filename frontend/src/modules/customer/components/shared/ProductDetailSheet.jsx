@@ -642,7 +642,7 @@ const ProductDetailSheet = () => {
                                                 initial={{ opacity: 0, x: -10 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: 0.1 }}
-                                                className="inline-flex items-center gap-1.5 bg-[#ecfeff] border border-brand-200/50 text-primary px-3 py-1.5 rounded-lg text-[10px] font-[700] uppercase tracking-wider"
+                                                className="inline-flex items-center gap-1.5 bg-brand-50 border border-brand-200/50 text-primary px-3 py-1.5 rounded-lg text-[10px] font-[700] uppercase tracking-wider"
                                             >
                                                 <Clock size={12} strokeWidth={2.5} className="text-primary" />
                                                 {deliveryLabel}
@@ -737,7 +737,7 @@ const ProductDetailSheet = () => {
                                                                 <Minus size={16} strokeWidth={2.5} />
                                                             </motion.button>
                                                             <span className="font-[800] text-base text-gray-800 w-8 text-center">{quantity}</span>
-                                                            <motion.button whileTap={{ scale: 0.85 }} onClick={handleIncrement} className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center text-white hover:bg-[var(--brand-400)] transition-colors shadow-sm">
+                                                            <motion.button whileTap={{ scale: 0.85 }} onClick={handleIncrement} className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center text-primary-foreground hover:bg-[var(--brand-400)] transition-colors shadow-sm">
                                                                 <Plus size={16} strokeWidth={2.5} />
                                                             </motion.button>
                                                         </div>
@@ -893,7 +893,7 @@ const ProductDetailSheet = () => {
                                                                 className={cn(
                                                                     'px-3 py-1 rounded-xl text-[11px] font-bold border transition-all shrink-0',
                                                                     selectedStarFilter === starVal
-                                                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                                                        ? 'bg-primary text-primary-foreground border-primary shadow-xs'
                                                                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                                                                 )}
                                                             >
@@ -1142,7 +1142,7 @@ const ProductDetailSheet = () => {
                                                         className={cn(
                                                             "flex-shrink-0 px-5 py-2.5 font-bold rounded-xl text-sm transition-all relative border-2 flex items-center gap-1.5",
                                                             selectedVariant?.sku === v.sku
-                                                                ? "bg-[#ecfeff] border-primary text-primary shadow-sm shadow-brand-100"
+                                                                ? "bg-brand-50 border-primary text-primary shadow-sm shadow-brand-100"
                                                                 : isVarOut
                                                                     ? "bg-slate-50 border-slate-200 text-slate-400 opacity-75"
                                                                     : "bg-slate-50 border-slate-100 text-slate-500"
@@ -1236,7 +1236,7 @@ const ProductDetailSheet = () => {
                                                             ))}
                                                         </div>
                                                         <textarea value={newReview.comment} onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })} placeholder="Write your experience..." className="w-full bg-white border border-slate-100 rounded-2xl p-4 text-sm font-medium min-h-[100px] outline-none focus:border-primary transition-all resize-none shadow-sm" />
-                                                        <Button type="submit" disabled={isSubmittingReview} className="w-full h-12 bg-primary hover:opacity-90 text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-100">
+                                                        <Button type="submit" disabled={isSubmittingReview} className="w-full h-12 bg-primary hover:opacity-90 text-primary-foreground font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-100">
                                                             {isSubmittingReview ? "Submitting..." : "Post Review"}
                                                         </Button>
                                                     </form>

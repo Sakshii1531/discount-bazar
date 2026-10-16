@@ -135,7 +135,7 @@ const HelpSupport = () => {
           <p className="text-gray-500 text-sm mb-3">Still need help?</p>
           <Button 
             onClick={() => navigate('/delivery/profile/chat')}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 px-6 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 px-6 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <MessageCircle size={18} />
             Contact Support

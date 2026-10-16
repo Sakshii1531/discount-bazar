@@ -392,7 +392,7 @@ const MainLocationHeader = ({
           _id: "all",
           name: "All",
           icon: HomeIcon,
-          headerColor: "#0e7490",
+          headerColor: "var(--primary)",
           headerFontColor: "#111111",
           headerIconColor: "#111111",
         },

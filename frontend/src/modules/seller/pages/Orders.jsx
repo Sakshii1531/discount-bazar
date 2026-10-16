@@ -843,7 +843,7 @@ const Orders = () => {
                                                                         e.stopPropagation();
                                                                         handleStatusUpdate(order.id, 'confirmed');
                                                                     }}
-                                                                    className="flex items-center gap-1 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                                                                    className="flex items-center gap-1 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-primary-foreground rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                                                                     title="Accept & Confirm Order"
                                                                 >
                                                                     <HiOutlineCheck className="h-3.5 w-3.5" />
@@ -858,7 +858,7 @@ const Orders = () => {
                                                                     e.stopPropagation();
                                                                     handleStatusUpdate(order.id, 'packed');
                                                                 }}
-                                                                className="flex items-center gap-1 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                                                                className="flex items-center gap-1 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-primary-foreground rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                                                                 title="Mark Packed"
                                                             >
                                                                 <HiOutlineCheck className="h-3.5 w-3.5" />

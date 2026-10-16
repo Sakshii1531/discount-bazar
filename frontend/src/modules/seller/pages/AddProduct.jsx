@@ -1240,7 +1240,7 @@ const AddProduct = () => {
               <Button
                 type="button"
                 onClick={handleNext}
-                className="flex items-center gap-2 text-xs font-bold bg-primary text-white hover:bg-primary-600 shadow-sm ml-auto">
+                className="flex items-center gap-2 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary-600 shadow-sm ml-auto">
                 <span>Next: {nextTab.label}</span>
                 <HiOutlineArrowRight className="h-4 w-4" />
               </Button>

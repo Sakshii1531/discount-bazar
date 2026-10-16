@@ -85,7 +85,7 @@ const DeliveryCallSupport = () => {
 
           <Button
             onClick={() => handleCall(supportPhone)}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
           >
             <Phone size={18} />
             Call Support Helpline

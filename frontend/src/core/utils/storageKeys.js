@@ -29,6 +29,8 @@ export const STORAGE_KEYS = Object.freeze({
     LOCATION: 'location_v2',
     RECIPIENT_ADDRESS: 'turbocart_checkout_recipient_v1',
     GEOCODE_CACHE: 'qc_geocode_cache_v1',
+    // Last applied brand colours, re-applied before first paint (no default-colour flash).
+    THEME_COLORS: 'theme_colors_v1',
 
     // ── Customer UX caches ───────────────────────────────────────────────────
     RECENT_SEARCHES: 'turbocart_recent_searches',

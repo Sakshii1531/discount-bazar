@@ -1463,7 +1463,7 @@ const CheckoutPage = () => {
               </Button>
               <Button
                 onClick={handleSaveEditedAddress}
-                className="bg-primary hover:bg-[#0b721b] text-white font-bold">
+                className="bg-primary hover:bg-brand-700 text-primary-foreground font-bold">
                 Save changes
               </Button>
             </DialogFooter>
@@ -1664,7 +1664,7 @@ const CheckoutPage = () => {
                     showToast("Link copied to clipboard!", "success");
                     setIsShareModalOpen(false);
                   }}
-                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                 >
                   <Copy size={14} />
                   Copy

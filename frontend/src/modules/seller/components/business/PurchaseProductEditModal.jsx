@@ -234,7 +234,7 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                         <button type="button" onClick={onClose} disabled={busy} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50">
                             Cancel
                         </button>
-                        <button type="submit" disabled={busy} className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-bold shadow-xs hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer">
+                        <button type="submit" disabled={busy} className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-xs hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer">
                             {busy ? "Saving…" : "Save Product"}
                         </button>
                     </div>

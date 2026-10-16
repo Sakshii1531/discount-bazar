@@ -620,7 +620,7 @@ const PosTerminal = () => {
                                 <button
                                     type="button"
                                     onClick={() => resumeHeld(bill)}
-                                    className="text-xs font-bold text-white bg-primary rounded-lg px-3 py-1.5"
+                                    className="text-xs font-bold text-primary-foreground bg-primary rounded-lg px-3 py-1.5"
                                 >
                                     Resume
                                 </button>

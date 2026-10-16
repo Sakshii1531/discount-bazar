@@ -45,7 +45,12 @@ describe('customer: header theme colours', () => {
     expect(buildMiniCartGradient('#336699')).toMatch(/^linear-gradient\(135deg/);
     expect(buildMiniCartColor('#336699')).toMatch(/^#[0-9a-f]{6}$/);
     expect(buildSearchBarBackgroundColor('#000000')).toBe('#b3b3b3');
-    expect(buildSearchBarBackgroundColor()).toBe('#f8fafc');
+    // No category colour: tinted from the admin brand colour by the browser.
+    expect(buildSearchBarBackgroundColor()).toBe('color-mix(in srgb, var(--primary), white 70%)');
+    expect(buildHeaderGradient('var(--primary)')).toBe(
+      'linear-gradient(to bottom, color-mix(in srgb, var(--primary), black 7%) 0%, color-mix(in srgb, var(--primary), white 8%) 54%, color-mix(in srgb, var(--primary), white 65%) 100%)',
+    );
+    expect(buildMiniCartColor('var(--primary)')).toMatch(/^color-mix\(in srgb, color-mix\(in srgb, var\(--primary\), white 8%\), black 10%\)$/);
   });
 });
 

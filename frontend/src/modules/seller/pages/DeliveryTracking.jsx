@@ -313,7 +313,7 @@ const DeliveryTracking = () => {
                                   className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"
                                 />
                               </div>
-                              <div className="absolute -bottom-1 -right-1 h-3.5 w-3.5 bg-brand-500 rounded-sm border-[1px] border-white flex items-center justify-center text-white text-[7px] font-black shadow-sm">
+                              <div className="absolute -bottom-1 -right-1 h-3.5 w-3.5 bg-brand-500 rounded-sm border-[1px] border-white flex items-center justify-center text-primary-foreground text-[7px] font-black shadow-sm">
                                 {dlv.deliveryBoy.rating}
                               </div>
                             </div>

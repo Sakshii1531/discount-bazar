@@ -592,7 +592,7 @@ const AdminWallet = () => {
                                                                 <button
                                                                     disabled={isProcessing || loadingId === req._id}
                                                                     onClick={() => handleUpdateStatus(req._id, 'COMPLETED')}
-                                                                    className="px-4 py-2 bg-black  text-primary-foreground rounded-xl text-[10px] font-black uppercase hover:bg-brand-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px] flex items-center justify-center"
+                                                                    className="px-4 py-2 bg-black  text-white rounded-xl text-[10px] font-black uppercase hover:bg-brand-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px] flex items-center justify-center"
                                                                 >
                                                                     {loadingId === req._id ? (
                                                                         <RotateCw className="h-3 w-3 animate-spin" />

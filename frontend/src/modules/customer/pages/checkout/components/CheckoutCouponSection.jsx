@@ -195,7 +195,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                       className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
                         selectedCoupon?.code === coupon.code
                           ? "bg-white text-primary border-2 border-primary cursor-default"
-                          : "bg-primary text-primary-foreground hover:bg-[#0b721b]"
+                          : "bg-primary text-primary-foreground hover:bg-brand-700"
                       }`}>
                       {selectedCoupon?.code === coupon.code ? "Applied" : selectedCoupon ? "Use this instead" : "Apply Now"}
                     </button>

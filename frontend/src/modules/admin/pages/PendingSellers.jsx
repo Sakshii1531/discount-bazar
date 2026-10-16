@@ -291,7 +291,7 @@ const PendingSellers = () => {
                                             <div className="w-[1px] h-4 bg-slate-200 mx-1" />
                                             <button
                                                 onClick={() => { setViewingSeller(s); setIsReviewModalOpen(true); }}
-                                                className="h-9 px-4 bg-black  text-primary-foreground rounded-xl text-[10px] font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100 hover:-translate-y-0.5 flex items-center gap-2"
+                                                className="h-9 px-4 bg-black  text-white rounded-xl text-[10px] font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100 hover:-translate-y-0.5 flex items-center gap-2"
                                             >
                                                 <HiOutlineEye className="h-4 w-4" />
                                                 REVIEW

@@ -416,7 +416,7 @@ const ProductDetailPage = () => {
                         >
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (
-                                <span className="h-5 min-w-[20px] px-1 bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                                <span className="h-5 min-w-[20px] px-1 bg-primary text-primary-foreground text-[10px] font-black rounded-full flex items-center justify-center">
                                     {cartCount}
                                 </span>
                             )}
@@ -655,7 +655,7 @@ const ProductDetailPage = () => {
                                         OUT OF STOCK
                                     </Button>
                                 ) : quantity > 0 ? (
-                                    <div className="flex items-center justify-between bg-primary text-white rounded-2xl h-14 w-full sm:w-56 px-2 shadow-lg shadow-primary/20">
+                                    <div className="flex items-center justify-between bg-primary text-primary-foreground rounded-2xl h-14 w-full sm:w-56 px-2 shadow-lg shadow-primary/20">
                                         <button
                                             type="button"
                                             onClick={handleDecrement}
@@ -678,7 +678,7 @@ const ProductDetailPage = () => {
                                     <Button
                                         type="button"
                                         onClick={handleAdd}
-                                        className="h-14 w-full sm:w-64 bg-primary hover:bg-primary/95 text-white text-sm font-black rounded-2xl shadow-xl shadow-primary/25 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer uppercase tracking-wider"
+                                        className="h-14 w-full sm:w-64 bg-primary hover:bg-primary/95 text-primary-foreground text-sm font-black rounded-2xl shadow-xl shadow-primary/25 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer uppercase tracking-wider"
                                     >
                                         <Plus className="mr-2" size={20} strokeWidth={3} /> ADD TO CART
                                     </Button>
@@ -908,7 +908,7 @@ const ProductDetailPage = () => {
                             OUT OF STOCK
                         </Button>
                     ) : quantity > 0 ? (
-                        <div className="flex items-center justify-between bg-primary text-white rounded-xl h-11 px-2 shadow-md">
+                        <div className="flex items-center justify-between bg-primary text-primary-foreground rounded-xl h-11 px-2 shadow-md">
                             <button
                                 type="button"
                                 onClick={handleDecrement}
@@ -931,7 +931,7 @@ const ProductDetailPage = () => {
                         <Button
                             type="button"
                             onClick={handleAdd}
-                            className="h-11 w-full bg-primary hover:bg-primary/95 text-white text-xs font-black rounded-xl shadow-lg shadow-primary/20 active:scale-95 uppercase tracking-wider"
+                            className="h-11 w-full bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-black rounded-xl shadow-lg shadow-primary/20 active:scale-95 uppercase tracking-wider"
                         >
                             <Plus size={16} className="mr-1" strokeWidth={3} /> ADD TO CART
                         </Button>

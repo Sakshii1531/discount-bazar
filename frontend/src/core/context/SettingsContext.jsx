@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import axiosInstance from "@core/api/axios";
 import { getWithDedupe } from "@core/api/dedupe";
-import { DEFAULT_SETTINGS, applyThemeVariables } from "./SettingsDefaults";
+import { DEFAULT_SETTINGS, applyThemeVariables, applyCachedThemeColors } from "./SettingsDefaults";
 
 // Create context with null so we can check if it's provided
 const SettingsContext = createContext(null);
@@ -39,7 +39,8 @@ export const SettingsProvider = ({ children }) => {
           "Failed to load settings",
       );
       setSettings(DEFAULT_SETTINGS);
-      applyThemeVariables(DEFAULT_SETTINGS);
+      // Keep the last known brand colours rather than resetting to the defaults.
+      applyCachedThemeColors();
     } finally {
       setLoading(false);
     }

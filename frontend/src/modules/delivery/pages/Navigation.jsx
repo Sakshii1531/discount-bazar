@@ -82,7 +82,7 @@ const Navigation = () => {
         <button className="bg-white text-gray-700 p-3 rounded-full shadow-lg hover:bg-gray-50 active:bg-gray-100 transition-colors">
           <LocateFixed size={24} />
         </button>
-        <button className="bg-black  text-primary-foreground p-3 rounded-full shadow-lg hover:bg-brand-700 active:bg-brand-800 transition-colors">
+        <button className="bg-black  text-white p-3 rounded-full shadow-lg hover:bg-brand-700 active:bg-brand-800 transition-colors">
           <NavIcon size={24} className="rotate-45" />
         </button>
       </div>

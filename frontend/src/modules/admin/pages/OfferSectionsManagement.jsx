@@ -467,7 +467,7 @@ const OfferSectionsManagement = () => {
                     className={cn(
                       "px-2.5 py-1.5 rounded-full text-[11px] font-bold border transition-all",
                       selected
-                        ? "bg-black  text-primary-foreground border-brand-600"
+                        ? "bg-black  text-white border-brand-600"
                         : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     )}
                   >

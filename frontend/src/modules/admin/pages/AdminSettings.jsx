@@ -25,6 +25,12 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@shared/components/ui/Toast';
 import { adminApi } from '../services/adminApi';
 import { useSettings } from '@core/context/SettingsContext';
+import {
+    DEFAULT_PRIMARY_COLOR,
+    DEFAULT_SECONDARY_COLOR,
+    applyThemeVariables,
+    normalizeHexColor,
+} from '@core/context/SettingsDefaults';
 
 const AdminSettings = () => {
     const normalizeProductApprovalConfig = (raw) => {
@@ -35,7 +41,10 @@ const AdminSettings = () => {
         };
     };
 
-    const { refetch } = useSettings();
+    const { refetch, settings: appSettings } = useSettings();
+    // Saved (app-wide) settings, re-applied when leaving with unsaved colour edits.
+    const appSettingsRef = useRef(appSettings);
+    appSettingsRef.current = appSettings;
     const { showToast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -54,8 +63,8 @@ const AdminSettings = () => {
         timezone: 'Asia/Kolkata',
         logoUrl: '',
         faviconUrl: '',
-        primaryColor: 'var(--primary)',
-        secondaryColor: '#64748b',
+        primaryColor: DEFAULT_PRIMARY_COLOR,
+        secondaryColor: DEFAULT_SECONDARY_COLOR,
         companyName: '',
         taxId: '',
         address: '',
@@ -109,11 +118,36 @@ const AdminSettings = () => {
         fetchSettings();
     }, [showToast]);
 
+    // Empty means "use the default"; anything else must be a hex code.
+    const colorErrors = ['primaryColor', 'secondaryColor'].reduce((acc, field) => {
+        const value = String(settings[field] ?? '').trim();
+        if (value && !normalizeHexColor(value)) acc[field] = 'Enter a hex colour like #08f7a7 or #0f8.';
+        return acc;
+    }, {});
+
+    // Live preview of the brand colours while editing (not saved until "Save").
+    useEffect(() => {
+        if (isLoading) return;
+        applyThemeVariables(
+            { primaryColor: settings.primaryColor, secondaryColor: settings.secondaryColor },
+            { persist: false },
+        );
+    }, [isLoading, settings.primaryColor, settings.secondaryColor]);
+
+    // Leaving the page drops an unsaved preview: back to the saved colours.
+    useEffect(() => () => applyThemeVariables(appSettingsRef.current, { persist: false }), []);
+
     const handleSave = async () => {
+        if (Object.keys(colorErrors).length) {
+            showToast(Object.values(colorErrors)[0], 'error');
+            return;
+        }
         try {
             setIsSaving(true);
             const payload = {
                 ...settings,
+                primaryColor: normalizeHexColor(settings.primaryColor) || '',
+                secondaryColor: normalizeHexColor(settings.secondaryColor) || '',
                 keywords: Array.isArray(settings.keywords) ? settings.keywords : (settings.metaKeywords ? settings.metaKeywords.split(',').map(k => k.trim()).filter(Boolean) : []),
             };
             const res = await adminApi.updateSettings(payload);
@@ -229,7 +263,7 @@ const AdminSettings = () => {
                         onClick={handleSave}
                         disabled={isSaving}
                         className={cn(
-                            "flex items-center gap-2 px-8 py-4 bg-black text-primary-foreground rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-brand-200 hover:shadow-brand-300 active:scale-95 active:shadow-inner",
+                            "flex items-center gap-2 px-8 py-4 bg-black text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-brand-200 hover:shadow-brand-300 active:scale-95 active:shadow-inner",
                             isSaving ? "opacity-70 cursor-wait" : "hover:bg-brand-700"
                         )}
                     >
@@ -539,40 +573,39 @@ const AdminSettings = () => {
                                         <input type="url" value={settings.faviconUrl} onChange={(e) => handleInputChange('faviconUrl', e.target.value)} placeholder="Or paste favicon URL" className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20" />
                                     </div>
                                 </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Brand Color</label>
-                                    <div className="flex items-center gap-4">
-                                        <input
-                                            type="color"
-                                            value={settings.primaryColor}
-                                            onChange={(e) => handleInputChange('primaryColor', e.target.value)}
-                                            className="h-12 w-24 rounded-lg cursor-pointer bg-transparent"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={settings.primaryColor}
-                                            onChange={(e) => handleInputChange('primaryColor', e.target.value)}
-                                            className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all font-mono"
-                                        />
+                                {[
+                                    { field: 'primaryColor', label: 'Primary Brand Color', fallback: DEFAULT_PRIMARY_COLOR, hint: 'Buttons, links, highlights and the app header.' },
+                                    { field: 'secondaryColor', label: 'Secondary Brand Color', fallback: DEFAULT_SECONDARY_COLOR, hint: 'Secondary buttons (e.g. Hold, Close, Back).' },
+                                ].map(({ field, label, fallback, hint }) => (
+                                    <div key={field} className="space-y-3">
+                                        <label htmlFor={`settings-${field}`} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+                                        <div className="flex items-center gap-4">
+                                            <input
+                                                type="color"
+                                                aria-label={`${label} picker`}
+                                                value={normalizeHexColor(settings[field]) || fallback}
+                                                onChange={(e) => handleInputChange(field, e.target.value)}
+                                                className="h-12 w-24 rounded-lg cursor-pointer bg-transparent"
+                                            />
+                                            <input
+                                                id={`settings-${field}`}
+                                                type="text"
+                                                value={settings[field] || ''}
+                                                placeholder={fallback}
+                                                maxLength={7}
+                                                onChange={(e) => handleInputChange(field, e.target.value)}
+                                                aria-invalid={Boolean(colorErrors[field])}
+                                                className={cn(
+                                                    "w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all font-mono",
+                                                    colorErrors[field] && "ring-2 ring-rose-300"
+                                                )}
+                                            />
+                                        </div>
+                                        <p className={cn("text-[11px] font-medium", colorErrors[field] ? "text-rose-600" : "text-slate-400")}>
+                                            {colorErrors[field] || `${hint} Changes preview live; save to apply everywhere.`}
+                                        </p>
                                     </div>
-                                </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Brand Color</label>
-                                    <div className="flex items-center gap-4">
-                                        <input
-                                            type="color"
-                                            value={settings.secondaryColor}
-                                            onChange={(e) => handleInputChange('secondaryColor', e.target.value)}
-                                            className="h-12 w-24 rounded-lg cursor-pointer bg-transparent"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={settings.secondaryColor}
-                                            onChange={(e) => handleInputChange('secondaryColor', e.target.value)}
-                                            className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all font-mono"
-                                        />
-                                    </div>
-                                </div>
+                                ))}
                             </div>
                         </Card>
                     )}

@@ -142,7 +142,7 @@ const IconSelector = ({ selectedIcon, onSelect, onClose }) => {
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-black  text-primary-foreground rounded-lg hover:bg-brand-700 font-medium transition-colors">
+            className="px-4 py-2 bg-black  text-white rounded-lg hover:bg-brand-700 font-medium transition-colors">
             Done
           </button>
         </div>
