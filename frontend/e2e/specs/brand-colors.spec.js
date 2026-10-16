@@ -85,7 +85,11 @@ test.describe('brand colours', () => {
     await page.locator('#settings-primaryColor').fill('#123456');
     await expect.poll(() => rootVar(page, '--primary')).toBe('#123456');
 
-    await page.getByRole('link', { name: 'Dashboard', exact: true }).filter({ visible: true }).first().click();
+    // In-app navigation (works with the sidebar collapsed on mobile).
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/admin');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
     await expect(page).not.toHaveURL(/settings/);
     await expect.poll(() => rootVar(page, '--primary')).toBe(GREEN);
     expect(api.callsTo('PUT', /^\/settings$/)).toHaveLength(0);
