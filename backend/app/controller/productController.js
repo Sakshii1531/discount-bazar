@@ -194,6 +194,15 @@ async function assertItemMasterValid(productData, sellerId, excludeId = null) {
   if (new Set(variantCodes).size !== variantCodes.length) {
     throw Object.assign(new Error("Duplicate barcode within product variants"), { statusCode: 400 });
   }
+  // Stock, purchase bills and POS lines find a variant by SKU, so it must be unique.
+  if (Array.isArray(productData.variants)) {
+    const skus = productData.variants
+      .map((v) => String(v?.sku || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (new Set(skus).size !== skus.length) {
+      throw Object.assign(new Error("Two variants have the same SKU"), { statusCode: 400 });
+    }
+  }
 
   const allUniqueCodes = new Set(variantCodes);
   if (productData.barcode && String(productData.barcode).trim()) {

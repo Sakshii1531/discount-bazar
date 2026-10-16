@@ -114,3 +114,78 @@ describe("edit product from a purchase bill line", () => {
     expect(row).toEqual(expect.objectContaining({ purchaseCost: 12, gstPercent: 12 }));
   });
 });
+
+describe("add variants from the purchase bill edit popup", () => {
+  let seller;
+  let tree;
+  let auth;
+  beforeEach(async () => {
+    seller = await fx.createSeller();
+    tree = await fx.createCategoryTree();
+    auth = bearer("seller", seller._id);
+  });
+  const edit = (id, body) => request(app).put(`/api/products/${id}`).set("Authorization", auth).send(body);
+  const base = { gstPercent: 5, purchaseGstType: "INCLUSIVE", mrp: 0 };
+
+  it("adds a variant with 0 stock and an auto SKU, then a purchase bill stocks it", async () => {
+    const p = await fx.createProduct(seller, tree, {
+      stock: 16,
+      variants: [{ name: "Jungle Land", sku: "ALPEN-001", price: 10, salePrice: 10, stock: 16, purchaseCost: 8.75 }],
+    });
+    const saved = (await Product.findById(p._id).lean()).variants;
+    const res = await edit(p._id, {
+      ...base,
+      variants: [
+        ...saved.map(({ purchaseBasePrice, purchaseGstAmount, purchaseFinalPrice, ...v }) => v),
+        // As the popup sends it: no SKU (server generates one) and 0 stock (the bill adds it).
+        { sku: "", name: "Mango Bites", price: 12, salePrice: 11, barcode: "8901001", purchaseCost: 9.45, stock: 0 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const after = await Product.findById(p._id).lean();
+    expect(after.variants).toHaveLength(2);
+    const added = after.variants.find((v) => v.name === "Mango Bites");
+    expect(added).toEqual(expect.objectContaining({ stock: 0, price: 12, salePrice: 11, barcode: "8901001", purchaseCost: 9.45 }));
+    expect(added.sku).toMatch(/^[A-Z0-9]+-/);
+    expect(added.purchaseFinalPrice).toBe(9.45);
+    expect(after.variants.find((v) => v.sku === "ALPEN-001").stock).toBe(16);
+    expect(after.stock).toBe(16);
+
+    // End to end: the new variant is bought on a purchase bill.
+    const bill = await request(app).post("/api/seller/business/purchases").set("Authorization", auth).send({
+      billNo: "VAR-1", confirm: true,
+      items: [{ productId: String(p._id), variantSku: added.sku, quantity: 6, cost: 9.45, gstPercent: 5, purchaseGstType: "INCLUSIVE" }],
+    });
+    expect(bill.status).toBe(201);
+    const stocked = await Product.findById(p._id).lean();
+    expect(stocked.variants.find((v) => v.sku === added.sku).stock).toBe(6);
+    expect(stocked.stock).toBe(22);
+  });
+
+  it("keeps a typed SKU and rejects duplicate SKUs", async () => {
+    const p = await fx.createProduct(seller, tree, { variants: [{ name: "A", sku: "VAR-A", price: 10, stock: 3 }] });
+    const ok = await edit(p._id, { ...base, variants: [{ name: "A", sku: "VAR-A", price: 10 }, { name: "B", sku: "var-b", price: 10, stock: 0 }] });
+    expect(ok.status).toBe(200);
+    expect((await Product.findById(p._id).lean()).variants.map((v) => v.sku)).toEqual(["VAR-A", "VAR-B"]);
+
+    const dup = await edit(p._id, { ...base, variants: [{ name: "A", sku: "VAR-A", price: 10 }, { name: "C", sku: "var-a", price: 10, stock: 0 }] });
+    expect(dup.status).toBe(400);
+    expect(dup.body.message).toMatch(/same SKU/);
+  });
+
+  it("turns a product without variants into variant 1 and keeps its stock", async () => {
+    const p = await fx.createProduct(seller, tree, { stock: 7, price: 60, salePrice: 55, purchaseCost: 40, barcode: "8902001" });
+    const res = await edit(p._id, {
+      ...base,
+      variants: [
+        { sku: p.sku, name: "Standard", price: 60, salePrice: 55, barcode: "8902001", purchaseCost: 40, stock: 7 },
+        { sku: "", name: "Family Pack", price: 110, salePrice: 100, barcode: "", purchaseCost: 75, stock: 0 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const after = await Product.findById(p._id).lean();
+    expect(after.variants.map((v) => [v.name, v.stock])).toEqual([["Standard", 7], ["Family Pack", 0]]);
+    expect(after.variants[0].sku).toBe(p.sku);
+    expect(after.stock).toBe(7);
+  });
+});

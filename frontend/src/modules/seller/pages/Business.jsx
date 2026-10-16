@@ -1000,6 +1000,10 @@ const PurchasesTab = () => {
         setLines((ls) => ls.map((l) => {
             if (l.productId !== id) return l;
             const next = { ...l };
+            // A product that just got its first variants: the original became variant 1.
+            if (!l.variantSku && !(before?.variants?.length) && after.variants?.length) {
+                next.variantSku = after.variants[0].sku || "";
+            }
             if (Number(after.gstPercent || 0) !== Number(before?.gstPercent || 0)) next.gstPercent = after.gstPercent ?? 0;
             if ((after.purchaseGstType || "EXCLUSIVE") !== (before?.purchaseGstType || "EXCLUSIVE") && !l.gstTypeSet) {
                 next.purchaseGstType = after.purchaseGstType || "EXCLUSIVE";
@@ -1232,7 +1236,8 @@ const PurchasesTab = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setEditProductId(prod._id)}
-                                                    className="text-[10px] font-bold text-slate-600 hover:underline flex items-center gap-0.5"
+                                                    className="text-[10px] font-bold text-primary-foreground bg-primary hover:bg-primary/90 active:scale-95 rounded-md px-2 py-0.5 shadow-xs flex items-center gap-0.5 transition-all cursor-pointer"
+                                                    aria-label={`Edit ${prod.name}`}
                                                 >
                                                     <HiOutlinePencilSquare className="h-3 w-3" /> Edit
                                                 </button>
@@ -1259,12 +1264,12 @@ const PurchasesTab = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setEditProductId(prod._id)}
-                                                className="hidden md:flex shrink-0 px-2.5 py-2.5 rounded-xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 active:scale-95 text-xs font-bold transition-all cursor-pointer items-center gap-1"
+                                                className="hidden md:flex shrink-0 px-2.5 py-2.5 rounded-xl border border-primary bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/30 active:scale-95 text-xs font-bold transition-all cursor-pointer items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
                                                 title="Edit this product"
                                                 aria-label={`Edit ${prod.name}`}
                                             >
                                                 <HiOutlinePencilSquare className="h-3.5 w-3.5" />
-                                                <span className="hidden xl:inline text-xs">Edit</span>
+                                                <span className="hidden 2xl:inline text-xs">Edit</span>
                                             </button>
                                         )}
                                         <button
@@ -1274,7 +1279,7 @@ const PurchasesTab = () => {
                                             title="Add new product"
                                         >
                                             <HiOutlinePlus className="h-3.5 w-3.5" />
-                                            <span className="hidden xl:inline text-xs">New</span>
+                                            <span className="hidden 2xl:inline text-xs">New</span>
                                         </button>
                                     </div>
                                 </div>
