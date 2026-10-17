@@ -137,6 +137,10 @@ jest.unstable_mockModule("../app/services/finance/orderFinanceService.js", () =>
   }),
 }));
 
+jest.unstable_mockModule("../app/services/finance/financeSettingsService.js", () => ({
+  getOrCreateFinanceSettings: jest.fn(async () => ({ onlineEnabled: true, codEnabled: true })),
+}));
+
 jest.unstable_mockModule("../app/services/idempotencyService.js", () => ({
   checkIdempotency: mockCheckIdempotency,
   acquireIdempotencyLock: mockAcquireIdempotencyLock,
