@@ -7,6 +7,8 @@ import PosCustomer from "../models/posCustomer.js";
 import PurchaseBill from "../models/purchaseBill.js";
 import PurchaseReturn from "../models/purchaseReturn.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
+import Order from "../models/order.js";
+import PosReturn from "../models/posReturn.js";
 import Expense from "../models/expense.js";
 import CashEntry from "../models/cashEntry.js";
 import CashDay from "../models/cashDay.js";
@@ -101,12 +103,66 @@ export async function partyLedger(sellerId, partyType, partyId, { from, to } = {
   const q = { seller: sellerId, partyType, party: partyId };
   if (from || to) q.date = { ...(from && { $gte: from }), ...(to && { $lte: to }) };
   const entries = await PartyLedgerEntry.find(q).sort({ date: 1, createdAt: 1 }).lean();
+  const itemsByRef = await ledgerBillItems(sellerId, entries);
   let running = 0;
   const rows = entries.map((e) => {
     running = roundCurrency(running + e.amount * e.effect);
-    return { ...e, balance: running };
+    // Payments share the bill's ref but carry no goods of their own.
+    const items = e.kind !== "PAYMENT" && e.refId ? itemsByRef.get(`${e.refModel}:${e.refId}`) || [] : [];
+    return { ...e, items, balance: running };
   });
   return { entries: rows, balance: running };
+}
+
+// Item lines of the bills/returns behind ledger entries, normalised to
+// { name, variant, quantity, rate, gstPercent, amount } and keyed "refModel:refId".
+async function ledgerBillItems(sellerId, entries) {
+  const idsOf = (model) => [
+    ...new Set(entries.filter((e) => e.kind !== "PAYMENT" && e.refModel === model && e.refId).map((e) => String(e.refId))),
+  ];
+  const [orders, bills, purchaseReturns, posReturns] = await Promise.all([
+    idsOf("Order").length ? Order.find({ _id: { $in: idsOf("Order") }, seller: sellerId }).select("items").lean() : [],
+    idsOf("PurchaseBill").length ? PurchaseBill.find({ _id: { $in: idsOf("PurchaseBill") }, seller: sellerId }).select("items").lean() : [],
+    idsOf("PurchaseReturn").length ? PurchaseReturn.find({ _id: { $in: idsOf("PurchaseReturn") }, seller: sellerId }).select("items").lean() : [],
+    idsOf("PosReturn").length ? PosReturn.find({ _id: { $in: idsOf("PosReturn") }, seller: sellerId }).select("items").lean() : [],
+  ]);
+
+  // Lines store the variant SKU; show the variant's name where the product still has it.
+  const productIds = [...new Set([...orders, ...bills, ...purchaseReturns, ...posReturns]
+    .flatMap((d) => d.items || []).map((i) => String(i.product)).filter(Boolean))];
+  const products = productIds.length
+    ? await Product.find({ _id: { $in: productIds } }).select("variants.sku variants.name").lean()
+    : [];
+  const variantNames = new Map();
+  products.forEach((p) => (p.variants || []).forEach((v) => {
+    if (v.sku && v.name) variantNames.set(`${p._id}:${String(v.sku).toLowerCase()}`, v.name);
+  }));
+  const variantOf = (productId, sku) =>
+    (sku && variantNames.get(`${productId}:${String(sku).toLowerCase()}`)) || sku || "";
+
+  const map = new Map();
+  const put = (model, docs, toLine) => docs.forEach((d) => map.set(`${model}:${d._id}`, (d.items || []).map(toLine)));
+  put("Order", orders, (i) => ({
+    name: i.name || "", variant: variantOf(i.product, i.variantSlot), quantity: i.quantity,
+    rate: Number(i.price || 0), gstPercent: Number(i.gstPercent || 0),
+    amount: roundCurrency(Number(i.price || 0) * Number(i.quantity || 0)),
+  }));
+  // Purchase lines are named "Product (SKU)"; the SKU moves to the variant column.
+  const purchaseLine = (i) => ({
+    name: i.variantSku && String(i.name || "").endsWith(` (${i.variantSku})`)
+      ? i.name.slice(0, -(i.variantSku.length + 3))
+      : i.name || "",
+    variant: variantOf(i.product, i.variantSku), quantity: i.quantity,
+    rate: Number(i.cost || 0), gstPercent: Number(i.gstPercent || 0),
+    amount: roundCurrency(Number(i.lineTotal) || Number(i.cost || 0) * Number(i.quantity || 0)),
+  });
+  put("PurchaseBill", bills, purchaseLine);
+  put("PurchaseReturn", purchaseReturns, purchaseLine);
+  put("PosReturn", posReturns, (i) => ({
+    name: i.productName || "", variant: variantOf(i.product, i.variantSlot), quantity: i.quantity,
+    rate: Number(i.unitPrice || 0), gstPercent: 0, amount: Number(i.refundAmount || 0),
+  }));
+  return map;
 }
 
 export async function recordPayment(sellerId, { partyType, partyId, amount, method = "CASH", note = "", date }) {

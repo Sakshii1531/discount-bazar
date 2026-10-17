@@ -65,6 +65,9 @@ export const RECEIPT_PRINT_CSS = `
                 }
 `;
 
+// Unit MRP snapshot on the bill line; bills saved before it existed fall back to the selling price.
+const unitMrp =(item) => Math.max(Number(item?.mrp) || 0, Number(item?.price) || 0);
+
 /**
  * Standard POS Receipt (80mm thermal receipt slip / browser print format)
  */
@@ -137,6 +140,8 @@ const ReceiptPrint = ({
     const gstTotal = gstRows.reduce((sum, [, r]) => sum + r.tax, 0);
     const taxableTotal = gstRows.reduce((sum, [, r]) => sum + r.taxable, 0);
     const totalUnits = lineItems.reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0);
+    const mrpTotal = lineItems.reduce((sum, item) => sum + unitMrp(item) * Number(item.quantity || item.qty || 1), 0);
+    const mrpSavings = Math.round((mrpTotal - grandTotal) * 100) / 100;
 
     const sellerInfo = seller || order.seller || {};
     const storeTitle = shopName || sellerInfo.shopName || sellerInfo.name || "Store";
@@ -162,7 +167,7 @@ const ReceiptPrint = ({
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:bg-white print:p-0 print:static print:backdrop-blur-none print-modal-wrapper">
             <style>{RECEIPT_PRINT_CSS}</style>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 print:shadow-none print:rounded-none print:max-w-full print:p-0 print-modal-content max-h-[90vh] flex flex-col">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 print:shadow-none print:rounded-none print:max-w-full print:p-0 print-modal-content max-h-[90vh] flex flex-col">
                 <div className="flex flex-col items-center text-center mb-3 print:hidden shrink-0">
                     <HiOutlineCheckCircle className="h-9 w-9 text-emerald-500 mb-1" />
                     <h2 className="text-base font-black text-slate-900">{heading}</h2>
@@ -172,37 +177,37 @@ const ReceiptPrint = ({
                 <div className="overflow-y-auto flex-1 pr-1 print:overflow-visible">
                     <div
                         id="pos-receipt"
-                        className="bg-white text-slate-900 font-mono text-[11px] leading-relaxed p-3.5 rounded-xl border border-slate-200 shadow-xs"
+                        className="bg-white text-slate-900 font-mono text-[13px] leading-relaxed p-3.5 rounded-xl border border-slate-200 shadow-xs"
                     >
                         {/* Store Header */}
                         <div className="text-center pb-2">
-                            <h1 className="font-black text-sm uppercase tracking-wider text-slate-900 leading-tight">
+                            <h1 className="font-black text-lg uppercase tracking-wider text-slate-900 leading-tight">
                                 {storeTitle}
                             </h1>
-                            <p className="text-[9px] font-bold tracking-widest text-slate-500 uppercase mt-0.5">
+                            <p className="text-[11px] font-bold tracking-widest text-slate-500 uppercase mt-0.5">
                                 *** Retail Cash Invoice ***
                             </p>
                             {sellerInfo.address && (
-                                <p className="text-[9px] text-slate-500 leading-tight mt-0.5">
+                                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
                                     {sellerInfo.address}
                                     {sellerInfo.city ? `, ${sellerInfo.city}` : ""}
                                     {sellerInfo.pincode ? ` - ${sellerInfo.pincode}` : ""}
                                 </p>
                             )}
                             {sellerInfo.phone && (
-                                <p className="text-[9px] text-slate-500">
+                                <p className="text-[11px] text-slate-500">
                                     Tel: +91 {sellerInfo.phone}
                                 </p>
                             )}
                             {sellerInfo.gstNumber && (
-                                <p className="text-[9px] font-semibold text-slate-600">
+                                <p className="text-[11px] font-semibold text-slate-600">
                                     GSTIN: {sellerInfo.gstNumber}
                                 </p>
                             )}
                         </div>
 
                         {/* Order & Customer Metadata */}
-                        <div className="border-t border-dashed border-slate-400 py-2 space-y-0.5 text-[10px] text-slate-700">
+                        <div className="border-t border-dashed border-slate-400 py-2 space-y-0.5 text-[12px] text-slate-700">
                             <div className="flex justify-between items-start gap-1">
                                 <span className="font-semibold text-slate-600 shrink-0">Bill No:</span>
                                 <span className="font-bold text-slate-900 break-all text-right">
@@ -236,19 +241,19 @@ const ReceiptPrint = ({
                         {/* Standard Itemized Table */}
                         <table className="w-full text-left border-collapse my-1">
                             <thead>
-                                <tr className="border-t border-b border-dashed border-slate-400 text-[10px] uppercase font-bold text-slate-900">
+                                <tr className="border-t border-b border-dashed border-slate-400 text-[12px] uppercase font-bold text-slate-900">
                                     <th className="py-1 text-left">Item</th>
-                                    <th className="py-1 text-center w-8">Qty</th>
-                                    <th className="py-1 text-right w-14">Rate</th>
-                                    <th className="py-1 text-right w-16">Amount</th>
+                                    <th className="py-1 text-center w-9">Qty</th>
+                                    <th className="py-1 text-right w-[4.5rem] leading-tight">Sale Price</th>
+                                    <th className="py-1 text-right w-[4.5rem]">MRP</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-dotted divide-slate-200 text-[10px]">
+                            <tbody className="divide-y divide-dotted divide-slate-200 text-[12px]">
                                 {lineItems.map((item, idx) => {
                                     const name = item.name || item.productName || "Item";
                                     const qty = Number(item.quantity || item.qty || 1);
                                     const price = Number(item.price || 0);
-                                    const total = qty * price;
+                                    const mrp = unitMrp(item);
                                     const variant = item.variantSlot || item.variantSku || "";
                                     return (
                                         <tr key={idx} className="align-top">
@@ -257,12 +262,12 @@ const ReceiptPrint = ({
                                                     {name}
                                                 </div>
                                                 {variant && (
-                                                    <div className="text-[9px] text-slate-500 font-normal">
+                                                    <div className="text-[11px] text-slate-500 font-normal">
                                                         {variant}
                                                     </div>
                                                 )}
                                                 {item.gstPercent > 0 && (
-                                                    <div className="text-[8.5px] text-emerald-700 font-medium">
+                                                    <div className="text-[11px] text-emerald-700 font-medium">
                                                         GST: {item.gstPercent}%
                                                     </div>
                                                 )}
@@ -270,11 +275,11 @@ const ReceiptPrint = ({
                                             <td className="py-1 text-center font-semibold text-slate-800">
                                                 {qty}
                                             </td>
-                                            <td className="py-1 text-right text-slate-700">
+                                            <td className="py-1 text-right font-bold text-slate-900">
                                                 ₹{price.toFixed(2)}
                                             </td>
-                                            <td className="py-1 text-right font-bold text-slate-900">
-                                                ₹{total.toFixed(2)}
+                                            <td className="py-1 text-right text-slate-600">
+                                                ₹{mrp.toFixed(2)}
                                             </td>
                                         </tr>
                                     );
@@ -283,7 +288,7 @@ const ReceiptPrint = ({
                         </table>
 
                         {/* Summary & Totals */}
-                        <div className="border-t border-dashed border-slate-400 pt-1.5 space-y-1 text-[10px]">
+                        <div className="border-t border-dashed border-slate-400 pt-1.5 space-y-1 text-[12px]">
                             <div className="flex justify-between text-slate-600">
                                 <span>Total Items: {lineItems.length}</span>
                                 <span>Total Qty: {totalUnits}</span>
@@ -294,15 +299,15 @@ const ReceiptPrint = ({
                             </div>
                             {isTaxInclusive && (gstTotal > 0 || taxTotal > 0) && (
                                 <>
-                                    <div className="flex justify-between text-slate-600 text-[9.5px]">
+                                    <div className="flex justify-between text-slate-600 text-[12px]">
                                         <span>Taxable Value (Before GST)</span>
                                         <span>₹{(taxableTotal || Math.max(0, subtotal - (gstTotal || taxTotal))).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[12px]">
                                         <span className="text-slate-500">CGST Amount</span>
                                         <span>₹{((gstTotal || taxTotal) / 2).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[12px]">
                                         <span className="text-slate-500">SGST Amount</span>
                                         <span>₹{((gstTotal || taxTotal) / 2).toFixed(2)}</span>
                                     </div>
@@ -310,11 +315,11 @@ const ReceiptPrint = ({
                             )}
                             {!isTaxInclusive && taxTotal > 0 && (
                                 <>
-                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[12px]">
                                         <span className="text-slate-500">CGST Amount</span>
                                         <span>+₹{(taxTotal / 2).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-600 pl-2 text-[9.5px]">
+                                    <div className="flex justify-between text-slate-600 pl-2 text-[12px]">
                                         <span className="text-slate-500">SGST Amount</span>
                                         <span>+₹{(taxTotal / 2).toFixed(2)}</span>
                                     </div>
@@ -333,24 +338,30 @@ const ReceiptPrint = ({
                         </div>
 
                         {/* Grand Total */}
-                        <div className="border-t-2 border-b-2 border-dashed border-slate-900 my-2 py-1.5 flex justify-between font-black text-xs text-slate-900">
+                        <div className="border-t-2 border-b-2 border-dashed border-slate-900 my-2 py-1.5 flex justify-between font-black text-base text-slate-900">
                             <span>TOTAL AMOUNT</span>
                             <span>₹{grandTotal.toFixed(2)}</span>
                         </div>
+                        {mrpSavings > 0 && (
+                            <div className="flex justify-between font-bold text-[13px] text-emerald-700 -mt-1 mb-1.5">
+                                <span>You Saved (on MRP)</span>
+                                <span>₹{mrpSavings.toFixed(2)}</span>
+                            </div>
+                        )}
                         {isTaxInclusive && (
-                            <p className="text-[9px] text-slate-500 font-semibold text-center -mt-1 mb-1.5">
+                            <p className="text-[11px] text-slate-500 font-semibold text-center -mt-1 mb-1.5">
                                 (Prices are inclusive of GST)
                             </p>
                         )}
 
                         {/* GST Summary */}
                         {(gstRows.length > 0 || taxTotal > 0) && (
-                            <div className="border-b border-dashed border-slate-400 pb-1.5 mb-1.5 text-[9px] text-slate-700">
+                            <div className="border-b border-dashed border-slate-400 pb-1.5 mb-1.5 text-[11px] text-slate-700">
                                 <div className="flex justify-between items-center mb-0.5">
                                     <p className="font-bold uppercase text-slate-800">
                                         {gstRows.length > 0 ? (isTaxInclusive ? "GST Summary (incl. in price)" : "GST Summary") : "Tax / GST Summary"}
                                     </p>
-                                    <span className="text-[8px] font-semibold text-slate-500">CGST + SGST</span>
+                                    <span className="text-[10px] font-semibold text-slate-500">CGST + SGST</span>
                                 </div>
                                 {gstRows.length > 0 ? (
                                     <>
@@ -383,7 +394,7 @@ const ReceiptPrint = ({
                         )}
 
                         {/* Payment Details */}
-                        <div className="space-y-0.5 text-[10px] text-slate-700">
+                        <div className="space-y-0.5 text-[12px] text-slate-700">
                             <div className="flex justify-between">
                                 <span className="font-semibold text-slate-600">Payment Mode:</span>
                                 <span className="font-black text-slate-900 uppercase">{paymentMethod}</span>
@@ -424,15 +435,15 @@ const ReceiptPrint = ({
                         </div>
 
                         {/* Footer Notes */}
-                        <div className="border-t border-dashed border-slate-400 mt-2.5 pt-2 text-center text-[9px] text-slate-500 space-y-0.5">
+                        <div className="border-t border-dashed border-slate-400 mt-2.5 pt-2 text-center text-[11px] text-slate-500 space-y-0.5">
                             <p className="font-bold uppercase tracking-wider text-slate-800">
                                 Thank You For Shopping!
                             </p>
                             <p className="text-slate-500">Please Visit Again</p>
-                            <p className="text-[8px] text-slate-400 mt-1">
+                            <p className="text-[10px] text-slate-400 mt-1">
                                 Computer Generated POS Invoice
                             </p>
-                            <p className="text-[8px] text-slate-400">
+                            <p className="text-[10px] text-slate-400">
                                 Valid without physical signature
                             </p>
                         </div>

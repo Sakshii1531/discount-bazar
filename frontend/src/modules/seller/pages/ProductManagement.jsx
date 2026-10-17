@@ -234,7 +234,7 @@ const ProductManagement = () => {
       returnReasons: [],
     },
     variants: [
-      { id: Date.now(), name: "", size: "", colour: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", purchaseCost: "" },
+      { id: Date.now(), name: "", size: "", colour: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", purchaseCost: "", expiryDate: "" },
     ],
   });
 
@@ -585,6 +585,7 @@ const ProductManagement = () => {
           colour: v.colour || "",
           barcode: v.barcode || "",
           purchaseCost: v.purchaseCost ?? "",
+          expiryDate: v.expiryDate ? String(v.expiryDate).slice(0, 10) : "",
         })) : [
           {
             id: Date.now(),
@@ -598,6 +599,7 @@ const ProductManagement = () => {
             sku: item.sku || "",
             barcode: item.barcode || "",
             purchaseCost: item.purchaseCost ?? "",
+            expiryDate: "",
           },
         ],
       });
@@ -646,6 +648,7 @@ const ProductManagement = () => {
             sku: "",
             barcode: "",
             purchaseCost: "",
+            expiryDate: "",
           },
         ],
       });
@@ -1331,7 +1334,7 @@ const ProductManagement = () => {
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
-                          ["expiryDate", "Expiry Date", "date"],
+                          ["expiryDate", "Default Expiry Date", "date"],
                         ].map(([key, label, type]) => (
                           <div key={key} className="space-y-1.5 flex flex-col">
                             <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
@@ -1344,6 +1347,11 @@ const ProductManagement = () => {
                               onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
                               className="w-full px-4 py-3 bg-slate-100 border-none rounded-2xl text-sm font-semibold outline-none"
                             />
+                            {key === "expiryDate" && (
+                              <p className="text-[10px] text-slate-500 ml-1">
+                                Used for variants without their own expiry date.
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1643,6 +1651,7 @@ const ProductManagement = () => {
                                   sku: makeSku(prev.name, prev.variants.length + 1),
                                   barcode: "",
                                   purchaseCost: "",
+                                  expiryDate: "",
                                 },
                               ],
                             }));
@@ -1813,8 +1822,8 @@ const ProductManagement = () => {
                               </div>
                             </div>
 
-                            {/* Section 2: Product Code, Stock, Barcode, Purchase Cost */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-3 border-t border-slate-100 items-start">
+                            {/* Section 2: Product Code, Stock, Barcode, Purchase Cost, Expiry Date */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 pt-3 border-t border-slate-100 items-start">
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
                                   Product Code
@@ -1910,6 +1919,23 @@ const ProductManagement = () => {
                                     setFormData({ ...formData, variants: news });
                                   }}
                                   placeholder="0.00"
+                                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                  Expiry Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={v.expiryDate || ""}
+                                  onChange={(e) => {
+                                    const news = [...formData.variants];
+                                    news[i] = { ...news[i], expiryDate: e.target.value };
+                                    setFormData({ ...formData, variants: news });
+                                  }}
+                                  title={formData.expiryDate ? `Leave empty to use the default (${formData.expiryDate})` : ""}
                                   className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none"
                                 />
                               </div>

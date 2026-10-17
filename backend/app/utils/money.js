@@ -112,6 +112,19 @@ export function purchaseBaseCost(cost, rate, type) {
   return roundCurrency(price);
 }
 
+/**
+ * Unit MRP of a product (or its variant) for bill printing. A variant's `price`
+ * is its MRP; a plain product uses `mrp`, else `price`. Never below what the
+ * line was sold at.
+ */
+export function lineMrp(product, variantSku, sellingPrice = 0) {
+  const variant = variantSku ? (product?.variants || []).find((v) => v.sku === variantSku) : null;
+  const listed = variant
+    ? Number(variant.price) || 0
+    : Number(product?.mrp) > 0 ? Number(product.mrp) : Number(product?.price) || 0;
+  return roundCurrency(Math.max(listed, Number(sellingPrice) || 0));
+}
+
 export function ceilKm(valueKm) {
   const num = Number(valueKm || 0);
   if (!Number.isFinite(num) || num <= 0) return 0;

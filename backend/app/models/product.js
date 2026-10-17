@@ -175,6 +175,8 @@ const productSchema = new mongoose.Schema(
                 sku: String,
                 barcode: { type: String, trim: true },
                 purchaseCost: { type: Number, min: 0 },
+                // Own expiry for this variant; null falls back to the product's expiryDate
+                expiryDate: { type: Date, default: null },
                 // Server-computed purchase GST breakdown for this variant's purchaseCost
                 purchaseBasePrice: { type: Number, min: 0 },
                 purchaseGstAmount: { type: Number, min: 0 },

@@ -600,8 +600,8 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
             { header: 'Variant', width: 0.13 },
             { header: 'GST %', width: 0.1, align: 'center' },
             { header: 'Qty', width: 0.08, align: 'right' },
-            { header: 'Rate', width: 0.12, align: 'right' },
-            { header: 'Amount', width: 0.14, align: 'right' },
+            { header: 'Sale Price', width: 0.13, align: 'right' },
+            { header: 'MRP', width: 0.13, align: 'right' },
         ],
         rows: f.items.map((it, i) => [
             String(i + 1),
@@ -610,9 +610,9 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
             it.gstPercent ? `${it.gstPercent}%` : (f.gstRows.length === 1 ? `${f.gstRows[0][0]}%` : '-'),
             String(f.qtyOf(it)),
             money(it.price),
-            money(f.qtyOf(it) * num(it.price)),
+            money(Math.max(num(it.mrp), num(it.price))),
         ]),
-        totals: ['', `Total (${f.items.length} item${f.items.length === 1 ? '' : 's'})`, '', '', String(f.units), '', money(f.subtotal)],
+        totals: ['', `Total (${f.items.length} item${f.items.length === 1 ? '' : 's'})`, '', '', String(f.units), money(f.subtotal), ''],
     });
 
     const couponCode = order.couponSnapshot?.code || order.couponCode || '';

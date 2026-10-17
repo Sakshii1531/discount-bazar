@@ -306,6 +306,28 @@ function applyDeliveryFields(productData) {
   parse("productDeliveryTimeMinutes", "Product delivery time", { integer: true });
 }
 
+// Expiry dates: empty means none; the product-level date is the default for
+// variants that have no expiry of their own.
+function applyExpiryDates(productData) {
+  const parse = (raw, label) => {
+    if (raw === "" || raw === null) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) {
+      throw Object.assign(new Error(label + " is not a valid date"), { statusCode: 400 });
+    }
+    return d;
+  };
+  if (productData.expiryDate !== undefined) {
+    productData.expiryDate = parse(productData.expiryDate, "Expiry date");
+  }
+  if (Array.isArray(productData.variants)) {
+    productData.variants.forEach((v, idx) => {
+      if (!v || v.expiryDate === undefined) return;
+      v.expiryDate = parse(v.expiryDate, `Variant #${idx + 1} expiry date`);
+    });
+  }
+}
+
 // Links the product to an admin-managed Brand and copies its name into
 // `brand`. `brandId` (from the product form) wins; a bare `brand` name (bulk
 // import, older clients) is matched to an active brand by name and otherwise
@@ -749,7 +771,7 @@ export const getSellerProducts = async (req, res) => {
     ] = await Promise.all([
       Product.find(query)
         .select(
-          "name slug description sku barcode price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes",
+          "name slug description sku barcode price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes expiryDate shelfLife countryOfOrigin fssaiLicense tags",
         )
         .populate("headerId", "name")
         .populate("categoryId", "name")
@@ -1031,6 +1053,7 @@ export const createProduct = async (req, res) => {
     try {
       applyPurchaseGst(productData);
       applyDeliveryFields(productData);
+      applyExpiryDates(productData);
       await applyBrandFields(productData);
       await assertItemMasterValid(productData, req.user.id);
     } catch (e) {
@@ -1294,6 +1317,7 @@ export const updateProduct = async (req, res) => {
     try {
       applyPurchaseGst(productData, product);
       applyDeliveryFields(productData);
+      applyExpiryDates(productData);
       await applyBrandFields(productData, product);
       await assertItemMasterValid(
         {

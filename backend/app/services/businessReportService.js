@@ -142,17 +142,22 @@ async function lowStockReport(sellerId) {
 async function expiryReport(sellerId) {
   const prods = await Product.find({
     sellerId: oid(sellerId),
-    expiryDate: { $ne: null, $exists: true },
+    $or: [
+      { expiryDate: { $type: "date" } },
+      { variants: { $elemMatch: { expiryDate: { $type: "date" } } } },
+    ],
   })
-    .select("name barcode sku stock lowStockAlert expiryDate price salePrice unit")
-    .sort({ expiryDate: 1 })
+    .select("name barcode sku stock lowStockAlert expiryDate price salePrice unit variants")
     .lean();
 
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const rows = prods.map((p) => {
-    const exp = new Date(p.expiryDate);
+  const toRow = (p, v) => {
+    // A variant's own expiry wins; otherwise it inherits the product's
+    const expiryDate = (v && v.expiryDate) || p.expiryDate;
+    if (!expiryDate) return null;
+    const exp = new Date(expiryDate);
     const expDateOnly = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate());
     const diffTime = expDateOnly.getTime() - startOfToday.getTime();
     const daysLeft = Math.round(diffTime / (1000 * 60 * 60 * 24));
@@ -164,19 +169,33 @@ async function expiryReport(sellerId) {
     else if (daysLeft <= 7) status = "NEXT_7_DAYS";
     else if (daysLeft <= 30) status = "NEXT_30_DAYS";
 
+    const src = v || p;
+    const salePrice = Number(src.salePrice || 0);
     return {
       _id: p._id,
+      rowKey: v?._id ? `${p._id}-${v._id}` : String(p._id),
+      variantId: v?._id || null,
       name: p.name,
-      sku: p.sku || "",
-      barcode: p.barcode || "",
-      stock: Number(p.stock || 0),
+      variantName: v?.name || "",
+      sku: src.sku || p.sku || "",
+      barcode: src.barcode || "",
+      stock: Number(src.stock || 0),
       unit: p.unit || "",
-      price: p.salePrice > 0 ? p.salePrice : p.price,
-      expiryDate: p.expiryDate,
+      price: salePrice > 0 ? salePrice : Number(src.price || 0),
+      expiryDate,
       daysLeft,
       status,
     };
-  });
+  };
+
+  const rows = prods
+    .flatMap((p) =>
+      Array.isArray(p.variants) && p.variants.length > 0
+        ? p.variants.map((v) => toRow(p, v))
+        : [toRow(p, null)]
+    )
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
   const expiredCount = rows.filter((r) => r.daysLeft < 0).length;
   const todayCount = rows.filter((r) => r.daysLeft === 0).length;

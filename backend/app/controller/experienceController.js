@@ -6,6 +6,16 @@ import handleResponse from "../utils/helper.js";
 import mongoose from "mongoose";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
+import { parseCustomerCoordinates } from "../services/customerVisibilityService.js";
+import { resolveExperienceSectionProducts } from "../services/experienceSectionService.js";
+import { decorateProductsWithDelivery } from "../services/deliveryQuoteService.js";
+import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
+
+// Section edits must also clear the per-location resolved copies.
+const invalidatePublicSections = async () => {
+  await invalidate("cache:experience:public:*");
+  await invalidate(buildKey("catalog", "productList", "experience:*"));
+};
 
 /* ===============================
    Helpers
@@ -72,6 +82,12 @@ const normalizeUrl = (value) => {
   return normalized;
 };
 
+// Keep the admin's chosen order (and drop ids that failed validation / repeats).
+const inRequestedOrder = (requestedIds, docs) => {
+  const valid = new Map(docs.map((d) => [String(d._id), d._id]));
+  return [...new Set(requestedIds.map(String))].filter((id) => valid.has(id)).map((id) => valid.get(id));
+};
+
 const validateAndNormalizeConfig = async (displayType, config = {}) => {
   const normalized = {};
 
@@ -114,7 +130,7 @@ const validateAndNormalizeConfig = async (displayType, config = {}) => {
 
     normalized.categories = {
       maxItems,
-      categoryIds: categories.map((c) => c._id),
+      categoryIds: inRequestedOrder(categoryIds, categories),
       rows: rows < 1 ? 1 : rows,
     };
     return normalized;
@@ -147,8 +163,8 @@ const validateAndNormalizeConfig = async (displayType, config = {}) => {
     }
 
     normalized.subcategories = {
-      categoryIds: categories.map((c) => c._id),
-      subcategoryIds: subcategories.map((s) => s._id),
+      categoryIds: inRequestedOrder(categoryIds, categories),
+      subcategoryIds: inRequestedOrder(subcategoryIds, subcategories),
       rows: rows < 1 ? 1 : rows,
     };
     return normalized;
@@ -186,9 +202,9 @@ const validateAndNormalizeConfig = async (displayType, config = {}) => {
       : [];
 
     normalized.products = {
-      categoryIds: categories.map((c) => c._id),
-      subcategoryIds: subcategories.map((s) => s._id),
-      productIds: products.map((p) => p._id),
+      categoryIds: inRequestedOrder(categoryIds, categories),
+      subcategoryIds: inRequestedOrder(subcategoryIds, subcategories),
+      productIds: inRequestedOrder(productIds, products),
       rows: normalizedRows,
       columns: normalizedColumns,
       singleRowScrollable,
@@ -238,7 +254,7 @@ export const createExperienceSection = async (req, res) => {
       order: base.order ?? count,
       config,
     });
-    await invalidate("cache:experience:public:*");
+    await invalidatePublicSections();
 
     return handleResponse(res, 201, "Experience section created", section);
   } catch (error) {
@@ -275,7 +291,7 @@ export const updateExperienceSection = async (req, res) => {
     existing.config = config;
 
     await existing.save();
-    await invalidate("cache:experience:public:*");
+    await invalidatePublicSections();
 
     return handleResponse(res, 200, "Experience section updated", existing);
   } catch (error) {
@@ -294,7 +310,7 @@ export const deleteExperienceSection = async (req, res) => {
     if (!section) {
       return handleResponse(res, 404, "Section not found");
     }
-    await invalidate("cache:experience:public:*");
+    await invalidatePublicSections();
 
     return handleResponse(res, 200, "Experience section deleted");
   } catch (error) {
@@ -330,7 +346,7 @@ export const reorderExperienceSections = async (req, res) => {
     }
 
     await ExperienceSection.bulkWrite(bulkOps);
-    await invalidate("cache:experience:public:*");
+    await invalidatePublicSections();
 
     return handleResponse(res, 200, "Sections reordered");
   } catch (error) {
@@ -364,13 +380,41 @@ export const getPublicExperienceSections = async (req, res) => {
       "public",
       `${pageType}:${headerId || "root"}`,
     );
-    const sections = await getOrSet(
-      cacheKey,
-      async () =>
-        ExperienceSection.find(query)
-          .sort({ order: 1, createdAt: 1, _id: 1 })
-          .lean(),
-      getTTL("homepage"),
+    const loadSections = () =>
+      getOrSet(
+        cacheKey,
+        async () =>
+          ExperienceSection.find(query)
+            .sort({ order: 1, createdAt: 1, _id: 1 })
+            .lean(),
+        getTTL("homepage"),
+      );
+
+    // With the customer's location, product sections come back with their
+    // products resolved server-side (cached under productList so product
+    // writes clear it, and per location bucket like offer sections).
+    const coords = parseCustomerCoordinates(req.query || {});
+    if (!coords.valid) {
+      return handleResponse(res, 200, "Experience sections fetched", await loadSections());
+    }
+    const resolvedKey = buildKey(
+      "catalog",
+      "productList",
+      `experience:${pageType}:${headerId || "root"}:${coords.lat.toFixed(3)}:${coords.lng.toFixed(3)}`,
+    );
+    const resolved = await getOrSet(
+      resolvedKey,
+      async () => resolveExperienceSectionProducts(await loadSections(), coords),
+      getTTL("productList"),
+    );
+    // Delivery fee/time are added after the cache so admin/seller changes show at once.
+    const deliverySettings = await getOrCreateFinanceSettings();
+    const sections = await Promise.all(
+      (resolved || []).map(async (s) =>
+        Array.isArray(s.products)
+          ? { ...s, products: await decorateProductsWithDelivery(s.products, deliverySettings) }
+          : s,
+      ),
     );
 
     return handleResponse(res, 200, "Experience sections fetched", sections);
@@ -389,7 +433,7 @@ export const uploadBannerImage = async (req, res) => {
         mimeType: req.file.mimetype,
         resourceType: "image",
       });
-      await invalidate("cache:experience:public:*");
+      await invalidatePublicSections();
       return handleResponse(res, 200, "Banner image uploaded", { url: uploadedUrl });
     }
 
@@ -397,7 +441,7 @@ export const uploadBannerImage = async (req, res) => {
     if (!url) {
       return handleResponse(res, 400, "A valid image URL is required");
     }
-    await invalidate("cache:experience:public:*");
+    await invalidatePublicSections();
     return handleResponse(res, 200, "Banner image uploaded", { url });
   } catch (error) {
     return handleResponse(res, 500, error.message);

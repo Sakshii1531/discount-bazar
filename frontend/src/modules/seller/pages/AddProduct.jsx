@@ -86,6 +86,7 @@ const initialFormData = {
       sku: "",
       barcode: "",
       purchaseCost: "",
+      expiryDate: "",
     },
   ],
 };
@@ -682,7 +683,7 @@ const AddProduct = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  ["expiryDate", "Expiry Date", "date"],
+                  ["expiryDate", "Default Expiry Date", "date"],
                 ].map(([key, label, type]) => (
                   <div key={key} className="space-y-1.5 flex flex-col">
                     <label className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">
@@ -695,6 +696,11 @@ const AddProduct = () => {
                       onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-100 border-none rounded-md text-sm font-semibold outline-none ring-primary/5 focus:ring-2 transition-all"
                     />
+                    {key === "expiryDate" && (
+                      <p className="text-[10px] text-slate-500 ml-1">
+                        Used for variants without their own expiry date.
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -792,6 +798,7 @@ const AddProduct = () => {
                           sku: makeSku(prev.name, prev.variants.length + 1),
                           barcode: "",
                           purchaseCost: "",
+                          expiryDate: "",
                         },
                       ],
                     }));
@@ -965,8 +972,8 @@ const AddProduct = () => {
                       </div>
                     </div>
 
-                    {/* Row 2: Product Code, Stock, Barcode, Purchase Cost */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-2 border-t border-slate-200/60 items-end">
+                    {/* Row 2: Product Code, Stock, Barcode, Purchase Cost, Expiry Date */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 pt-2 border-t border-slate-200/60 items-end">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
                           Product Code
@@ -1040,6 +1047,27 @@ const AddProduct = () => {
                             setFormData({ ...formData, variants: newVariants });
                           }}
                           placeholder="e.g. 350"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-1">
+                          Expiry Date
+                        </label>
+                        <input
+                          type="date"
+                          value={variant.expiryDate || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData((prev) => ({
+                              ...prev,
+                              variants: prev.variants.map((item, idx) =>
+                                idx === index ? { ...item, expiryDate: val } : item
+                              ),
+                            }));
+                          }}
+                          title={formData.expiryDate ? `Leave empty to use the default (${formData.expiryDate})` : ""}
                           className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/10"
                         />
                       </div>

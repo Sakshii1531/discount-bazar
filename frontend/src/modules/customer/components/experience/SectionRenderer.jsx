@@ -248,7 +248,10 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
 
           let allProducts;
 
-          if (ids.length) {
+          if (Array.isArray(section.products)) {
+            // Resolved server-side for the customer's location (see Home).
+            allProducts = section.products;
+          } else if (ids.length) {
             allProducts = ids.map((id) => productsById[id]).filter(Boolean);
           } else {
             const categoryFilter = productConfig.categoryIds || [];

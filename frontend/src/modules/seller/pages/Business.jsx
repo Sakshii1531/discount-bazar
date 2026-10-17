@@ -36,6 +36,7 @@ import {
     HiOutlinePrinter,
     HiOutlineCube,
     HiOutlineClock,
+    HiOutlineChevronDown,
 } from "react-icons/hi2";
 
 const REPORTS = [
@@ -107,6 +108,152 @@ const Table = ({ rows, hide = ["_id", "__v", "seller", "createdAt", "updatedAt",
     );
 };
 
+/* ---------- Ledger statement with expandable bill items ---------- */
+const LEDGER_KIND_LABEL = {
+    SALE: "Sale", SALE_RETURN: "Sale Return", PURCHASE: "Purchase",
+    PURCHASE_RETURN: "Purchase Return", PAYMENT: "Payment",
+};
+
+const LedgerItems = ({ items }) => {
+    const showGst = items.some((i) => Number(i.gstPercent) > 0);
+    const totalQty = items.reduce((s, i) => s + Number(i.quantity || 0), 0);
+    const totalAmount = items.reduce((s, i) => s + Number(i.amount || 0), 0);
+    return (
+        <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+            <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold border-b border-slate-200">
+                    <tr>
+                        <th className="text-left px-3 py-2 w-8">#</th>
+                        <th className="text-left px-3 py-2">Product</th>
+                        <th className="text-left px-3 py-2">Variant</th>
+                        <th className="text-right px-3 py-2">Qty</th>
+                        <th className="text-right px-3 py-2">Rate</th>
+                        {showGst && <th className="text-right px-3 py-2">GST</th>}
+                        <th className="text-right px-3 py-2">Amount</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {items.map((it, idx) => (
+                        <tr key={idx}>
+                            <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
+                            <td className="px-3 py-2 font-semibold text-slate-800">{it.name || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.variant || "—"}</td>
+                            <td className="px-3 py-2 text-right font-bold text-slate-800">{it.quantity}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{inrExact(it.rate)}</td>
+                            {showGst && <td className="px-3 py-2 text-right text-slate-600">{Number(it.gstPercent) || 0}%</td>}
+                            <td className="px-3 py-2 text-right font-semibold text-slate-800">{inrExact(it.amount)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+                <tfoot className="bg-slate-50/70 border-t border-slate-200 font-bold text-slate-800">
+                    <tr>
+                        <td className="px-3 py-2" colSpan={3}>Total ({items.length} {items.length === 1 ? "item" : "items"})</td>
+                        <td className="px-3 py-2 text-right">{totalQty}</td>
+                        <td className="px-3 py-2" colSpan={showGst ? 2 : 1} />
+                        <td className="px-3 py-2 text-right">{inrExact(totalAmount)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    );
+};
+
+const LedgerStatementTable = ({ entries = [] }) => {
+    const [open, setOpen] = useState(() => new Set());
+    const withItems = entries.filter((e) => e.items?.length > 0);
+    const allOpen = withItems.length > 0 && withItems.every((e) => open.has(String(e._id)));
+    const toggle = (id) => setOpen((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+
+    if (!entries.length) {
+        return (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+                <p className="text-sm font-medium text-slate-400">No records found</p>
+            </div>
+        );
+    }
+    return (
+        <div className="space-y-2">
+            {withItems.length > 0 && (
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        className={ghostBtn}
+                        onClick={() => setOpen(allOpen ? new Set() : new Set(withItems.map((e) => String(e._id))))}
+                    >
+                        <HiOutlineChevronDown className={cn("h-3.5 w-3.5 transition-transform", allOpen && "rotate-180")} />
+                        {allOpen ? "Collapse all items" : "Expand all items"}
+                    </button>
+                </div>
+            )}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-xs">
+                <table className="w-full text-xs">
+                    <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider font-bold">
+                        <tr>
+                            <th className="text-left px-4 py-3">Date</th>
+                            <th className="text-left px-4 py-3">Type</th>
+                            <th className="text-left px-4 py-3">Bill No</th>
+                            <th className="text-left px-4 py-3">Method</th>
+                            <th className="text-right px-4 py-3">Debit</th>
+                            <th className="text-right px-4 py-3">Credit</th>
+                            <th className="text-right px-4 py-3">Balance</th>
+                            <th className="text-right px-4 py-3">Items</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {entries.map((e, i) => {
+                            const id = String(e._id || i);
+                            const count = e.items?.length || 0;
+                            const isOpen = open.has(id);
+                            return (
+                                <React.Fragment key={id}>
+                                    <tr
+                                        className={cn("transition-colors", count ? "cursor-pointer hover:bg-slate-50/60" : "", isOpen && "bg-slate-50/60")}
+                                        onClick={count ? () => toggle(id) : undefined}
+                                    >
+                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{fmtCell("date", e.date)}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{LEDGER_KIND_LABEL[e.kind] || e.kind}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{e.refNo || "—"}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{e.method || "—"}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right text-slate-700 font-medium">{e.effect === 1 ? inr(e.amount) : "—"}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right text-slate-700 font-medium">{e.effect === -1 ? inr(e.amount) : "—"}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right text-slate-900 font-bold">{inr(e.balance)}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                                            {count > 0 ? (
+                                                <button
+                                                    type="button"
+                                                    aria-expanded={isOpen}
+                                                    onClick={(ev) => { ev.stopPropagation(); toggle(id); }}
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                                >
+                                                    {isOpen ? "Hide" : "View"} items ({count})
+                                                    <HiOutlineChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-slate-300">—</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    {isOpen && count > 0 && (
+                                        <tr className="bg-slate-50/60">
+                                            <td colSpan={8} className="px-4 pb-4 pt-1">
+                                                <LedgerItems items={e.items} />
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 const Stat = ({ label, value, tone = "", icon: Icon }) => (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex items-center justify-between">
         <div>
@@ -143,6 +290,7 @@ const ExpiryReportCard = ({ items = [], totals = {}, onNavigateTab }) => {
             const q = searchTerm.trim().toLowerCase();
             list = list.filter(i =>
                 (i.name && i.name.toLowerCase().includes(q)) ||
+                (i.variantName && i.variantName.toLowerCase().includes(q)) ||
                 (i.sku && i.sku.toLowerCase().includes(q)) ||
                 (i.barcode && i.barcode.toLowerCase().includes(q))
             );
@@ -366,9 +514,14 @@ const ExpiryReportCard = ({ items = [], totals = {}, onNavigateTab }) => {
                                 const isTomorrow = days === 1;
 
                                 return (
-                                    <tr key={item._id || item.sku || idx} className="hover:bg-slate-50/70 transition-colors">
+                                    <tr key={item.rowKey || item._id || item.sku || idx} className="hover:bg-slate-50/70 transition-colors">
                                         <td className="px-4 py-3 font-bold text-slate-900 text-sm capitalize">
                                             {item.name}
+                                            {item.variantName && (
+                                                <span className="block text-[11px] font-semibold text-slate-500 normal-case">
+                                                    {item.variantName}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="font-mono text-[11px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
@@ -2403,17 +2556,7 @@ const PartiesTab = () => {
                             {/* Statement Table */}
                             <div className="space-y-2">
                                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
-                                <Table
-                                    rows={ledger.entries.map((e) => ({
-                                        date: e.date,
-                                        kind: e.kind,
-                                        refNo: e.refNo || "—",
-                                        method: e.method || "—",
-                                        debit: e.effect === 1 ? inr(e.amount) : "—",
-                                        credit: e.effect === -1 ? inr(e.amount) : "—",
-                                        balance: inr(e.balance),
-                                    }))}
-                                />
+                                <LedgerStatementTable key={ledger.party._id} entries={ledger.entries} />
                             </div>
                         </div>
                     </div>

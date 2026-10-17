@@ -162,7 +162,7 @@ export const customerApi = {
   },
 
   // Experience sections (home / header pages)
-  getExperienceSections: (params) => getWithDedupe("/experience", params),
+  getExperienceSections: (params, options) => getWithDedupe("/experience", params, options),
 
   // Hero config (separate hero banners + categories per page; fallback to home)
   getHeroConfig: (params) =>

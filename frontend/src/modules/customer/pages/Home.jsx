@@ -169,6 +169,21 @@ const getHomePageDataCacheKey = (location) => {
 const getCachedHomePageData = (location) =>
   homePageDataCache.get(getHomePageDataCacheKey(location)) || null;
 
+const toCardProduct = (p) => ({ ...p, id: p._id, image: p.mainImage || p.image || "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400", price: p.salePrice || p.price, originalPrice: p.price, weight: p.weight || "1 unit", deliveryTime: p.deliveryTime || null });
+
+const locationParams = (location) =>
+  Number.isFinite(location?.latitude) && Number.isFinite(location?.longitude)
+    ? { lat: location.latitude, lng: location.longitude }
+    : {};
+
+// Product sections arrive with their products resolved server-side for the customer's location.
+const sectionsFromResponse = (res) => {
+  if (!res?.data?.success) return null;
+  const list = res.data.result || res.data.results;
+  if (!Array.isArray(list)) return [];
+  return list.map((s) => (Array.isArray(s.products) ? { ...s, products: s.products.map(toCardProduct) } : s));
+};
+
 const HomeSkeleton = ({ isFetchingLocation }) => (
   <div className="w-full max-w-[1920px] mx-auto px-4 md:px-8 lg:px-[50px] pt-3 animate-in fade-in duration-300">
     {isFetchingLocation && (
@@ -264,7 +279,6 @@ const Home = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedHeaderId, categories]);
   const [products, setProducts] = useState(() => cachedHomePageData?.products || []);
-  const productsRef = useRef(cachedHomePageData?.products || []);
   const [quickCategories, setQuickCategories] = useState(() => cachedHomePageData?.quickCategories || []);
   const [isLoading, setIsLoading] = useState(() => !cachedHomePageData);
   const [experienceSections, setExperienceSections] = useState(() => cachedHomePageData?.experienceSections || []);
@@ -278,10 +292,6 @@ const Home = () => {
   const [offerSections, setOfferSections] = useState(() => cachedHomePageData?.offerSections || []);
   const [noServiceData, setNoServiceData] = useState(null);
   const [hasFetchedOnce, setHasFetchedOnce] = useState(() => Boolean(cachedHomePageData));
-
-  useEffect(() => {
-    productsRef.current = products || [];
-  }, [products]);
 
   useEffect(() => {
     if (products.length === 0 && !isLoading && !isFetchingLocation && isLocationResolved) {
@@ -311,6 +321,19 @@ const Home = () => {
     if (persist && cacheKey) homePageDataCache.set(cacheKey, data);
   };
 
+  // Sections change from the admin panel, so a cached page still re-checks them.
+  const refreshHomeSections = async (cacheKey) => {
+    try {
+      const sections = sectionsFromResponse(
+        await customerApi.getExperienceSections({ pageType: "home", ...locationParams(currentLocation) }, { forceRefresh: true }),
+      );
+      if (!sections || getHomePageDataCacheKey(currentLocation) !== cacheKey) return;
+      setExperienceSections(sections);
+      const cached = homePageDataCache.get(cacheKey);
+      if (cached) homePageDataCache.set(cacheKey, { ...cached, experienceSections: sections });
+    } catch (e) {}
+  };
+
   const fetchData = async ({ forceRefresh = false } = {}) => {
     const cacheKey = getHomePageDataCacheKey(currentLocation);
     if (!forceRefresh) {
@@ -319,6 +342,7 @@ const Home = () => {
         applyHomePageData(cached, { cacheKey, persist: false });
         setIsLoading(false);
         setHasFetchedOnce(true);
+        refreshHomeSections(cacheKey);
         return;
       }
     }
@@ -333,7 +357,7 @@ const Home = () => {
       const [catRes, prodRes, expRes, sectionsRes] = await Promise.all([
         customerApi.getCategories(),
         hasValidLocation ? customerApi.getProducts(productParams) : Promise.resolve({ data: { success: true, result: { items: [] } } }),
-        customerApi.getExperienceSections({ pageType: "home" }).catch(() => null),
+        customerApi.getExperienceSections({ pageType: "home", ...locationParams(currentLocation) }).catch(() => null),
         hasValidLocation ? customerApi.getOfferSections({ lat: currentLocation.latitude, lng: currentLocation.longitude }).catch(() => ({ data: {} })) : Promise.resolve({ data: { results: [] } }),
       ]);
       const nextHomeData = {
@@ -371,27 +395,13 @@ const Home = () => {
       if (prodRes.data.success) {
         const rawResult = prodRes.data.result;
         const dbProds = Array.isArray(prodRes.data.results) ? prodRes.data.results : Array.isArray(rawResult?.items) ? rawResult.items : Array.isArray(rawResult) ? rawResult : [];
-        nextHomeData.products = dbProds.map((p) => ({ ...p, id: p._id, image: p.mainImage || p.image || "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400", price: p.salePrice || p.price, originalPrice: p.price, weight: p.weight || "1 unit", deliveryTime: p.deliveryTime || null }));
+        nextHomeData.products = dbProds.map(toCardProduct);
       }
-      if (expRes?.data?.success) nextHomeData.experienceSections = Array.isArray(expRes.data.result || expRes.data.results) ? (expRes.data.result || expRes.data.results) : [];
+      nextHomeData.experienceSections = sectionsFromResponse(expRes) || [];
       const sectionsList = sectionsRes?.data?.results || sectionsRes?.data?.result || sectionsRes?.data;
       nextHomeData.offerSections = Array.isArray(sectionsList) ? sectionsList : [];
       applyHomePageData(nextHomeData, { cacheKey });
     } catch (error) { console.error("Error:", error); } finally { setIsLoading(false); setHasFetchedOnce(true); }
-  };
-
-  const hydrateSelectedSectionProducts = async (sections = []) => {
-    const selectedProductIds = Array.from(new Set(sections.flatMap((s) => s?.displayType === "products" ? (s?.config?.products?.productIds || []) : []).map((id) => String(id || "").trim()).filter(Boolean)));
-    if (!selectedProductIds.length) return;
-    const existingIds = new Set(productsRef.current.map((p) => String(p?._id || p?.id || "").trim()));
-    const missingIds = selectedProductIds.filter((id) => !existingIds.has(id));
-    if (!missingIds.length) return;
-    try {
-      const locationParams = Number.isFinite(currentLocation?.latitude) ? { lat: currentLocation.latitude, lng: currentLocation.longitude } : undefined;
-      const missingResults = await Promise.allSettled(missingIds.map((id) => customerApi.getProductById(id, locationParams)));
-      const fetchedMissing = missingResults.filter((r) => r.status === "fulfilled").flatMap((r) => { const p = r.value?.data?.result || r.value?.data?.results; return Array.isArray(p) ? p : (p ? [p] : []); }).map((p) => ({ ...p, id: p._id, image: p.mainImage || p.image || "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400", price: p.salePrice || p.price, originalPrice: p.price, weight: p.weight || "1 unit", deliveryTime: p.deliveryTime || null }));
-      if (fetchedMissing.length) setProducts((prev) => { const merged = [...prev]; const mergedIds = new Set(merged.map((p) => String(p?._id || p?.id || "").trim())); fetchedMissing.forEach((p) => { const key = String(p?._id || p?.id || "").trim(); if (!mergedIds.has(key)) { merged.push(p); mergedIds.add(key); } }); return merged; });
-    } catch (e) {}
   };
 
   useEffect(() => { fetchData(); }, [currentLocation?.latitude, currentLocation?.longitude]);
@@ -399,18 +409,23 @@ const Home = () => {
   const heroConfigCache = useRef(heroConfigMemoryCache);
 
   useEffect(() => {
-    const fetchHeaderSections = async () => {
-      if (!activeCategory || activeCategory._id === "all") { setHeaderSections([]); return; }
-      const cacheKey = activeCategory._id;
-      if (headerSectionsCache.current[cacheKey]) { setHeaderSections(headerSectionsCache.current[cacheKey]); return; }
-      try {
-        const res = await customerApi.getExperienceSections({ pageType: "header", headerId: activeCategory._id });
-        if (res.data.success) { const sections = Array.isArray(res.data.result || res.data.results) ? (res.data.result || res.data.results) : []; headerSectionsCache.current[cacheKey] = sections; setHeaderSections(sections); await hydrateSelectedSectionProducts(sections); }
-        else setHeaderSections([]);
-      } catch (e) { setHeaderSections([]); }
-    };
-    fetchHeaderSections();
-  }, [activeCategory]);
+    if (!activeCategory || activeCategory._id === "all") { setHeaderSections([]); return undefined; }
+    let cancelled = false;
+    // Show the last copy for this header + location at once, then re-check (sections change from the admin panel).
+    const cacheKey = `${activeCategory._id}:${getHomePageDataCacheKey(currentLocation)}`;
+    const cached = headerSectionsCache.current[cacheKey];
+    setHeaderSections(cached || []);
+    customerApi
+      .getExperienceSections({ pageType: "header", headerId: activeCategory._id, ...locationParams(currentLocation) }, { forceRefresh: Boolean(cached) })
+      .then((res) => {
+        const sections = sectionsFromResponse(res);
+        if (cancelled || !sections) return;
+        headerSectionsCache.current[cacheKey] = sections;
+        setHeaderSections(sections);
+      })
+      .catch(() => { if (!cancelled && !cached) setHeaderSections([]); });
+    return () => { cancelled = true; };
+  }, [activeCategory, currentLocation?.latitude, currentLocation?.longitude]);
 
   useEffect(() => {
     const fetchHeroConfig = async () => {

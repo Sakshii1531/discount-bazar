@@ -25,7 +25,7 @@ import { emitNewOrderToSeller, emitProductStockUpdate } from "./orderSocketEmitt
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import { isLowStockAlertsEnabled } from "./lowStockAlertService.js";
-import { roundCurrency, purchaseBaseCost } from "../utils/money.js";
+import { roundCurrency, purchaseBaseCost, lineMrp } from "../utils/money.js";
 import { assertDayOpen } from "./businessTime.js";
 import PosCustomer from "../models/posCustomer.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
@@ -94,6 +94,7 @@ function buildItemsForPersistence(items) {
     name: item.productName,
     quantity: item.quantity,
     price: item.price,
+    mrp: item.mrp,
     variantSlot: item.variantSku || undefined,
     image: item.image || "",
     costPrice: item.costPrice,
@@ -251,7 +252,7 @@ function buildPosBreakdown({
 async function hydratePosItems({ sellerId, payloadItems, session = null }) {
   const productIds = payloadItems.map((item) => item.productId);
   const query = Product.find({ _id: { $in: productIds }, sellerId })
-    .select("_id name mainImage sellerId headerId purchaseCost gstPercent purchaseGstType variants.sku variants.purchaseCost");
+    .select("_id name mainImage sellerId headerId price mrp purchaseCost gstPercent purchaseGstType variants.sku variants.price variants.purchaseCost");
   if (session) query.session(session);
   const products = await query.lean();
   const productMap = new Map(products.map((p) => [String(p._id), p]));
@@ -268,6 +269,7 @@ async function hydratePosItems({ sellerId, payloadItems, session = null }) {
       productName: product.name,
       quantity: item.quantity,
       price: item.price,
+      mrp: lineMrp(product, item.variantSku, item.price),
       variantSku: item.variantSku || "",
       image: product.mainImage || "",
       // Cost snapshot excl. GST (product cost may be saved GST-inclusive)

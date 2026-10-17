@@ -41,6 +41,8 @@ const orderSchema = new mongoose.Schema(
           required: true,
         },
         variantSlot: String,
+        // Unit MRP at time of sale (POS bills print it next to the selling price)
+        mrp: { type: Number, default: undefined },
         image: String,
         // Snapshots at time of sale (POS) for GST + cost-price based P&L.
         costPrice: { type: Number, default: undefined },
