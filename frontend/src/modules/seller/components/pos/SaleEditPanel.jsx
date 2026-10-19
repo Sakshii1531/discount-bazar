@@ -28,8 +28,8 @@ const splitFromOrder = (order) => {
  * server keeps a before/after history. The server blocks the edit once the
  * business day is closed or the bill has returns.
  */
-const SaleEditPanel = ({ order, lines, onSaved }) => {
-    const [open, setOpen] = useState(false);
+const SaleEditPanel = ({ order, lines, onSaved, defaultOpen = false, onCancel }) => {
+    const [open, setOpen] = useState(defaultOpen);
     const [draft, setDraft] = useState([]);
     const [discount, setDiscount] = useState(0);
     const [method, setMethod] = useState(order.posPaymentMethod || "CASH");
@@ -102,7 +102,7 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
     const save = async () => {
         setSaving(true);
         try {
-            await posApi.editSale(order.orderId, {
+            const res = await posApi.editSale(order.orderId, {
                 items: kept.map((d) => ({ productId: d.product, variantSku: d.variantSlot || undefined, quantity: Number(d.quantity), price: Number(d.price) })),
                 posPaymentMethod: method,
                 posCustomerId: customerId || undefined,
@@ -113,8 +113,8 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
                 reason: reason.trim() || "Bill correction",
             });
             toast.success("Bill updated");
-            setOpen(false);
-            onSaved?.();
+            setOpen(defaultOpen);
+            onSaved?.(res?.data?.result?.order);
         } catch (e) {
             toast.error(e?.response?.data?.message || "Could not edit bill");
         } finally {
@@ -201,7 +201,7 @@ const SaleEditPanel = ({ order, lines, onSaved }) => {
             <input className={`${input} w-full`} placeholder="Reason for edit (optional, e.g. quantity adjustment)" value={reason} onChange={(e) => setReason(e.target.value)} />
             <div className="flex items-center gap-2">
                 <span className="text-xs font-bold">New total: ₹{total.toLocaleString("en-IN")}</span>
-                <button type="button" onClick={() => setOpen(false)} className="ml-auto text-xs font-bold text-slate-500">Cancel</button>
+                <button type="button" onClick={() => (onCancel ? onCancel() : setOpen(false))} className="ml-auto text-xs font-bold text-slate-500">Cancel</button>
                 <button type="button" disabled={saving || !kept.length || splitInvalid} onClick={save}
                     className="text-xs font-bold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
                     {saving ? "Saving…" : "Save changes"}

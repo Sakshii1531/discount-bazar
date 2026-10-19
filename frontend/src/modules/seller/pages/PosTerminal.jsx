@@ -17,6 +17,8 @@ import {
     ReturnsPanel,
     SalesHistory,
     OnlineOrdersPanel,
+    SaleEditPanel,
+    LastSaleCard,
 } from "../components/pos";
 import { formatAmount } from "@shared/utils/currency";
 import { downloadPosHeldBillsPDF } from "@/lib/posPdfExport";
@@ -47,6 +49,16 @@ const readHeld = (key) => {
         return Array.isArray(list) ? list : [];
     } catch {
         return [];
+    }
+};
+
+const readLastSale = (key) => {
+    try {
+        const raw = localStorage.getItem(key);
+        const order = raw ? JSON.parse(raw) : null;
+        return order && order.orderId ? order : null;
+    } catch {
+        return null;
     }
 };
 
@@ -110,6 +122,28 @@ const PosTerminal = () => {
             }
         },
         [heldKey],
+    );
+
+    // Last completed bill stays on the counter (and survives a reload) for quick reprint / edit.
+    const lastSaleKey = `pos:last:${user?._id || user?.id || "seller"}`;
+    const [lastSale, setLastSale] = useState(() => readLastSale(lastSaleKey));
+    const [reprintOrder, setReprintOrder] = useState(null);
+    const [editBill, setEditBill] = useState(null); // { order, lines, hasReturns }
+    const [isEditLoading, setIsEditLoading] = useState(false);
+    useEffect(() => {
+        setLastSale(readLastSale(lastSaleKey));
+    }, [lastSaleKey]);
+    const saveLastSale = useCallback(
+        (order) => {
+            setLastSale(order);
+            try {
+                if (order) localStorage.setItem(lastSaleKey, JSON.stringify(order));
+                else localStorage.removeItem(lastSaleKey);
+            } catch {
+                /* storage unavailable — last sale stays in memory for this session */
+            }
+        },
+        [lastSaleKey],
     );
 
     // Catalog is queried server-side with the current search/category, so the
@@ -485,6 +519,7 @@ const PosTerminal = () => {
             setIsCheckoutOpen(false);
             setSaleCount((n) => n + 1); // fresh checkout form for the next bill
             setCompletedOrder(order || null);
+            if (order) saveLastSale(order);
             toast.success("Sale recorded");
         } catch (error) {
             const status = error?.response?.status;
@@ -498,6 +533,34 @@ const PosTerminal = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    /* ---------- last sale: reprint / edit from the counter ---------- */
+    const handleEditLastSale = async () => {
+        if (!lastSale?.orderId) return;
+        setIsEditLoading(true);
+        try {
+            const res = await posApi.getOrderForReturn(lastSale.orderId);
+            const data = res?.data?.result;
+            if (!data?.order) throw new Error("Bill not found");
+            const lines = Array.isArray(data.items) ? data.items : [];
+            setEditBill({
+                order: data.order,
+                lines,
+                hasReturns: lines.some((l) => Number(l.returnedQuantity || 0) > 0),
+            });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Could not open the bill for editing");
+        } finally {
+            setIsEditLoading(false);
+        }
+    };
+
+    const handleLastSaleEdited = (updated) => {
+        if (updated) saveLastSale({ ...lastSale, ...updated });
+        setEditBill(null);
+        fetchCatalog(catalogParams); // edited quantities move stock
+        toast.info("Reprint the corrected bill from Last sale");
     };
 
     const packingQueue = useMemo(
@@ -540,26 +603,35 @@ const PosTerminal = () => {
 
                     {/* Desktop: pinned under the top bar (top-24) and capped to the space between it and the
                         layout's bottom padding, so the line list scrolls inside and totals + Checkout stay visible. */}
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col overflow-hidden">
-                        <CartPanel
-                            cart={cart}
-                            onUpdateQuantity={updateQuantity}
-                            onUpdatePrice={updatePrice}
-                            onRemove={removeLine}
-                            onCheckout={() => setIsCheckoutOpen(true)}
-                            subtotal={subtotal}
-                            taxPercent={taxPercent}
-                            taxMode={taxMode}
-                            taxValue={taxValue}
-                            onUpdateTax={handleUpdateTax}
-                            taxAmount={taxAmount}
-                            isTaxInclusive={isTaxInclusive}
-                            onToggleTaxInclusive={handleToggleTaxInclusive}
-                            totalWithTax={totalWithTax}
-                            onHold={handleHold}
-                            heldCount={heldBills.length}
-                            onShowHeld={() => setIsHeldOpen(true)}
+                    <div className="h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col gap-3 min-h-0">
+                        <LastSaleCard
+                            order={lastSale}
+                            onReprint={() => setReprintOrder(lastSale)}
+                            onEdit={handleEditLastSale}
+                            onDismiss={() => saveLastSale(null)}
+                            isEditLoading={isEditLoading}
                         />
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm min-h-0 flex flex-col overflow-hidden">
+                            <CartPanel
+                                cart={cart}
+                                onUpdateQuantity={updateQuantity}
+                                onUpdatePrice={updatePrice}
+                                onRemove={removeLine}
+                                onCheckout={() => setIsCheckoutOpen(true)}
+                                subtotal={subtotal}
+                                taxPercent={taxPercent}
+                                taxMode={taxMode}
+                                taxValue={taxValue}
+                                onUpdateTax={handleUpdateTax}
+                                taxAmount={taxAmount}
+                                isTaxInclusive={isTaxInclusive}
+                                onToggleTaxInclusive={handleToggleTaxInclusive}
+                                totalWithTax={totalWithTax}
+                                onHold={handleHold}
+                                heldCount={heldBills.length}
+                                onShowHeld={() => setIsHeldOpen(true)}
+                            />
+                        </div>
                     </div>
                 </div>
             ) : (
@@ -646,6 +718,38 @@ const PosTerminal = () => {
                     onClose={() => setCompletedOrder(null)}
                 />
             )}
+
+            {reprintOrder && (
+                <ReceiptPrint
+                    order={reprintOrder}
+                    shopName={user?.shopName || user?.name}
+                    seller={user}
+                    heading="Bill Copy"
+                    onClose={() => setReprintOrder(null)}
+                />
+            )}
+
+            <Modal
+                isOpen={!!editBill}
+                onClose={() => setEditBill(null)}
+                title={editBill ? `Edit bill #${editBill.order.orderId}` : "Edit bill"}
+                size="md"
+            >
+                {editBill &&
+                    (editBill.hasReturns ? (
+                        <p className="text-sm text-slate-600 py-4 text-center">
+                            This bill already has returns, so it can't be edited here. Use Returns to adjust it.
+                        </p>
+                    ) : (
+                        <SaleEditPanel
+                            order={editBill.order}
+                            lines={editBill.lines}
+                            defaultOpen
+                            onCancel={() => setEditBill(null)}
+                            onSaved={handleLastSaleEdited}
+                        />
+                    ))}
+            </Modal>
         </div>
     );
 };
