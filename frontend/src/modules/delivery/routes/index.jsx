@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DeliveryLayout from "../layout/DeliveryLayout";
+import { ActiveDeliveriesProvider } from "../context/ActiveDeliveriesContext";
 import DeliveryScrollToTop from "../components/DeliveryScrollToTop";
 import { setActiveRole, ROLES } from "@core/auth/activeRoleStore";
 import Splash from "../pages/Splash";
@@ -35,7 +36,13 @@ const DeliveryRoutes = () => {
     <>
       <DeliveryScrollToTop />
       <Routes>
-        <Route element={<DeliveryLayout />}>
+        <Route
+          element={
+            <ActiveDeliveriesProvider>
+              <DeliveryLayout />
+            </ActiveDeliveriesProvider>
+          }
+        >
           <Route path="splash" element={<Splash />} />
 
           <Route path="auth" element={<DeliveryAuth />} />

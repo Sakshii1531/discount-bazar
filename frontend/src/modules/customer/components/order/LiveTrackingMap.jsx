@@ -558,14 +558,8 @@ const LiveTrackingMap = memo(({
                   Vaccinated
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <a href={`tel:${riderPhone || ''}`} className="h-8 w-8 rounded-full bg-brand-50 flex items-center justify-center text-primary hover:bg-brand-100 transition-colors">
-                  <Phone size={14} />
-                </a>
-                <a href={`sms:${riderPhone || ''}`} className="h-8 w-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 hover:bg-brand-100 transition-colors">
-                  <MessageSquare size={14} />
-                </a>
-              </div>
+              {/* Contact lives in the order's delivery-partner card, which
+                  checks the live assignment before every chat or call. */}
             </div>
           </motion.div>
         </div>

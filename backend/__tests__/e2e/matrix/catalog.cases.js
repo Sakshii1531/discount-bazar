@@ -523,4 +523,39 @@ export default [
   },
   { route: "DELETE /api/public/faqs/:id", as: "admin", params: (ctx) => ({ id: ctx.faqId2 }) },
   { route: "DELETE /api/admin/faqs/:id", as: "admin", params: (ctx) => ({ id: ctx.faqId }) },
+
+  // ── Brands (admin management + public active list) ───────────────────────
+  { route: "POST /api/admin/brands", name: "sellers are denied", as: "seller", body: { name: "Amul" }, status: 403 },
+  { route: "POST /api/admin/brands", name: "a name is required", as: "admin", body: {}, status: 400 },
+  {
+    route: "POST /api/admin/brands",
+    as: "admin",
+    body: { name: "Amul" },
+    status: 201,
+    check: (res, ctx) => {
+      expect(res.body.result).toEqual(expect.objectContaining({ name: "Amul" }));
+      ctx.brandId = res.body.result._id;
+    },
+  },
+  { route: "POST /api/admin/brands", name: "duplicate names are refused", as: "admin", body: { name: "Amul" }, status: 400 },
+  {
+    route: "GET /api/admin/brands",
+    as: "admin",
+    check: (res) => expect(res.body.result.items.map((b) => b.name)).toContain("Amul"),
+  },
+  {
+    route: "PUT /api/admin/brands/:id",
+    as: "admin",
+    params: (ctx) => ({ id: ctx.brandId }),
+    body: { name: "Amul Dairy" },
+    check: (res) => expect(res.body.result.name).toBe("Amul Dairy"),
+  },
+  { route: "PUT /api/admin/brands/:id", name: "unknown brand", as: "admin", params: { id: OID }, body: { name: "X" }, status: 404 },
+  {
+    route: "GET /api/brands",
+    optionalAuth: true,
+    check: (res) => expect(listOf(res).map((b) => b.name)).toContain("Amul Dairy"),
+  },
+  { route: "DELETE /api/admin/brands/:id", as: "admin", params: (ctx) => ({ id: ctx.brandId }) },
+  { route: "DELETE /api/admin/brands/:id", name: "already deleted", as: "admin", params: (ctx) => ({ id: ctx.brandId }), status: 404 },
 ];

@@ -1,3 +1,4 @@
+import { getRiderActiveOrders } from "../services/delivery/riderActiveOrdersService.js";
 import Order from "../models/order.js";
 import { orderMatchQueryFromRouteParam } from "../utils/orderLookup.js";
 import Transaction from "../models/transaction.js";
@@ -517,3 +518,17 @@ export const updateDeliveryLocation = async (req, res) => {
  * persistence, delivery:otp:validated socket fan-out) now live in
  * app/services/orderWorkflowService.js.
  */
+
+/* ===============================
+   Active assignments (resume / restore)
+================================ */
+export const getMyActiveOrders = async (req, res) => {
+  try {
+    const result = await getRiderActiveOrders(req.user.id);
+    res.setHeader("Cache-Control", "no-store");
+    return handleResponse(res, 200, "Active orders", result);
+  } catch (error) {
+    return handleResponse(res, 500, error.message);
+  }
+};
+

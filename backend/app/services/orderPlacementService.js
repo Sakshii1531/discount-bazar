@@ -49,6 +49,13 @@ import { emitNewOrderToSeller, emitProductStockUpdate } from "./orderSocketEmitt
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import * as logger from "./logger.js";
 import { getOrCreateFinanceSettings } from "./finance/financeSettingsService.js";
+import { assertMinimumOrderMet, MIN_ORDER_ERROR_CODE } from "./minimumOrderService.js";
+import {
+  MAX_TRANSACTION_ATTEMPTS,
+  asRetryLaterError,
+  isTransientTransactionError,
+  transactionRetryDelay,
+} from "../utils/transactionRetry.js";
 
 /** Rejects a payment method the admin has switched off (Fees & Charges). */
 export async function assertPaymentModeEnabled(paymentMode) {
@@ -324,10 +331,13 @@ export async function placeOrderAtomic({
   payload,
   idempotencyKey = null,
   retryCount = 0,
+  transientAttempt = 1,
 }) {
   const normalizedPayload = {
     ...(payload || {}),
     paymentMode: normalizePaymentMode(payload?.paymentMode),
+    // Kept as a flag because paymentMode itself is normalised to COD/ONLINE.
+    ...(isFullyWalletPayload(payload) || payload?.walletOnly === true ? { walletOnly: true } : {}),
   };
 
   if (idempotencyKey) {
@@ -381,7 +391,7 @@ export async function placeOrderAtomic({
   }
 
   // Wallet-only orders (fully covered) don't use either method.
-  if (!isFullyWalletPayload(normalizedPayload)) {
+  if (!normalizedPayload.walletOnly) {
     await assertPaymentModeEnabled(normalizePaymentMode(normalizedPayload.paymentMode));
   }
 
@@ -479,6 +489,10 @@ export async function placeOrderAtomic({
       session,
     });
 
+    // Recomputed from server prices/stock/coupon on every attempt, so stale
+    // carts, price changes and direct API calls can't slip under the minimum.
+    assertMinimumOrderMet(pricingSnapshot.minimumOrder);
+
     const checkoutGroupId = await generateUniqueCheckoutGroupId({ session });
     const checkoutReservation = computeStockReservationWindow(paymentMode);
     const checkoutGroup = new CheckoutGroup({
@@ -562,6 +576,13 @@ export async function placeOrderAtomic({
         proportionateWallet > 0 &&
         (proportionateWallet >= Number(entry.breakdown.grandTotal || 0) ||
           Number(entry.breakdown.payableAmount || entry.breakdown.grandTotal || 0) === 0);
+      // Wallet-only orders skip the payment-method switches, so they must
+      // really be fully paid by the wallet (no sneaking in a COD order).
+      if (normalizedPayload.walletOnly && !isOrderFullyWalletCovered) {
+        const err = new Error("Your wallet balance does not cover this order. Please choose another payment method.");
+        err.statusCode = 400;
+        throw err;
+      }
       const effectivePaymentMode = isOrderFullyWalletCovered ? "WALLET" : paymentMode;
 
       const order = new Order({
@@ -867,8 +888,27 @@ export async function placeOrderAtomic({
       await session.abortTransaction();
     }
 
+    // Transient conflict: nothing was written, so place the order again.
+    if (isTransientTransactionError(error)) {
+      if (idempotencyKey) await releaseIdempotencyLock(idempotencyKey);
+      if (transientAttempt < MAX_TRANSACTION_ATTEMPTS) {
+        session.endSession();
+        await transactionRetryDelay(transientAttempt);
+        return placeOrderAtomic({
+          customerId,
+          payload: normalizedPayload,
+          idempotencyKey,
+          retryCount,
+          transientAttempt: transientAttempt + 1,
+        });
+      }
+      throw asRetryLaterError(error);
+    }
+
     if (idempotencyKey) {
-      if (isRetryableError(error)) {
+      // A below-minimum rejection is fixed by editing the cart, so the same
+      // key must be usable again rather than replaying the cached error.
+      if (isRetryableError(error) || error?.code === MIN_ORDER_ERROR_CODE) {
         await releaseIdempotencyLock(idempotencyKey);
       } else {
         await storeIdempotencyError(idempotencyKey, error, normalizedPayload);
@@ -894,6 +934,7 @@ export async function placeOrderAtomic({
           payload: normalizedPayload,
           idempotencyKey,
           retryCount: retryCount + 1,
+          transientAttempt,
         });
       }
     }

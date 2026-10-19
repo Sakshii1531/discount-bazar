@@ -14,6 +14,7 @@ import { posApi } from "../../services/posApi";
 import ReceiptPrint from "./ReceiptPrint";
 import { formatAmount } from "@shared/utils/currency";
 import { downloadPosSalesReportPDF, downloadPosBillPDF } from "@/lib/posPdfExport";
+import { posBillCustomer } from "@/lib/posCustomer";
 
 const METHOD_LABELS = { CASH: "Cash", CARD: "Card", QR: "QR / UPI", CREDIT: "Credit", OTHER: "Other", SPLIT: "Split" };
 const inr = (n) => `${Number(n || 0) < 0 ? "-" : ""}₹${formatAmount(Math.abs(Number(n || 0)))}`;
@@ -176,8 +177,8 @@ const SalesHistory = ({ shopName, seller }) => {
                                             {new Date(o.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
                                         </td>
                                         <td className="px-4 py-2.5 text-slate-700">
-                                            {o.walkInCustomer?.name || "Walk-in"}
-                                            {o.walkInCustomer?.phone ? ` · ${o.walkInCustomer.phone}` : ""}
+                                            {posBillCustomer(o).name}
+                                            {posBillCustomer(o).phone ? ` · ${posBillCustomer(o).phone}` : ""}
                                         </td>
                                         <td className="px-4 py-2.5 text-slate-700">
                                             {METHOD_LABELS[o.posPaymentMethod] || o.posPaymentMethod || "-"}

@@ -42,11 +42,33 @@ function normalizeDeliveryId(deliveryId) {
 }
 
 /**
+ * Every order status emit funnels through here, so this is the one place that
+ * keeps chat access in step with the order: revoke a reassigned rider's
+ * thread, close channels whose stage ended, audit, and ping the parties to
+ * refetch. Deferred and best-effort — access is enforced from the live order
+ * on every request regardless, so a failed sync never widens access.
+ */
+function scheduleCommunicationSync(orderId) {
+  if (!orderId || process.env.NODE_ENV === "test") return;
+  setImmediate(async () => {
+    try {
+      const { syncCommunicationState } = await import(
+        "./communication/communicationService.js"
+      );
+      await syncCommunicationState(String(orderId));
+    } catch {
+      /* best-effort; see above */
+    }
+  });
+}
+
+/**
  * Emit workflow status to the order room (clients that joined `join_order`)
  * and optionally to the customer’s personal room so the app updates even before
  * opening order details (e.g. checkout success overlay).
  */
 export function emitOrderStatusUpdate(orderId, payload, customerId) {
+  scheduleCommunicationSync(orderId);
   const s = getIo();
   if (!s) return;
   const body = {

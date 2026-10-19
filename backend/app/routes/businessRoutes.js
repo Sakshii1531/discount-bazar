@@ -104,6 +104,7 @@ const parseRange = (q, tz) => ({
 });
 router.get("/purchases", wrap(async (req) => ({ data: await svc.listPurchaseBills(sid(req), parseRange(req.query, await getSellerTz(sid(req)))) })));
 router.post("/purchases", validate(billSchema), wrap(async (req) => ({ status: 201, message: "Purchase bill saved", data: await svc.createPurchaseBill(sid(req), req.body) })));
+router.get("/purchases/:id", wrap(async (req) => ({ data: await svc.getPurchaseBill(sid(req), req.params.id) })));
 router.put("/purchases/:id", validate(billSchema), wrap(async (req) => ({ message: "Purchase bill updated", data: await svc.updatePurchaseBill(sid(req), req.params.id, req.body) })));
 router.post("/purchases/:id/confirm", wrap(async (req) => ({ message: "Purchase confirmed, stock updated", data: await svc.confirmPurchaseBill(sid(req), req.params.id) })));
 router.post("/purchases/:id/cancel", wrap(async (req) => ({ message: "Purchase cancelled", data: await svc.cancelPurchaseBill(sid(req), req.params.id) })));

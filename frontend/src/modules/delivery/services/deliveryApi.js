@@ -14,6 +14,8 @@ export const deliveryApi = {
   getWalletSummary: () => axiosInstance.get("/delivery/wallet/summary"),
   getOrderHistory: (params, config = {}) =>
     axiosInstance.get("/delivery/order-history", { params, ...config }),
+  // Server-authoritative list of the rider's in-progress assignments.
+  getActiveOrders: (config = {}) => axiosInstance.get("/delivery/active-orders", config),
   getAvailableOrders: (params = {}, config = {}) =>
     axiosInstance.get("/orders/available", { params, ...config }),
   acceptOrder: (orderId, idempotencyKey) =>

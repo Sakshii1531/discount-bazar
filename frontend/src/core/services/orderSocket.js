@@ -355,3 +355,29 @@ export function onDeliveryApproved(getToken, handler, deliveryId, deliveryPhone)
   };
 }
 
+/**
+ * Generic subscription for the order-communication events
+ * (`chat:message`, `chat:receipt`, `communication:state`,
+ * `communication:revoked`). Returns an unsubscribe function.
+ */
+export function onSocketEvent(getToken, event, handler) {
+  const s = getOrderSocket(getToken);
+  if (!s || typeof handler !== "function") return () => {};
+  s.on(event, handler);
+  return () => s.off(event, handler);
+}
+
+/** Fires after every (re)connect — callers resync instead of trusting the socket. */
+export function onSocketConnect(getToken, handler) {
+  const s = getOrderSocket(getToken);
+  if (!s || typeof handler !== "function") return () => {};
+  s.on("connect", handler);
+  return () => s.off("connect", handler);
+}
+
+export function emitSocket(getToken, event, payload, ack) {
+  const s = getOrderSocket(getToken);
+  if (!s) return;
+  if (typeof ack === "function") s.emit(event, payload, ack);
+  else s.emit(event, payload);
+}

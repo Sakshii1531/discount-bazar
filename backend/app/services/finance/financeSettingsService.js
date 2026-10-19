@@ -17,6 +17,8 @@ const DEFAULT_FINANCE_SETTINGS = {
   zeroDeliveryTimeMessage: "Instant Delivery",
   handlingFeeStrategy: HANDLING_FEE_STRATEGY.HIGHEST_CATEGORY_FEE,
   globalTaxRate: 0,
+  minOrderValue: 99,
+  minOrderValueAfterCoupon: true,
   codEnabled: true,
   onlineEnabled: true,
   returnDeliveryCommission: 0,
@@ -63,6 +65,9 @@ export function normalizeFinanceSettings(raw = {}) {
   const handlingFeeStrategy =
     raw.handlingFeeStrategy || DEFAULT_FINANCE_SETTINGS.handlingFeeStrategy;
 
+  const rawMinOrder = Number(raw.minOrderValue ?? DEFAULT_FINANCE_SETTINGS.minOrderValue);
+  const minOrderValue = Number.isFinite(rawMinOrder) && rawMinOrder > 0 ? roundCurrency(rawMinOrder) : 0;
+
   const returnDeliveryCommission = roundCurrency(
     raw.returnDeliveryCommission ?? DEFAULT_FINANCE_SETTINGS.returnDeliveryCommission,
   );
@@ -84,6 +89,8 @@ export function normalizeFinanceSettings(raw = {}) {
     zeroDeliveryTimeMessage,
     handlingFeeStrategy,
     globalTaxRate: Number.isFinite(Number(raw.globalTaxRate)) ? Math.max(Number(raw.globalTaxRate), 0) : 0,
+    minOrderValue,
+    minOrderValueAfterCoupon: raw.minOrderValueAfterCoupon ?? DEFAULT_FINANCE_SETTINGS.minOrderValueAfterCoupon,
     codEnabled: raw.codEnabled ?? DEFAULT_FINANCE_SETTINGS.codEnabled,
     onlineEnabled: raw.onlineEnabled ?? DEFAULT_FINANCE_SETTINGS.onlineEnabled,
     returnDeliveryCommission,

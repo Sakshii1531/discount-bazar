@@ -77,6 +77,7 @@ const OrderDetail = React.lazy(() => import("../pages/OrderDetail"));
 const Returns = React.lazy(() => import("../pages/Returns"));
 const SellerDetail = React.lazy(() => import("../pages/SellerDetail"));
 const SupportTickets = React.lazy(() => import("../pages/SupportTickets"));
+const OrderCommunications = React.lazy(() => import("../pages/OrderCommunications"));
 const ReviewModeration = React.lazy(() => import("../pages/ReviewModeration"));
 const FleetTracking = React.lazy(() => import("../pages/FleetTracking"));
 const CouponManagement = React.lazy(() => import("../pages/CouponManagement"));
@@ -134,6 +135,7 @@ const navItems = [
     color: "emerald",
     children: [
       { label: "Help Tickets", path: "/admin/support-tickets" },
+      { label: "Order Communications", path: "/admin/order-communications" },
       { label: "Review Content", path: "/admin/moderation" },
     ],
   },
@@ -302,6 +304,7 @@ const AdminRoutes = () => {
         <Route path="/sellers/active" element={<ActiveSellers />} />
         <Route path="/sellers/active/:id" element={<SellerDetail />} />
         <Route path="/support-tickets" element={<SupportTickets />} />
+        <Route path="/order-communications" element={<OrderCommunications />} />
         <Route path="/moderation" element={<ReviewModeration />} />
         <Route path="/experience-studio" element={<ContentManager />} />
         <Route path="/hero-categories" element={<HeroCategoriesPerPage />} />

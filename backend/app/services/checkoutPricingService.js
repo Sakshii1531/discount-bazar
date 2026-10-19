@@ -14,6 +14,7 @@ import {
 } from "./finance/pricingService.js";
 import { computeOrderDiscount } from "./finance/couponService.js";
 import { getOrCreateFinanceSettings } from "./finance/financeSettingsService.js";
+import { evaluateMinimumOrder, worstMinimumOrderStatus } from "./minimumOrderService.js";
 
 function normalizeLocation(location = null) {
   const lat = Number(location?.lat);
@@ -503,9 +504,18 @@ export async function buildCheckoutPricingSnapshot({
       deliverySettings: effectiveSettings,
       session,
     });
+    // Minimum order is checked per seller: stores are never combined.
+    // Only a coupon's merchandise discount counts (free delivery does not).
+    const minimumOrder = evaluateMinimumOrder({
+      minOrderValue: effectiveSettings?.minOrderValue,
+      merchandiseSubtotal: sellerSubtotalAmount,
+      couponDiscount: sellerDiscount,
+      includeCouponDiscount: effectiveSettings?.minOrderValueAfterCoupon !== false,
+    });
     sellerBreakdownEntries.push({
       sellerId,
       distanceKm,
+      minimumOrder,
       items: sellerItems,
       breakdown: {
         ...breakdown,
@@ -560,6 +570,8 @@ export async function buildCheckoutPricingSnapshot({
     // deterministically against the rule that was in effect.
     couponSnapshot: resolvedCouponSnapshot,
     coupon: resolvedCoupon,
+    // Seller cart furthest from the admin-configured minimum order value.
+    minimumOrder: worstMinimumOrderStatus(sellerBreakdownEntries.map((entry) => entry.minimumOrder)),
     freeDeliveryApplied: applyFreeDelivery,
   };
 }

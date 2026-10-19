@@ -6,9 +6,13 @@
 import * as fx from "./fixtures.js";
 import { bearer } from "./testApp.js";
 import Customer from "../../../app/models/customer.js";
+import Setting from "../../../app/models/setting.js";
 
-export async function seedWorld() {
+// The fixture cart (₹45 bread / ₹55 milk) is below the live ₹99 minimum
+// order; suites not about that rule seed it off. See api-minimum-order.
+export async function seedWorld({ minOrderValue = 0 } = {}) {
   await fx.ensureIndexes();
+  await Setting.updateOne({}, { $set: { minOrderValue } }, { upsert: true, setDefaultsOnInsert: true });
   const admin = await fx.createAdmin({ name: "Root Admin" });
   const seller = await fx.createSeller({ name: "Main Seller", shopName: "Main Mart" });
   const otherSeller = await fx.createSeller({ name: "Other Seller", shopName: "Other Mart" });

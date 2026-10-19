@@ -26,6 +26,16 @@ const preferenceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Order chat (customer/seller ↔ rider). Turning these off never blocks
+    // the message itself — it stays on the server for the next app open.
+    chatMessages: {
+      type: Boolean,
+      default: true,
+    },
+    chatPreview: {
+      type: Boolean,
+      default: true,
+    },
     pushNotifications: {
       type: Boolean,
       default: true,

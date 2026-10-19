@@ -60,6 +60,8 @@ import { computeReturnWindowForOrder } from "../utils/returnWindow.js";
 import logger from "../services/logger.js";
 import { validateBody as validateWithJoi } from "../middleware/validate.js";
 import OrderReturnService from "../services/order/orderReturnService.js";
+import { sellerMarkReady } from "../services/communication/communicationService.js";
+import { assertRiderCanTakeOrder } from "../services/delivery/riderActiveOrdersService.js";
 
 function normalizePaymentMode(value) {
   const raw = String(value || "").trim().toUpperCase();
@@ -211,7 +213,7 @@ export const placeOrder = async (req, res) => {
       correlationId: req.correlationId,
       error,
     });
-    return handleResponse(res, error.statusCode || 500, error.message);
+    return handleResponse(res, error.statusCode || 500, error.message, error.details);
   }
 };
 /* ===============================
@@ -436,6 +438,37 @@ export const updateOrderStatus = async (req, res) => {
           });
         }
       }
+      if (status === "packed") {
+        // "Packed" on a v2 order == Ready for Pickup. It is validated and
+        // idempotent, notifies the assigned rider (or is held until one is
+        // assigned), and never touches workflowStatus — previously this fell
+        // through to workflowFromLegacyStatus("packed") and could move an
+        // order without a rider to DELIVERY_ASSIGNED.
+        try {
+          const ready = await sellerMarkReady({ id: userId, role }, canonicalOrderId);
+          await Order.updateOne(
+            { _id: order._id, status: "confirmed" },
+            { $set: { status: "packed", orderStatus: "packed" } },
+          );
+          if (!ready.alreadyReady) {
+            emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_PACKED, {
+              orderId: canonicalOrderId,
+              customerId: order.customer,
+              userId: order.customer,
+              sellerId: order.seller,
+            });
+          }
+          emitOrderStatusUpdate(
+            canonicalOrderId,
+            { workflowStatus: order.workflowStatus, status: "packed", sellerReadyAt: ready.sellerReadyAt },
+            order.customer,
+          );
+          const refreshed = await Order.findById(order._id);
+          return handleResponse(res, 200, "Order marked ready for pickup", refreshed);
+        } catch (e) {
+          return handleResponse(res, e.statusCode || 500, e.message);
+        }
+      }
       if (status === "cancelled") {
         try {
           const updated = await sellerRejectAtomic(userId, canonicalOrderId);
@@ -513,7 +546,25 @@ export const updateOrderStatus = async (req, res) => {
         order.workflowStatus = workflowFromLegacyStatus(status);
       }
     }
-    if (deliveryBoyId) order.deliveryBoy = deliveryBoyId;
+    // Rider (re)assignment is an operations action. A change bumps
+    // assignmentVersion so communication access moves to the new rider and
+    // the previous rider's conversation is revoked (see emitOrderStatusUpdate).
+    let riderChanged = false;
+    if (deliveryBoyId) {
+      if (!isAdmin) {
+        return handleResponse(
+          res,
+          403,
+          "Only operations can assign or reassign a delivery partner.",
+        );
+      }
+      if (String(order.deliveryBoy || "") !== String(deliveryBoyId)) {
+        order.deliveryBoy = deliveryBoyId;
+        order.assignmentVersion = (order.assignmentVersion || 0) + 1;
+        order.assignedAt = new Date();
+        riderChanged = true;
+      }
+    }
 
     // Legacy orders: keep rider UI step in sync with status (delivery app refresh-safe)
     if (
@@ -655,7 +706,7 @@ export const updateOrderStatus = async (req, res) => {
 
     // Emit real-time socket event so connected clients (customer, delivery, admin)
     // update their UI immediately without requiring a manual page refresh.
-    if (status) {
+    if (status || riderChanged) {
       emitOrderStatusUpdate(
         canonicalOrderId,
         { workflowStatus: order.workflowStatus, status: order.status },
@@ -931,6 +982,13 @@ export const acceptReturnPickup = async (req, res) => {
     }
 
     if (!order.returnDeliveryBoy) {
+      if (role === "delivery") {
+        try {
+          await assertRiderCanTakeOrder(userId, order.orderId);
+        } catch (e) {
+          return handleResponse(res, e.statusCode || 409, e.message, { code: e.code });
+        }
+      }
       order.returnDeliveryBoy = userId;
       order.returnStatus = "return_pickup_assigned";
       const acceptedAttempt = order.returnSearchMeta?.attempt || 1;

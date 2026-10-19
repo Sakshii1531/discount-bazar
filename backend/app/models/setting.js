@@ -172,6 +172,18 @@ const settingSchema = new mongoose.Schema(
             enum: ALL_HANDLING_FEE_STRATEGIES,
             default: "highest_category_fee",
         },
+        // Minimum eligible merchandise subtotal (after product + coupon
+        // discounts, before delivery/fees/tax) for a customer order.
+        minOrderValue: {
+            type: Number,
+            default: 99,
+            min: 0,
+        },
+        // When true, a coupon's merchandise discount lowers the eligible subtotal.
+        minOrderValueAfterCoupon: {
+            type: Boolean,
+            default: true,
+        },
         globalTaxRate: {
             type: Number,
             default: 0,
@@ -214,6 +226,18 @@ const settingSchema = new mongoose.Schema(
                 type: Boolean,
                 default: false,
             },
+        },
+
+        // Order communication (customer/seller ↔ rider chat + native calls).
+        // Unset fields fall back to env defaults in constants/orderCommunication.js.
+        communication: {
+            chatEnabled: Boolean,
+            callEnabled: Boolean,
+            messageMaxLength: Number,
+            pushPreviewEnabled: Boolean,
+            riderAssignmentDelayMinutes: Number,
+            pickupDelayEscalationMinutes: Number,
+            messageRetentionDays: Number,
         },
     },
     {

@@ -297,11 +297,15 @@ export function clearOnLogout({
     if (normalizedRole === 'delivery' || clearLastLocation) {
         rawRemove(STORAGE_KEYS.DELIVERY_LAST_LOCATION, { storage: 'local' });
         rawRemove(STORAGE_KEYS.DELIVERY_HANDLED_INCOMING, { storage: 'session' });
+        rawRemove(STORAGE_KEYS.DELIVERY_ACTIVE_ORDERS, { storage: 'local' });
     }
 
     if (clearLastLocation) {
         rawRemove(STORAGE_KEYS.LOCATION, { storage: 'local' });
     }
+
+    // Unsent order-chat drafts must never surface for the next account.
+    swallow(() => clearByPrefix(KEY_PREFIXES.ORDER_CHAT_OUTBOX, { storage: 'session' }));
 
     swallow(() => rawRemove(STORAGE_KEYS.FAQ_CACHE, { storage: 'session' }));
     swallow(() => rawRemove(STORAGE_KEYS.EXPERIENCE_RETURN, { storage: 'session' }));

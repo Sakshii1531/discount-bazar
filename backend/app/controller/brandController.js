@@ -19,6 +19,8 @@ function activeBrandsCacheKey() {
 async function invalidateBrandCaches({ productsChanged = false } = {}) {
   try {
     await invalidate(buildKey("catalog", "brands", "*"));
+    // Brand showcase sections show brand names/logos.
+    await invalidate("cache:experience:public:*");
     if (productsChanged) {
       await invalidate(buildKey("catalog", "productList", "*"));
       await invalidate(buildKey("catalog", "product", "*"));

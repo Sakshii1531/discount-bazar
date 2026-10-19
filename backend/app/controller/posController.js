@@ -128,7 +128,9 @@ export const getPosSales = async (req, res) => {
     }
 
     const [items, total] = await Promise.all([
-      Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      // posCustomer comes back as { _id, name, phone } so bills linked to a
+      // ledger customer show their name rather than "Walk-in".
+      Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("posCustomer", "name phone").lean(),
       Order.countDocuments(query),
     ]);
 

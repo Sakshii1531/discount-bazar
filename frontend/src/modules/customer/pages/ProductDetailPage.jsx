@@ -11,7 +11,6 @@ import { useLocation as useAppLocation } from '../context/LocationContext';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { useSettings } from '@core/context/SettingsContext';
 import Lottie from 'lottie-react';
-import { getProductDeliveryFeeLabel } from "../utils/deliveryLabels";
 import { getDisplayPricing, getUnitPriceLabel } from "../utils/productPricing";
 import { brandPath, productPath } from "../utils/catalogLinks";
 import ProductRecommendations from "../components/shared/ProductRecommendations";
@@ -322,7 +321,6 @@ const ProductDetailPage = () => {
     const discountPercentage = pricing.discountPercent;
     const packLabel = selectedVariant?.name || product.weight || '';
     const unitPriceLabel = getUnitPriceLabel(effectivePrice, packLabel);
-    const deliveryFeeLabel = getProductDeliveryFeeLabel(product);
     const ratingAverage = ratingSummary.count > 0 ? Number(ratingSummary.average) : Number(product.ratingAverage) || 0;
     const ratingCount = ratingSummary.count > 0 ? ratingSummary.count : Number(product.ratingCount) || 0;
     const brandName = String(product.brand || '').trim();
@@ -623,9 +621,6 @@ const ProductDetailPage = () => {
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p>
                                             <p className="text-xs sm:text-sm font-black text-slate-800 truncate" data-testid="product-delivery-time">{product.deliveryTime}</p>
-                                            {deliveryFeeLabel && (
-                                                <p className="text-[10px] font-bold text-primary truncate" data-testid="product-delivery-fee">{deliveryFeeLabel}</p>
-                                            )}
                                         </div>
                                     )}
                                     {brandName && (
@@ -687,7 +682,7 @@ const ProductDetailPage = () => {
                                 {product.deliveryTime && (
                                     <div className="flex items-center gap-1 text-xs font-bold text-slate-400">
                                         <Clock size={15} />
-                                        <span>{`Delivery: ${product.deliveryTime}`}{deliveryFeeLabel ? ` · ${deliveryFeeLabel}` : ''}</span>
+                                        <span>{`Delivery: ${product.deliveryTime}`}</span>
                                     </div>
                                 )}
                             </div>

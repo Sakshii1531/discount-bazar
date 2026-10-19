@@ -75,6 +75,18 @@ const CheckoutModal = ({
     const [newCustomerPhone, setNewCustomerPhone] = useState("");
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
 
+    // Picking a ledger customer fills Name/Phone so the bill carries their
+    // details. Fields the cashier typed themselves are left alone; fields
+    // filled from the previously picked customer are swapped (or cleared).
+    const handleSelectCustomer = (id) => {
+        const prev = customers.find((c) => c._id === posCustomerId);
+        const next = customers.find((c) => c._id === id);
+        const wasAutoFilled = (value, prevValue) => !value.trim() || (prev && value.trim() === String(prevValue || "").trim());
+        if (wasAutoFilled(walkInName, prev?.name)) setWalkInName(next?.name || "");
+        if (wasAutoFilled(walkInPhone, prev?.phone)) setWalkInPhone(next?.phone || "");
+        setPosCustomerId(id);
+    };
+
     const handleOpenAddCustomer = () => {
         setNewCustomerName(walkInName.trim() || "");
         setNewCustomerPhone(walkInPhone.trim() || "");
@@ -498,7 +510,7 @@ const CheckoutModal = ({
                             <div className={paymentMethod === "CREDIT" ? "grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2" : ""}>
                                 <select
                                     value={posCustomerId}
-                                    onChange={(e) => setPosCustomerId(e.target.value)}
+                                    onChange={(e) => handleSelectCustomer(e.target.value)}
                                     className={cn(
                                         "w-full px-3 py-2 rounded-xl border text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-primary/20 transition-colors",
                                         ledgerRequired && !posCustomerId

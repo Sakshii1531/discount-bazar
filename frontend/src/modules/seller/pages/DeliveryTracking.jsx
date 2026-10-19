@@ -19,6 +19,7 @@ import { MagicCard } from "@/components/ui/magic-card";
 import { sellerApi } from "../services/sellerApi";
 import { useToast } from "@shared/components/ui/Toast";
 import { Loader2 } from "lucide-react";
+import { CallContactButton, CHANNELS } from "@shared/communication";
 import Pagination from "@shared/components/ui/Pagination";
 
 const DeliveryTracking = () => {
@@ -75,15 +76,14 @@ const DeliveryTracking = () => {
             id: order._id,
             orderId: order.orderId,
             status: uiStatus,
+            assigned: Boolean(order.deliveryBoy),
             deliveryBoy: order.deliveryBoy ? {
               name: order.deliveryBoy.name,
-              phone: order.deliveryBoy.phone,
               avatar: order.deliveryBoy.name?.charAt(0) || "?",
               image: order.deliveryBoy.image || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop",
               rating: order.deliveryBoy.rating || 4.5,
             } : {
               name: "Not Assigned",
-              phone: "N/A",
               avatar: "?",
               image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop",
               rating: 0,
@@ -324,13 +324,19 @@ const DeliveryTracking = () => {
                               <h3 className="text-xs font-black text-slate-900 leading-none truncate">
                                 {dlv.deliveryBoy.name}
                               </h3>
-                              <a
-                                href={`tel:${dlv.deliveryBoy.phone}`}
-                                className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-slate-500 hover:text-primary transition-colors"
-                              >
-                                <HiOutlinePhone className="h-2.5 w-2.5 shrink-0" />
-                                <span className="truncate">{dlv.deliveryBoy.phone}</span>
-                              </a>
+                              {/* Number is fetched only after the server confirms this
+                                  rider is still assigned and pickup is in progress. */}
+                              {dlv.assigned && dlv.status === "Picked Up" && (
+                                <CallContactButton
+                                  orderId={dlv.orderId}
+                                  channel={CHANNELS.SELLER_RIDER}
+                                  label="Call rider"
+                                  className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-slate-500 hover:text-primary transition-colors"
+                                >
+                                  <HiOutlinePhone className="h-2.5 w-2.5 shrink-0" />
+                                  <span className="truncate">Call rider</span>
+                                </CallContactButton>
+                              )}
                             </div>
                           </div>
                         </div>

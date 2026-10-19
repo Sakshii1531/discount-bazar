@@ -29,6 +29,7 @@ let listenerRegistered = false;
 
 function dedupeKeyForNotification(eventType, notification, payload = {}) {
   const orderRef =
+    payload.eventId ||
     payload.messageId ||
     payload.messageCreatedAt ||
     payload.ticketId ||
@@ -107,6 +108,8 @@ function isDeliveryUpdateEvent(eventType) {
     NOTIFICATION_EVENTS.ORDER_READY,
     NOTIFICATION_EVENTS.RETURN_PICKUP_ASSIGNED,
     NOTIFICATION_EVENTS.RETURN_PICKUP_OTP,
+    NOTIFICATION_EVENTS.SELLER_READY_FOR_PICKUP,
+    NOTIFICATION_EVENTS.PICKUP_ETA_UPDATED,
   ].includes(eventType);
 }
 
@@ -132,6 +135,9 @@ async function getPreference(userId, role) {
 
 function isAllowedByPreference(eventType, preference) {
   if (!preference) return true;
+  if (eventType === NOTIFICATION_EVENTS.CHAT_MESSAGE) {
+    return preference.chatMessages !== false;
+  }
   if (isDeliveryUpdateEvent(eventType)) {
     return preference.deliveryUpdates !== false;
   }
@@ -230,6 +236,14 @@ export async function notify(eventType, payload = {}) {
       if (!isAllowedByPreference(eventType, preference)) {
         skipped += 1;
         continue;
+      }
+
+      if (
+        eventType === NOTIFICATION_EVENTS.CHAT_MESSAGE &&
+        preference?.chatPreview === false
+      ) {
+        notification.body = "New message";
+        notification.message = "New message";
       }
 
       const dedupeKey = dedupeKeyForNotification(eventType, notification, payload);

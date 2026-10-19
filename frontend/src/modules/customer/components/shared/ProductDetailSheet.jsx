@@ -14,7 +14,6 @@ import { customerApi } from '../../services/customerApi';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { formatAmount } from "@shared/utils/currency";
-import { getProductDeliveryFeeLabel } from "../../utils/deliveryLabels";
 import { getUnitPriceLabel } from "../../utils/productPricing";
 import { brandPath } from "../../utils/catalogLinks";
 import ProductRecommendations from "./ProductRecommendations";
@@ -646,7 +645,6 @@ const ProductDetailSheet = () => {
                                             >
                                                 <Clock size={12} strokeWidth={2.5} className="text-primary" />
                                                 {deliveryLabel}
-                                                {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ''}
                                             </motion.div>
                                             )}
                                             {hasDisplayDiscount && (
@@ -1103,7 +1101,6 @@ const ProductDetailSheet = () => {
                                 <div className="inline-flex items-center gap-1.5 bg-[#F0FDF4] border border-brand-100 text-primary px-2.5 py-1 rounded-lg text-[10px] font-black uppercase mb-3">
                                     <Clock size={12} strokeWidth={3} />
                                     {deliveryLabel}
-                                    {getProductDeliveryFeeLabel(selectedProduct) ? ` · ${getProductDeliveryFeeLabel(selectedProduct)}` : ""}
                                 </div>
                                 )}
 

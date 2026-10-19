@@ -96,4 +96,10 @@ export default [
     query: { status: "all" },
     check: (res) => expect(listOf(res)).toEqual([]),
   },
+  {
+    route: "GET /api/delivery/active-orders",
+    as: "delivery",
+    check: (res) => expect(res.body.result).toEqual(expect.objectContaining({ orders: [], canAcceptMore: true })),
+  },
+  { route: "GET /api/delivery/active-orders", name: "customers are denied", as: "customer", status: 403 },
 ];

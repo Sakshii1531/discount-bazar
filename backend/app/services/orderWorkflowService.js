@@ -41,6 +41,7 @@ import {
 import { distanceMeters } from "../utils/geoUtils.js";
 import { applyDeliveredSettlement } from "./orderSettlement.js";
 import { requireCanonicalOrderId } from "../utils/orderLookup.js";
+import { assertRiderCanTakeOrder } from "./delivery/riderActiveOrdersService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import logger from "./logger.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
@@ -336,6 +337,9 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
     }
   }
 
+  // Optional one-at-a-time (or N) rule — no-op unless RIDER_MAX_ACTIVE_ORDERS is set.
+  await assertRiderCanTakeOrder(deliveryOid, orderId);
+
   const now = new Date();
   const updated = await Order.findOneAndUpdate(
     {
@@ -417,6 +421,21 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
   });
 
   await retractDeliveryBroadcastForOrder(updated.orderId, deliveryOid);
+
+  // If the seller already marked the parcel ready, tell the new rider now —
+  // the ready event was retained, not lost, while no rider was assigned.
+  if (updated.sellerReadyAt && process.env.NODE_ENV !== "test") {
+    setImmediate(async () => {
+      try {
+        const { onRiderAssigned } = await import(
+          "./communication/communicationService.js"
+        );
+        await onRiderAssigned(updated.orderId);
+      } catch (e) {
+        logger.warn("onRiderAssigned hook failed", { orderId: updated.orderId, error: e.message });
+      }
+    });
+  }
 
   emitOrderStatusUpdate(
     updated.orderId,
@@ -914,6 +933,16 @@ export async function confirmPickupAtomic(deliveryId, orderId, lat, lng) {
     WORKFLOW_STATUS.DELIVERY_ASSIGNED,
     WORKFLOW_STATUS.PICKUP_READY,
   ]);
+  // Retry after a lost response: the pickup already went through for this
+  // rider, so return the authoritative order instead of a confusing 409 —
+  // and without re-emitting the transition.
+  if (
+    order &&
+    order.pickupConfirmedAt &&
+    [WORKFLOW_STATUS.OUT_FOR_DELIVERY, WORKFLOW_STATUS.DELIVERED].includes(order.workflowStatus)
+  ) {
+    return order;
+  }
   if (!order || !prePickup.has(order.workflowStatus)) {
     const err = new Error("Invalid state for pickup confirmation");
     err.statusCode = 409;
@@ -1226,14 +1255,10 @@ export async function requestHandoffOtpAtomic(deliveryId, orderId, lat, lng) {
     event: "delivery:otp:generated",
     payload: otpPayload,
   });
-  // Mirror the legacy fan-out: clients that joined `order:<id>` (the
-  // customer's open OrderDetailPage in particular) also expect to see
-  // these events without subscribing to the personal room.
-  emitToOrder(orderId, { event: "order:otp", payload: otpPayload });
-  emitToOrder(orderId, {
-    event: "delivery:otp:generated",
-    payload: otpPayload,
-  });
+  // The code goes to the customer's personal room only — never the shared
+  // `order:<id>` room, which riders who saw the broadcast may have joined.
+  // Every OTP listener (OrderDetailPage, DeliveryOtpDisplay) is a customer
+  // screen whose socket is always in `customer:<id>`.
   emitOrderStatusUpdate(orderId, { otpSent: true }, order.customer);
 
   return { expiresAt, attemptsRemaining: 3, message: "OTP sent to customer" };

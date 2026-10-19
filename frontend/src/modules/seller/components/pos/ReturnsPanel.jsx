@@ -29,6 +29,7 @@ import SaleEditPanel from "./SaleEditPanel";
 import ReturnReceipt from "./ReturnReceipt";
 import { formatAmount } from "@shared/utils/currency";
 import { downloadPosReturnsReportPDF, downloadPosReturnSlipPDF, downloadPosBillPDF } from "@/lib/posPdfExport";
+import { posBillCustomer } from "@/lib/posCustomer";
 
 const REFUND_METHODS = [
     { value: "CASH", label: "Cash", icon: HiOutlineBanknotes, desc: "Handed over cash" },
@@ -278,7 +279,7 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                             })}
                                         </span>
                                         <span>•</span>
-                                        <span>Customer: <strong className="text-slate-800">{order.walkInCustomer?.name || "Walk-in"}</strong> {order.walkInCustomer?.phone ? `(${order.walkInCustomer.phone})` : ""}</span>
+                                        <span>Customer: <strong className="text-slate-800">{posBillCustomer(order).name}</strong> {posBillCustomer(order).phone ? `(${posBillCustomer(order).phone})` : ""}</span>
                                     </div>
                                 </div>
 

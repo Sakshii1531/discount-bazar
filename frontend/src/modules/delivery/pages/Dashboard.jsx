@@ -22,6 +22,8 @@ import Card from "@/shared/components/ui/Card";
 import { useAuth } from "@core/context/AuthContext";
 import { deliveryApi } from "../services/deliveryApi";
 import { formatAmount } from "@shared/utils/currency";
+import ActiveDeliveriesSection from "../components/ActiveDeliveriesSection";
+import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -30,6 +32,10 @@ const Dashboard = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState("delivery"); // 'delivery' or 'return'
   const [availableOrders, setAvailableOrders] = useState([]);
+  // Accepted work comes from its own server list and is never replaced by
+  // new-order search results (`availableOrders`).
+  const { orders: activeDeliveries, canAcceptMore } = useActiveDeliveries();
+  const searchPaused = activeDeliveries.length > 0 && !canAcceptMore;
   const [earnings, setEarnings] = useState({
     today: 0,
     yesterday: 0,
@@ -77,6 +83,10 @@ const Dashboard = () => {
 
   const fetchAvailableOrders = async () => {
     try {
+      if (activeTab === "delivery" && searchPaused) {
+        setAvailableOrders([]);
+        return;
+      }
       const response = await deliveryApi.getAvailableOrders({ type: activeTab });
       if (response.data.success) {
         const orders = response.data.results || response.data.result || [];
@@ -91,7 +101,7 @@ const Dashboard = () => {
     fetchStats();
     fetchNotifications();
     if (isOnline) fetchAvailableOrders();
-  }, [isOnline, activeTab]);
+  }, [isOnline, activeTab, searchPaused]);
 
   const handleOnlineToggle = async () => {
     const newStatus = !isOnline;
@@ -186,6 +196,11 @@ const Dashboard = () => {
           )}
         </div>
       </header>
+
+      {/* Accepted, in-progress orders — always above the new-order search */}
+      <div className="px-6 pt-5">
+        <ActiveDeliveriesSection />
+      </div>
 
       {/* Online/Offline Toggle */}
       <div className="px-6 py-6">
@@ -414,7 +429,19 @@ const Dashboard = () => {
               </p>
             </motion.div>
           ) : activeTab === 'delivery' ? (
-            availableOrders.length > 0 ? (
+            searchPaused ? (
+              <motion.div
+                key="busy"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="bg-white rounded-2xl p-6 text-center border border-gray-100 shadow-sm">
+                <h3 className="ds-h3 mb-1 text-gray-800">You're completing a delivery</h3>
+                <p className="text-sm text-gray-500">
+                  New order requests will appear once your current delivery is finished. Use the card above to resume it.
+                </p>
+              </motion.div>
+            ) : availableOrders.length > 0 ? (
               <motion.div
                 key="waiting"
                 initial={{ opacity: 0, y: 12 }}
@@ -457,7 +484,7 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <h3 className="ds-h3 mb-2 text-gray-800">
-                    Finding Orders Nearby...
+                    {activeDeliveries.length ? "Finding More Orders Nearby..." : "Finding Orders Nearby..."}
                   </h3>
                   <p className="text-sm text-gray-500 max-w-[220px] mx-auto mb-6">
                     We're looking for delivery requests in your area. Stay

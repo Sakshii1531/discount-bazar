@@ -14,19 +14,26 @@ import {
     HiOutlineDevicePhoneMobile,
     HiOutlineLink,
     HiOutlineSparkles,
-    HiOutlineXMark
+    HiOutlineXMark,
+    HiOutlineCheckBadge
 } from 'react-icons/hi2';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { adminApi } from '../services/adminApi';
 import BannerLinkPicker, { isBannerLinkComplete } from '../components/BannerLinkPicker';
+import BrandSectionFields from '../components/BrandSectionFields';
 
 const DISPLAY_TYPES = [
     { id: 'banners', label: 'Banners' },
     { id: 'categories', label: 'Categories' },
     { id: 'subcategories', label: 'Sub Categories' },
     { id: 'products', label: 'Products' },
+    { id: 'brands', label: 'Brands' },
 ];
+
+// Section types whose heading is shown to shoppers (and therefore required).
+const TITLED_TYPES = ['categories', 'subcategories', 'products', 'brands'];
+const BRAND_DEFAULTS = { brandIds: [], brandLayout: 'carousel', brandRows: 1, brandMaxItems: 12 };
 
 const ContentManager = () => {
     const { showToast } = useToast();
@@ -61,6 +68,8 @@ const ContentManager = () => {
         productRows: 1,
         productColumns: 2,
         singleRowScrollable: false,
+        // brands
+        ...BRAND_DEFAULTS,
     });
 
     const bannerFileInputsRef = useRef([]);
@@ -158,6 +167,7 @@ const ContentManager = () => {
             productRows: 1,
             productColumns: 2,
             singleRowScrollable: false,
+            ...BRAND_DEFAULTS,
         });
         setActiveTab('banners');
     };
@@ -190,6 +200,10 @@ const ContentManager = () => {
             productRows: config.products?.rows || 1,
             productColumns: config.products?.columns || 2,
             singleRowScrollable: !!config.products?.singleRowScrollable,
+            brandIds: (config.brands?.brandIds || []).map(String),
+            brandLayout: config.brands?.layout === 'grid' ? 'grid' : 'carousel',
+            brandRows: config.brands?.rows || 1,
+            brandMaxItems: config.brands?.maxItems || BRAND_DEFAULTS.brandMaxItems,
         };
         setFormData(next);
         setActiveTab(displayType);
@@ -211,7 +225,7 @@ const ContentManager = () => {
     const handleSaveSection = async () => {
         const { displayType, title, status } = formData;
 
-        if (['categories', 'subcategories', 'products'].includes(displayType)) {
+        if (TITLED_TYPES.includes(displayType)) {
             if (!title || !title.trim()) {
                 showToast('Please enter a heading for this section', 'warning');
                 return;
@@ -281,6 +295,17 @@ const ContentManager = () => {
                 rows: formData.singleRowScrollable ? 1 : (Number(formData.productRows) || 1),
                 columns: Number(formData.productColumns) || 2,
                 singleRowScrollable: !!formData.singleRowScrollable,
+            };
+        } else if (displayType === 'brands') {
+            if (!formData.brandIds?.length) {
+                showToast('Please select at least one brand', 'warning');
+                return;
+            }
+            config = {
+                brandIds: formData.brandIds,
+                layout: formData.brandLayout,
+                rows: formData.brandLayout === 'grid' ? (Number(formData.brandRows) || 1) : 1,
+                maxItems: Number(formData.brandMaxItems) || undefined,
             };
         }
 
@@ -472,6 +497,7 @@ const ContentManager = () => {
                                                 {section.displayType === 'categories' && <HiOutlineSparkles className="h-6 w-6" />}
                                                 {section.displayType === 'subcategories' && <HiOutlineSparkles className="h-6 w-6" />}
                                                 {section.displayType === 'products' && <HiOutlineDevicePhoneMobile className="h-6 w-6" />}
+                                                {section.displayType === 'brands' && <HiOutlineCheckBadge className="h-6 w-6" />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
@@ -493,6 +519,7 @@ const ContentManager = () => {
                                                     {section.displayType === 'categories' && `${section.config?.categories?.categoryIds?.length || 0} categories • ${section.config?.categories?.rows || 1} rows`}
                                                     {section.displayType === 'subcategories' && `${section.config?.subcategories?.subcategoryIds?.length || 0} subcategories • ${section.config?.subcategories?.rows || 1} rows`}
                                                     {section.displayType === 'products' && `${section.config?.products?.productIds?.length || 0} products • ${section.config?.products?.rows || 1}x${section.config?.products?.columns || 2}${section.config?.products?.singleRowScrollable ? ' • Single row scroll' : ''}`}
+                                                    {section.displayType === 'brands' && `${section.config?.brands?.brandIds?.length || 0} brands • ${section.config?.brands?.layout === 'grid' ? `${section.config?.brands?.rows || 1}-row grid` : 'Scrollable row'}${section.config?.brands?.maxItems ? ` • max ${section.config.brands.maxItems}` : ''}`}
                                                 </p>
                                             </div>
                                             <div className="flex flex-col gap-2 items-end">
@@ -583,15 +610,22 @@ const ContentManager = () => {
                     {/* Heading - required for category/subcategory/product */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            Section Heading {['categories', 'subcategories', 'products'].includes(formData.displayType) && <span className="text-rose-500">*</span>}
+                            Section Heading {TITLED_TYPES.includes(formData.displayType) && <span className="text-rose-500">*</span>}
                         </label>
                         <input
                             value={formData.title}
                             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                             className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none ring-1 ring-transparent focus:ring-primary/20 transition-all"
-                            placeholder="E.g. Grocery Essentials"
+                            placeholder={formData.displayType === 'brands' ? 'E.g. Top Brands or Shop by Brand' : 'E.g. Grocery Essentials'}
                         />
                     </div>
+
+                    {formData.displayType === 'brands' && (
+                        <BrandSectionFields
+                            value={formData}
+                            onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                        />
+                    )}
 
                     {/* Type-specific config */}
                     {formData.displayType === 'banners' && (

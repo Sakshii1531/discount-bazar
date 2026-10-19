@@ -328,6 +328,12 @@ export const updateNotificationPreferences = async (req, res) => {
     if (typeof req.body?.promotions === "boolean") {
       update.promotions = req.body.promotions;
     }
+    if (typeof req.body?.chatMessages === "boolean") {
+      update.chatMessages = req.body.chatMessages;
+    }
+    if (typeof req.body?.chatPreview === "boolean") {
+      update.chatPreview = req.body.chatPreview;
+    }
     if (typeof req.body?.pushNotifications === "boolean") {
       update.pushNotifications = req.body.pushNotifications;
     }

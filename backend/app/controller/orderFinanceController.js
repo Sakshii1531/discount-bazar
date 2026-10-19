@@ -67,6 +67,9 @@ export const previewCheckoutFinance = async (req, res) => {
       // SERVER_SIDE_COUPON_ENGINE is off.
       couponSnapshot: pricingSnapshot.couponSnapshot || null,
       freeDeliveryApplied: !!pricingSnapshot.freeDeliveryApplied,
+      // { minOrderValue, eligibleSubtotal, remainingAmount, isMet } — the
+      // cart/checkout shows "Add ₹X more" from this.
+      minimumOrder: pricingSnapshot.minimumOrder,
       ...(distanceDebug ? { distanceDebug } : {}),
     });
   } catch (error) {
@@ -126,7 +129,8 @@ export const createOrderWithFinancialSnapshot = async (req, res) => {
       },
     );
   } catch (error) {
-    return handleResponse(res, error.statusCode || 500, error.message);
+    // `details` carries minimum-order amounts for the customer to act on.
+    return handleResponse(res, error.statusCode || 500, error.message, error.details);
   }
 };
 
@@ -169,7 +173,7 @@ export const markCodCollectedAfterDelivery = async (req, res) => {
       return handleResponse(res, 404, "Order not found");
     }
 
-    if (order.paymentMode === "ONLINE") {
+    if (order.paymentMode === "ONLINE" || order.paymentMode === "WALLET") {
       return handleResponse(res, 400, "COD collection is only allowed for COD orders");
     }
 

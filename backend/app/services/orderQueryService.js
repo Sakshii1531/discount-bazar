@@ -220,6 +220,10 @@ export async function fetchSellerOrdersPage({
     summary.packed +
     summary.outForDelivery;
 
+  if (role !== "admin") {
+    orders.forEach((o) => redactContactDetails(o, role));
+  }
+
   return {
     query,
     orders,
@@ -494,6 +498,32 @@ export async function getCustomerOrders(customerId, pagination) {
  *
  * Throws: 403 (access denied), 404 (not found), 500 (data integrity).
  */
+/**
+ * Phone numbers are handed out only by the communication contact endpoint,
+ * which checks the live assignment and order stage on every request. Order
+ * payloads therefore never carry the rider's number to customers/sellers, and
+ * a rider stops seeing customer/store numbers once the order is finished.
+ */
+export function redactContactDetails(order, role) {
+  if (!order || typeof order !== "object") return order;
+  const r = String(role || "").toLowerCase();
+  if (r === "admin") return order;
+  if (r === "customer" || r === "user" || r === "seller") {
+    if (order.deliveryBoy && typeof order.deliveryBoy === "object") {
+      delete order.deliveryBoy.phone;
+    }
+  }
+  if (r === "delivery") {
+    const ws = order.workflowStatus;
+    if (ws === WORKFLOW_STATUS.DELIVERED || ws === WORKFLOW_STATUS.CANCELLED) {
+      if (order.address) delete order.address.phone;
+      if (order.customer && typeof order.customer === "object") delete order.customer.phone;
+      if (order.seller && typeof order.seller === "object") delete order.seller.phone;
+    }
+  }
+  return order;
+}
+
 export async function getOrderWithAccess(orderId, userId, role) {
   const orderKey = orderMatchQueryFlexible(orderId);
   if (!orderKey) {
@@ -636,6 +666,7 @@ export async function getOrderWithAccess(orderId, userId, role) {
   }
 
   const payload = decorateOrderWithReturnEligibility(order);
+  redactContactDetails(payload, roleNorm);
 
   // Attach or auto-generate delivery OTP when order is in delivery state so customer app receives it
   const isOutForDelivery =

@@ -445,7 +445,13 @@ const orderSchema = new mongoose.Schema(
       lastBroadcastAt: Date,
     },
     pickupConfirmedAt: Date,
+    // Rider reached the store (workflowStatus PICKUP_READY). Kept for compat.
     pickupReadyAt: Date,
+    // Seller packed the parcel ("Ready for Pickup"). Independent of the rider
+    // and of workflowStatus, so the flag survives until a rider is assigned.
+    sellerReadyAt: Date,
+    // Seller-supplied estimate when the rider is waiting on an unready order.
+    sellerReadyEtaAt: Date,
     outForDeliveryAt: Date,
     deliveryRiderStep: {
       type: Number,

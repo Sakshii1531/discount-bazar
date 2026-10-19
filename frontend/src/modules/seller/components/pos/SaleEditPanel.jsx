@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { posApi } from "../../services/posApi";
 import { businessApi } from "../../services/businessApi";
+import { posCustomerIdOf } from "@/lib/posCustomer";
 
 const METHODS = [
     ["CASH", "Cash"], ["QR", "UPI / QR"], ["CARD", "Card"], ["OTHER", "Other"], ["CREDIT", "Credit (Udhaar)"], ["SPLIT", "Split"],
@@ -34,7 +35,7 @@ const SaleEditPanel = ({ order, lines, onSaved, defaultOpen = false, onCancel })
     const [discount, setDiscount] = useState(0);
     const [method, setMethod] = useState(order.posPaymentMethod || "CASH");
     const [customers, setCustomers] = useState([]);
-    const [customerId, setCustomerId] = useState(order.posCustomer || "");
+    const [customerId, setCustomerId] = useState(posCustomerIdOf(order));
     const [amountPaid, setAmountPaid] = useState(order.posAmountPaid ?? 0);
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
@@ -46,7 +47,7 @@ const SaleEditPanel = ({ order, lines, onSaved, defaultOpen = false, onCancel })
         setDraft(lines.map((l) => ({ product: l.product, variantSlot: l.variantSlot || "", name: l.name, quantity: l.quantity, price: l.price })));
         setDiscount(order.paymentBreakdown?.discountTotal || 0);
         setMethod(order.posPaymentMethod || "CASH");
-        setCustomerId(order.posCustomer || "");
+        setCustomerId(posCustomerIdOf(order));
         setAmountPaid(order.posAmountPaid ?? 0);
         setSplit(splitFromOrder(order));
         setReason("");

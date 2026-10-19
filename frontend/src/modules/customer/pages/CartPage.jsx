@@ -16,10 +16,26 @@ import { useToast } from '@shared/components/ui/Toast';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { formatAmount } from "@shared/utils/currency";
 import { customerApi } from "../services/customerApi";
+import { useSettings } from "@core/context/SettingsContext";
+import MinimumOrderNotice from "../components/shared/MinimumOrderNotice";
+import { getMinimumOrderStatus } from "../utils/minimumOrder";
 
 const CartPage = () => {
-    const { cart, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
+    const { cart, removeFromCart, updateQuantity, cartTotal, clearCart, isItemOutOfStock } = useCart();
     const { showToast } = useToast();
+    const { settings, refetch: refetchSettings } = useSettings();
+
+    // The admin can change the minimum order value at any time; use the latest.
+    useEffect(() => {
+        refetchSettings?.({ forceRefresh: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const minimumOrder = getMinimumOrderStatus({
+        cart,
+        minOrderValue: settings?.minOrderValue,
+        isItemOutOfStock,
+    });
+    const belowMinimum = Boolean(minimumOrder && !minimumOrder.isMet);
     const [deliveryQuote, setDeliveryQuote] = useState(null);
     const cartProductKey = [...new Set((cart || []).map((item) => String(item.id || "")).filter(Boolean))].sort().join(",");
 
@@ -216,11 +232,23 @@ const CartPage = () => {
                                         </div>
                                     </div>
 
-                                    <Link to="/checkout" className="block">
-                                        <Button className="h-14 w-full rounded-full bg-brand-400 text-slate-950 hover:bg-brand-300 text-base font-black flex items-center justify-center gap-2 shadow-[0_18px_35px_rgba(16,185,129,0.3)] transition-all">
+                                    <MinimumOrderNotice status={minimumOrder} tone="dark" />
+
+                                    {belowMinimum ? (
+                                        <Button
+                                            disabled
+                                            data-testid="cart-place-order"
+                                            className="h-14 w-full rounded-full bg-brand-400 text-slate-950 text-base font-black flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
                                             Place Order <ArrowRight size={18} />
                                         </Button>
-                                    </Link>
+                                    ) : (
+                                        <Link to="/checkout" className="block">
+                                            <Button data-testid="cart-place-order" className="h-14 w-full rounded-full bg-brand-400 text-slate-950 hover:bg-brand-300 text-base font-black flex items-center justify-center gap-2 shadow-[0_18px_35px_rgba(16,185,129,0.3)] transition-all">
+                                                Place Order <ArrowRight size={18} />
+                                            </Button>
+                                        </Link>
+                                    )}
 
                                     <div className="grid grid-cols-2 gap-3 text-xs font-bold uppercase tracking-[0.16em] text-white/55">
                                         <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">

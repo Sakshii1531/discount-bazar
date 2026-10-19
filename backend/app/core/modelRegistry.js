@@ -46,6 +46,12 @@ import "../models/seller.js";
 import "../models/ticket.js";
 import "../models/wishlist.js";
 
+// Order communication (customer/seller ↔ rider chat)
+import "../models/orderConversation.js";
+import "../models/orderChatMessage.js";
+import "../models/communicationIssue.js";
+import "../models/communicationEvent.js";
+
 // Finance models
 import "../models/financeAuditLog.js";
 import "../models/financeReports.js";
@@ -129,6 +135,10 @@ export const REQUIRED_MODELS = Object.freeze([
   "PushToken",
   "Ticket",
   "FAQ",
+  "OrderConversation",
+  "OrderChatMessage",
+  "CommunicationIssue",
+  "CommunicationEvent",
 
   // Configuration
   "Setting",

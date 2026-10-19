@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Product from "../models/product.js";
 import Category from "../models/category.js";
+import Brand from "../models/brand.js";
 import { getNearbySellerIdsForCustomer } from "./customerVisibilityService.js";
 import { getCustomerVisibleFilter, normalizeProductModerationFields } from "./productModerationService.js";
 import { enrichCatalogProducts } from "./productRecommendationService.js";
@@ -69,7 +70,8 @@ async function resolveProductSection(section, sellerIds) {
  */
 export async function resolveExperienceSectionProducts(sections = [], { lat, lng }) {
   const productSections = sections.filter((s) => s?.displayType === "products");
-  if (!productSections.length) return sections;
+  const brandSections = sections.filter((s) => s?.displayType === "brands");
+  if (!productSections.length && !brandSections.length) return sections;
 
   const sellerIds = await getNearbySellerIdsForCustomer(lat, lng);
   const resolved = new Map();
@@ -78,5 +80,67 @@ export async function resolveExperienceSectionProducts(sections = [], { lat, lng
       resolved.set(String(s._id), sellerIds.length ? await resolveProductSection(s, sellerIds) : []);
     }),
   );
-  return sections.map((s) => (s?.displayType === "products" ? { ...s, products: resolved.get(String(s._id)) || [] } : s));
+  const available = brandSections.length ? await availableBrandKeys(sellerIds) : null;
+
+  return sections.map((s) => {
+    if (s?.displayType === "products") return { ...s, products: resolved.get(String(s._id)) || [] };
+    if (s?.displayType === "brands") {
+      // Only brands this customer can actually buy (in stock, nearby store).
+      return { ...s, availableBrandKeys: available ? [...available] : [] };
+    }
+    return s;
+  });
+}
+
+const brandKey = (name) => String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Name keys of brands with at least one customer-visible, in-stock product
+ * from a store serving this location. Products are matched to brands by name
+ * (the same rule the brand listing page uses).
+ */
+async function availableBrandKeys(sellerIds) {
+  if (!sellerIds.length) return new Set();
+  const names = await Product.distinct("brand", {
+    status: "active",
+    sellerId: { $in: sellerIds },
+    ...getCustomerVisibleFilter(),
+    brand: { $nin: [null, ""] },
+    $or: [{ stock: { $gt: 0 } }, { "variants.stock": { $gt: 0 } }],
+  });
+  return new Set(names.map(brandKey).filter(Boolean));
+}
+
+/**
+ * Replaces each brand section's ids with displayable cards (name, slug, logo)
+ * in the order the admin chose: active brands only, filtered to what is
+ * available at the customer's location when that is known, capped at
+ * `maxItems`. A section with nothing to show is dropped rather than rendered
+ * empty.
+ */
+export async function attachBrandCards(sections = []) {
+  const brandSections = (sections || []).filter((s) => s?.displayType === "brands");
+  if (!brandSections.length) return sections;
+
+  const ids = [...new Set(brandSections.flatMap((s) => toIds(s.config?.brands?.brandIds)))];
+  const docs = ids.length
+    ? await Brand.find({ _id: { $in: ids }, status: "active" }).select("name slug logo").lean()
+    : [];
+  const byId = new Map(docs.map((b) => [String(b._id), b]));
+
+  return sections
+    .map((s) => {
+      if (s?.displayType !== "brands") return s;
+      const cfg = s.config?.brands || {};
+      const availability = Array.isArray(s.availableBrandKeys) ? new Set(s.availableBrandKeys) : null;
+      let cards = toIds(cfg.brandIds)
+        .map((id) => byId.get(id))
+        .filter(Boolean)
+        .filter((b) => !availability || availability.has(brandKey(b.name)))
+        .map((b) => ({ _id: String(b._id), name: b.name, slug: b.slug, logo: b.logo || "" }));
+      if (Number(cfg.maxItems) > 0) cards = cards.slice(0, Number(cfg.maxItems));
+      const { availableBrandKeys: _drop, ...rest } = s;
+      return { ...rest, brands: cards };
+    })
+    .filter((s) => s?.displayType !== "brands" || s.brands.length > 0);
 }

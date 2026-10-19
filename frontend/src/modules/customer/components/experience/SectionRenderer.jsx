@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "../shared/ProductCard";
 import { cn } from "@/lib/utils";
 import ExperienceBannerCarousel from "./ExperienceBannerCarousel";
+import BrandShowcaseSection from "./BrandShowcaseSection";
 import { setJSON, STORAGE_KEYS } from "@core/utils/storage";
 
 const rememberExperienceReturn = (headerId, sectionId) =>
@@ -83,6 +84,16 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
             <div key={section._id || sectionKey} className="-mt-8 md:-mt-8">
               <ExperienceBannerCarousel section={section} items={items} slideGap={12} />
             </div>
+          );
+        }
+
+        if (section.displayType === "brands") {
+          return (
+            <BrandShowcaseSection
+              key={section._id || sectionKey}
+              section={section}
+              onNavigate={() => rememberExperienceReturn(section.headerId, section._id)}
+            />
           );
         }
 

@@ -128,3 +128,96 @@ describe("experience sections resolve their products per location", () => {
     expect(section.products).toBeUndefined();
   });
 });
+
+describe("brand showcase sections", () => {
+  let A;
+  let seller;
+  let tree;
+  let amul;
+  let tata;
+  let nestle;
+  let hidden;
+  beforeEach(async () => {
+    const Brand = (await import("../../app/models/brand.js")).default;
+    A = bearer("admin", (await fx.createAdmin())._id);
+    seller = await fx.createSeller();
+    tree = await fx.createCategoryTree();
+    const mk = (name, extra = {}) =>
+      Brand.create({ name, slug: name.toLowerCase().replace(/\s+/g, "-"), logo: `https://cdn.test/${name}.png`, ...extra });
+    amul = await mk("Amul");
+    tata = await mk("Tata Sampann");
+    nestle = await mk("Nestle");
+    hidden = await mk("Retired Co", { status: "inactive" });
+    await fx.createProduct(seller, tree, { name: "Amul Butter", brand: "Amul", brandId: amul._id });
+    await fx.createProduct(seller, tree, { name: "Tata Dal", brand: "Tata Sampann", brandId: tata._id });
+    // Nestle exists only out of stock; Retired Co is inactive.
+    await fx.createProduct(seller, tree, { name: "Maggi", brand: "Nestle", brandId: nestle._id, stock: 0 });
+    await fx.createProduct(seller, tree, { name: "Old Thing", brand: "Retired Co", brandId: hidden._id });
+  });
+
+  const create = (config, extra = {}) =>
+    request(app)
+      .post("/api/admin/experience")
+      .set("Authorization", A)
+      .send({ pageType: "home", status: "active", displayType: "brands", title: "Top Brands", config, ...extra });
+  const home = async (q = { lat: AT.lat, lng: AT.lng }) => {
+    const res = await request(app).get("/api/experience").query({ pageType: "home", ...q });
+    expect(res.status).toBe(200);
+    return res.body.result || res.body.results;
+  };
+
+  it("validates the section", async () => {
+    const noBrands = await create({ brandIds: [] });
+    expect(noBrands.status).toBeGreaterThanOrEqual(400);
+    expect(noBrands.body.message).toMatch(/at least one brand/i);
+    const noTitle = await create({ brandIds: [String(amul._id)] }, { title: "" });
+    expect(noTitle.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("saves layout settings and serves brand cards in the admin's order, limited to brands buyable nearby", async () => {
+    const res = await create({
+      brandIds: [String(tata._id), String(nestle._id), String(hidden._id), String(amul._id)],
+      layout: "grid",
+      rows: 2,
+      maxItems: 10,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.result.config.brands).toEqual(
+      expect.objectContaining({ layout: "grid", rows: 2, maxItems: 10 }),
+    );
+
+    const [section] = await home();
+    expect(section.displayType).toBe("brands");
+    expect(section.brands).toEqual([
+      { _id: String(tata._id), name: "Tata Sampann", slug: "tata-sampann", logo: "https://cdn.test/Tata Sampann.png" },
+      { _id: String(amul._id), name: "Amul", slug: "amul", logo: "https://cdn.test/Amul.png" },
+    ]);
+  });
+
+  it("caps cards at maxItems and forces a single row for the carousel", async () => {
+    const res = await create({ brandIds: [String(amul._id), String(tata._id)], layout: "carousel", rows: 4, maxItems: 1 });
+    expect(res.body.result.config.brands).toEqual(expect.objectContaining({ layout: "carousel", rows: 1 }));
+    const [section] = await home();
+    expect(section.brands.map((b) => b.name)).toEqual(["Amul"]);
+  });
+
+  it("drops the section where none of its brands are available, and still works without a location", async () => {
+    await create({ brandIds: [String(amul._id), String(nestle._id)] });
+    const far = await home({ lat: 28.6139, lng: 77.209 });
+    expect(far.find((s) => s.displayType === "brands")).toBeUndefined();
+    const noLocation = await home({});
+    // Without a location every active selected brand is shown.
+    expect(noLocation[0].brands.map((b) => b.name)).toEqual(["Amul", "Nestle"]);
+  });
+
+  it("reorders with the other sections", async () => {
+    const banner = await request(app).post("/api/admin/experience").set("Authorization", A)
+      .send({ pageType: "home", status: "active", displayType: "categories", title: "Cats", config: { categoryIds: [String(tree.category._id)] } });
+    const brands = await create({ brandIds: [String(amul._id)] });
+    const reorder = await request(app).put("/api/admin/experience/reorder").set("Authorization", A)
+      .send({ items: [{ id: brands.body.result._id, order: 0 }, { id: banner.body.result._id, order: 1 }] });
+    expect(reorder.status).toBe(200);
+    const sections = await home();
+    expect(sections.map((s) => s.displayType)).toEqual(["brands", "categories"]);
+  });
+});

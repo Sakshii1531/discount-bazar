@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
+import { OrderContactPanel, CHANNELS } from "@shared/communication";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import InvoiceModal from "../components/order/InvoiceModal";
@@ -146,6 +147,9 @@ const matchesOrderIdentifier = (payloadOrderId, identifiers = []) => {
 
 const OrderDetailPage = () => {
   const { orderId } = useParams();
+  // Push/in-app notification deep link: /orders/:id?chat=customer_rider
+  const [searchParams] = useSearchParams();
+  const autoOpenRiderChat = searchParams.get("chat") === CHANNELS.CUSTOMER_RIDER;
   const [showInvoice, setShowInvoice] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -1053,7 +1057,6 @@ const OrderDetailPage = () => {
               status={order.workflowStatus || order.status}
               eta={estimatedArrival.arrivingInText}
               riderName={order.deliveryBoy?.name || "Delivery Partner"}
-              riderPhone={order.deliveryBoy?.phone || ""}
               riderLocation={effectiveRiderLocation}
               sellerLocation={sellerLocation}
               destinationLocation={
@@ -1133,22 +1136,19 @@ const OrderDetailPage = () => {
                     : "Searching for nearby rider"}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                {order.deliveryBoy?.phone ? (
-                  <>
-                    <a href={`sms:${order.deliveryBoy.phone}`} className="h-11 w-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors border border-white/30">
-                      <MessageSquare size={20} className="text-primary-foreground" />
-                    </a>
-                    <a href={`tel:${order.deliveryBoy.phone}`} className="h-11 w-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors border border-white/30">
-                      <Phone size={20} className="text-primary-foreground" />
-                    </a>
-                  </>
-                ) : (
-                  <button onClick={() => toast.error(order.deliveryBoy ? "Phone number not available for this delivery partner" : "Partner not assigned yet")} className="h-11 w-auto px-4 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/20 transition-colors border border-white/20 text-xs font-semibold">
-                    No Contact Info
-                  </button>
-                )}
-              </div>
+            </div>
+
+            {/* Chat / call / report — enabled only while this rider is the
+                current assignee and the order is in a delivery stage. */}
+            <div className="mt-4 pt-3 border-t border-white/20">
+              <OrderContactPanel
+                orderId={order.orderId || orderId}
+                role="customer"
+                channel={CHANNELS.CUSTOMER_RIDER}
+                autoOpenChat={autoOpenRiderChat}
+                tone="dark"
+                showHeading={false}
+              />
             </div>
 
             {/* Delivery Partner Rating Section */}

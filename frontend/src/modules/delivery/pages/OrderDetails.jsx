@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useAuth } from "@core/context/AuthContext";
 import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import {
@@ -22,6 +22,7 @@ import Card from "@/shared/components/ui/Card";
 import { toast } from "sonner";
 import { deliveryApi } from "../services/deliveryApi";
 import { Loader2 } from "lucide-react";
+import { OrderContactPanel, CHANNELS, useOrderCommunication } from "@shared/communication";
 import DeliveryTrackingMap from "../components/DeliveryTrackingMap";
 import DeliverySlideButton from "../components/DeliverySlideButton";
 import OtpInput from "../components/OtpInput";
@@ -37,7 +38,9 @@ import {
   joinOrderRoom,
   leaveOrderRoom,
   onOrderStatusUpdate,
+  onSocketEvent,
 } from "@/core/services/orderSocket";
+import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
 
 const getPublicStatusStage = (internalStep) => {
   if (internalStep >= 4) return 3;
@@ -205,6 +208,34 @@ const OrderDetails = () => {
       )
   );
 
+  // Order chat/call with store and customer (standard deliveries only). One
+  // shared state fetch drives both panels; ?chat=<channel> deep-links from
+  // notifications open the right conversation after the server re-checks access.
+  const [searchParams] = useSearchParams();
+  const chatParam = searchParams.get("chat");
+  const comm = useOrderCommunication(order && !isReturn ? order.orderId : null, "delivery");
+  const { refresh: refreshActiveDeliveries } = useActiveDeliveries();
+  const location = useLocation();
+
+  // Opened as the first page of the session (notification tap, relaunch on
+  // this URL): slot the dashboard underneath so the device back button lands
+  // on the active-delivery card instead of leaving the app.
+  useEffect(() => {
+    if (location.key === "default") {
+      const here = `${location.pathname}${location.search}`;
+      navigate("/delivery/dashboard", { replace: true });
+      navigate(here);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Leave a workflow that is no longer ours/active; the dashboard shows what's next. */
+  const exitToDashboard = (message) => {
+    if (message) toast.info(message);
+    refreshActiveDeliveries();
+    navigate("/delivery/dashboard", { replace: true });
+  };
+
   useEffect(() => {
     const fetchOrderDetails = async () => {
       try {
@@ -214,8 +245,14 @@ const OrderDetails = () => {
 
         setStep(getPersistedRiderStep(ord));
       } catch (error) {
-        toast.error("Failed to fetch order details");
-        navigate("/delivery/dashboard");
+        const code = error?.response?.status;
+        toast.error(
+          code === 404 || code === 403
+            ? "This order is no longer assigned to you."
+            : "Failed to fetch order details",
+        );
+        refreshActiveDeliveries();
+        navigate("/delivery/dashboard", { replace: true });
       } finally {
         setLoading(false);
       }
@@ -224,7 +261,7 @@ const OrderDetails = () => {
     if (orderId) {
       fetchOrderDetails();
     }
-  }, [orderId, navigate]);
+  }, [orderId, navigate, refreshActiveDeliveries]);
 
   useEffect(() => {
     const iv = setInterval(() => setClockTick(Date.now()), 30000);
@@ -243,13 +280,46 @@ const OrderDetails = () => {
       if (ws === "DELIVERED") {
         setStep(4);
         setOrder((prev) => prev ? { ...prev, status: "delivered", workflowStatus: "DELIVERED" } : prev);
+      } else if (ws === "CANCELLED") {
+        exitToDashboard(`Order #${orderId} was cancelled.`);
+      }
+    });
+    // Reassigned away while this screen is open: drop the workflow immediately.
+    const offRevoked = onSocketEvent(getToken, "communication:revoked", (payload) => {
+      if (String(payload?.orderId) === String(orderId) && payload?.reason === "RIDER_REASSIGNED" && !payload?.channel) {
+        exitToDashboard(`Order #${orderId} was reassigned to another rider.`);
       }
     });
 
+    // Back from background / reconnect: reconcile with the server's view.
+    const reconcile = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await deliveryApi.getOrderDetails(orderId);
+        const ord = res.data.result;
+        const ws = String(ord?.workflowStatus || "").toUpperCase();
+        if (ws === "CANCELLED") {
+          exitToDashboard(`Order #${orderId} was cancelled.`);
+          return;
+        }
+        setOrder(ord);
+        setStep(getPersistedRiderStep(ord));
+      } catch (error) {
+        const code = error?.response?.status;
+        if (code === 404 || code === 403) exitToDashboard("This order is no longer assigned to you.");
+      }
+    };
+    document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("online", reconcile);
+
     return () => {
       off();
+      offRevoked();
+      document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("online", reconcile);
       leaveOrderRoom(orderId, getToken);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
   const steps = useMemo(() => {
@@ -471,6 +541,10 @@ const OrderDetails = () => {
           setStep(3);
           toast.success(`${currentStep.action} Confirmed!`);
         } else if (step === 3) {
+          // Persist "at customer" on the server so reopening the app restores
+          // the delivery-completion step, not the travel step.
+          const res = await deliveryApi.advanceDeliveryRiderUi(order.orderId);
+          setOrder((prev) => mergeOrderUpdate(prev, res.data.result));
           setStep(4);
           toast.success(`${currentStep.action} Confirmed!`);
         } else {
@@ -485,6 +559,20 @@ const OrderDetails = () => {
       console.error("Failed to update status", error);
       const message = error.response?.data?.message || "Failed to update status";
       toast.error(message);
+      // No response or a state conflict: the action may already have gone
+      // through. Reload the authoritative order before allowing another try.
+      if (!isReturn && (!error.response || error.response.status === 409)) {
+        try {
+          const fresh = await deliveryApi.getOrderDetails(order.orderId);
+          const ord = fresh.data.result;
+          setOrder(ord);
+          setStep(getPersistedRiderStep(ord));
+        } catch {
+          /* keep current screen; the rider can retry */
+        }
+      }
+      setIsSlideComplete(false);
+      setDragX(0);
     }
   };
 
@@ -643,7 +731,9 @@ const OrderDetails = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate(-1)}
+            // Always land on the dashboard, where the active-delivery card
+            // offers Resume — never somewhere the order looks lost.
+            onClick={() => navigate("/delivery/dashboard")}
             className="mr-2"
           >
             <ChevronDown className="rotate-90 text-slate-800" size={24} />
@@ -958,7 +1048,7 @@ const OrderDetails = () => {
                       </p>
                     </div>
                   </div>
-                  {(isReturn ? order.address?.phone : order.seller?.phone) && (
+                  {isReturn && order.address?.phone && (
                     <div className="flex space-x-2">
                       <Button
                         variant="outline"
@@ -994,10 +1084,46 @@ const OrderDetails = () => {
                       ? order.address?.address || "Address not available"
                       : order.seller?.address || "Address not available"}
                   </p>
+                  {!isReturn && (comm.state?.pickup?.sellerReadyAt || comm.state?.pickup?.sellerReadyEtaAt) && (
+                    <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                      {comm.state.pickup.sellerReadyAt
+                        ? "Store has marked this order ready for pickup."
+                        : `Store expects it ready by ${new Date(comm.state.pickup.sellerReadyEtaAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`}
+                    </p>
+                  )}
+                  {!isReturn && comm.state?.handover?.reassigned && (
+                    <p className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      This order was reassigned to you.
+                      {comm.state.handover.openIssues?.length
+                        ? ` Open issue: ${comm.state.handover.openIssues[0].reason.replace(/_/g, " ").toLowerCase()}.`
+                        : ""}
+                    </p>
+                  )}
                   <Button onClick={handleNavigate} className="w-full" variant="outline">
                     <Navigation size={18} className="mr-2" />{" "}
                     {isReturn ? "Navigate to Customer" : "Navigate to Store"}
                   </Button>
+                  {!isReturn && (
+                    <OrderContactPanel
+                      className="mt-4 border-t border-gray-100 pt-4"
+                      orderId={order.orderId}
+                      role="delivery"
+                      channel={CHANNELS.SELLER_RIDER}
+                      comm={comm}
+                      autoOpenChat={chatParam === CHANNELS.SELLER_RIDER}
+                    />
+                  )}
+                  {!isReturn && (
+                    // Customer may already be messaging while the rider is at the store.
+                    <OrderContactPanel
+                      className="mt-4 border-t border-gray-100 pt-4"
+                      orderId={order.orderId}
+                      role="delivery"
+                      channel={CHANNELS.CUSTOMER_RIDER}
+                      comm={comm}
+                      autoOpenChat={step < 3 && chatParam === CHANNELS.CUSTOMER_RIDER}
+                    />
+                  )}
                 </div>
               </Card>
             </motion.div>
@@ -1042,7 +1168,7 @@ const OrderDetails = () => {
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                    {(isReturn ? order.seller?.phone : order.address?.phone) && (
+                    {isReturn && order.seller?.phone && (
                       <>
                         <Button 
                           variant="outline" 
@@ -1084,6 +1210,17 @@ const OrderDetails = () => {
                     <Navigation size={18} className="mr-2" />{" "}
                     {isReturn ? "Navigate to Seller" : "Navigate to Customer"}
                   </Button>
+                  {!isReturn && (
+                    <OrderContactPanel
+                      className="mt-4 border-t border-gray-100 pt-4"
+                      orderId={order.orderId}
+                      role="delivery"
+                      channel={CHANNELS.CUSTOMER_RIDER}
+                      comm={comm}
+                      autoOpenChat={step >= 3 && chatParam === CHANNELS.CUSTOMER_RIDER}
+                      showHeading={false}
+                    />
+                  )}
                 </div>
               </Card>
             </motion.div>

@@ -428,6 +428,9 @@ export async function handleCodOrderFinance(
     if (order.paymentMode === "ONLINE") {
       throw new Error("COD collection is not allowed for ONLINE orders");
     }
+    if (order.paymentMode === "WALLET") {
+      throw Object.assign(new Error("COD collection is not allowed for wallet-paid orders"), { statusCode: 400 });
+    }
 
     if (order.paymentMode !== "COD") {
       order.paymentMode = "COD";

@@ -40,6 +40,9 @@ export const STORAGE_KEYS = Object.freeze({
     // ── Delivery operational state ───────────────────────────────────────────
     DELIVERY_LAST_LOCATION: 'delivery_partner_last_location',
     DELIVERY_HANDLED_INCOMING: 'deliveryHandledIncomingOrderIds',
+    // Last server-confirmed active assignments — shown only as provisional
+    // info while offline; never used to authorize an action.
+    DELIVERY_ACTIVE_ORDERS: 'delivery_active_orders_snapshot',
 });
 
 /**
@@ -50,6 +53,8 @@ export const KEY_PREFIXES = Object.freeze({
     PUSH_FCM_TOKEN: 'push:fcm-token:',
     PUSH_REGISTERED: 'push:registered:',
     SUPPORT_UNREAD: 'supportUnread:',
+    // Unsent order-chat messages, keyed `orderChatOutbox:<role>:<userId>:<orderId>:<channel>`.
+    ORDER_CHAT_OUTBOX: 'orderChatOutbox:',
 });
 
 /** Convenience map: every literal key the app may persist. */

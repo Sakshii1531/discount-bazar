@@ -44,6 +44,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@shared/components/ui/Toast";
 import { useSettings } from "@core/context/SettingsContext";
 import SlideToPay from "../components/shared/SlideToPay";
+import MinimumOrderNotice from "../components/shared/MinimumOrderNotice";
+import {
+  getMinimumOrderStatus,
+  minimumOrderMessage,
+  MIN_ORDER_ERROR_CODE,
+} from "../utils/minimumOrder";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { getCachedGeocode, setCachedGeocode } from "@/core/utils/geocodeCache";
 import { getJSON, setJSON, STORAGE_KEYS } from "@core/utils/storage";
@@ -169,6 +175,8 @@ const CheckoutPage = () => {
   const [orderId, setOrderId] = useState(null);
   const [pricingPreview, setPricingPreview] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  // Server-computed minimum-order status (from the preview or a refused order).
+  const [serverMinimumOrder, setServerMinimumOrder] = useState(null);
   const postOrderNavigateRef = useRef(null);
   const previewDebounceRef = useRef(null);
   const [currentAddress, setCurrentAddress] = useState({
@@ -264,6 +272,18 @@ const CheckoutPage = () => {
   const discountAmount = selectedCoupon
     ? selectedCoupon.discountAmount || selectedCoupon.discount || 0
     : 0;
+
+  // Instant client figure while the preview reloads; the server's once it lands.
+  const minimumOrder =
+    serverMinimumOrder ||
+    getMinimumOrderStatus({
+      cart,
+      minOrderValue: settings?.minOrderValue,
+      couponDiscount: discountAmount,
+      includeCouponDiscount: settings?.minOrderValueAfterCoupon !== false,
+      isItemOutOfStock,
+    });
+  const belowMinimum = Boolean(minimumOrder && !minimumOrder.isMet);
 
   const RECIPIENT_STORAGE_KEY = STORAGE_KEYS.RECIPIENT_ADDRESS;
 
@@ -731,6 +751,8 @@ const CheckoutPage = () => {
 
   // Debounced checkoutPreview — fires 400 ms after last dependency change
   useEffect(() => {
+    // Anything that changes the cart value makes the last server figure stale.
+    setServerMinimumOrder(null);
     if (!isAuthenticated || cart.length === 0) {
       setPricingPreview(null);
       return;
@@ -765,6 +787,7 @@ const CheckoutPage = () => {
         const res = await customerApi.checkoutPreview(buildPreviewPayload());
         if (res.data?.success) {
           setPricingPreview(res.data.result?.breakdown ?? null);
+          setServerMinimumOrder(res.data.result?.minimumOrder ?? null);
         }
       } catch (error) {
         console.error("Checkout preview failed", error);
@@ -843,6 +866,10 @@ const CheckoutPage = () => {
     if (isPlacingOrder) return;
     if (hasOutOfStockItem) {
       showToast("Please remove out of stock items from your cart to proceed", "error");
+      return;
+    }
+    if (belowMinimum) {
+      showToast(minimumOrderMessage(minimumOrder.remainingAmount), "error");
       return;
     }
     setIsPlacingOrder(true);
@@ -1044,6 +1071,20 @@ const CheckoutPage = () => {
       const serverMessage =
         error.response?.data?.message ||
         "Failed to place order. Please try again.";
+      // Server re-checked with the latest prices, stock, coupon and minimum
+      // order value: show its figures so the customer can top up the cart.
+      const minimumOrderError = error.response?.data?.result;
+      if (minimumOrderError?.code === MIN_ORDER_ERROR_CODE) {
+        setServerMinimumOrder({
+          minOrderValue: minimumOrderError.minOrderValue,
+          eligibleSubtotal: minimumOrderError.eligibleSubtotal,
+          remainingAmount: minimumOrderError.remainingAmount,
+          isMet: false,
+        });
+        refetchSettings?.({ forceRefresh: true });
+        showToast(serverMessage, "error");
+        return;
+      }
       // If the backend rejected a coupon that was valid at validate-time
       // but expired/over-limit by place-order time, auto-clear it so the
       // customer sees a clean state and can retry without the broken coupon.
@@ -1311,12 +1352,13 @@ const CheckoutPage = () => {
 
             {/* Desktop Slide to Pay */}
             <div className="hidden lg:block">
+              <MinimumOrderNotice status={minimumOrder} className="mb-4" />
               <SlideToPay
                 amount={finalAmountToPay}
                 onSuccess={handlePlaceOrder}
-                disabled={hasOutOfStockItem}
+                disabled={hasOutOfStockItem || belowMinimum}
                 isLoading={isPlacingOrder || isPreviewLoading || !pricingPreview}
-                text={hasOutOfStockItem ? "Remove Out of Stock Items" : (finalAmountToPay === 0 ? "Place Free Order" : "Order Now")}
+                text={hasOutOfStockItem ? "Remove Out of Stock Items" : belowMinimum ? `Add ₹${formatAmount(minimumOrder.remainingAmount)} more` : (finalAmountToPay === 0 ? "Place Free Order" : "Order Now")}
               />
               <p className="text-center text-[10px] text-slate-400 font-bold mt-4 uppercase tracking-[0.1em]">
                 🔒 SSL encrypted secure checkout
@@ -1329,12 +1371,13 @@ const CheckoutPage = () => {
       {/* Sticky Footer — Mobile Only */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-50 rounded-t-3xl">
         <div className="max-w-4xl mx-auto">
+          <MinimumOrderNotice status={minimumOrder} compact className="mb-3" />
           <SlideToPay
             amount={finalAmountToPay}
             onSuccess={handlePlaceOrder}
-            disabled={hasOutOfStockItem}
+            disabled={hasOutOfStockItem || belowMinimum}
             isLoading={isPlacingOrder || isPreviewLoading || !pricingPreview}
-            text={hasOutOfStockItem ? "Remove Out of Stock Items" : (finalAmountToPay === 0 ? "Place Free Order" : "Slide to Pay")}
+            text={hasOutOfStockItem ? "Remove Out of Stock Items" : belowMinimum ? `Add ₹${formatAmount(minimumOrder.remainingAmount)} more` : (finalAmountToPay === 0 ? "Place Free Order" : "Slide to Pay")}
           />
         </div>
       </div>

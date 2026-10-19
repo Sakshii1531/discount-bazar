@@ -415,6 +415,16 @@ export async function listPurchaseBills(sellerId, { from, to, supplierId } = {})
   return PurchaseBill.find(q).populate("supplier", "name phone gstin address").sort({ billDate: -1 }).limit(300).lean();
 }
 
+/** One bill, shaped like a listPurchaseBills row (opened for editing from a supplier ledger). */
+export async function getPurchaseBill(sellerId, id) {
+  if (!mongoose.Types.ObjectId.isValid(String(id))) throw err(404, "Bill not found");
+  const bill = await PurchaseBill.findOne({ _id: id, seller: sellerId })
+    .populate("supplier", "name phone gstin address")
+    .lean();
+  if (!bill) throw err(404, "Bill not found");
+  return bill;
+}
+
 /* ---------------- purchase returns ---------------- */
 // A return against a bill reverses that bill's lines: each item takes the GST rate and
 // incl./excl. type it was bought at, the supplier is the bill's, and the quantity can't

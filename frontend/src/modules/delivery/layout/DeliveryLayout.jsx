@@ -22,6 +22,9 @@ import { createSocketTokenReader } from "@core/utils/authStorage";
 import { STORAGE_KEYS } from "@core/utils/storage";
 import { formatCurrencyInteger } from "@shared/utils/currency";
 import orderAlertSound from "@/assets/sounds/order_alert.mp3";
+import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
+import { ActiveDeliveryBanner } from "../components/ActiveDeliveriesSection";
+import { isDashboardPath, restoreTarget } from "../utils/activeDeliveryRestore";
 
 const getDeliveryToken = createSocketTokenReader(STORAGE_KEYS.AUTH_DELIVERY);
 
@@ -220,6 +223,53 @@ const DeliveryLayout = () => {
   const [isAcceptingOrder, setIsAcceptingOrder] = useState(false);
   const acceptInFlightRef = useRef(false);
   const availableOrdersRequestRef = useRef({ inFlight: false, controller: null });
+
+  // ── Active-assignment restore ─────────────────────────────────────────
+  // The server's active-order list (not whichever screen is open) decides
+  // whether the rider has work in progress. On launch and whenever the app
+  // returns from the background we wait for a *fresh* server answer, then —
+  // only if the rider is on the dashboard — reopen the single active order
+  // at its current stage. With several active orders the dashboard lists
+  // them all instead of picking one.
+  const activeDeliveries = useActiveDeliveries();
+  const { orders: assignedOrders, syncSeq, refresh: refreshActive, canAcceptMore } = activeDeliveries;
+  const restoreAfterSeqRef = useRef(0); // restore on the first sync after this seq
+  const restorePendingRef = useRef(true); // true at launch
+  const hiddenAtRef = useRef(0);
+  const syncSeqRef = useRef(syncSeq);
+  syncSeqRef.current = syncSeq;
+  const atCapacityRef = useRef(false);
+  atCapacityRef.current = !canAcceptMore && assignedOrders.length > 0;
+
+  useEffect(() => {
+    const requestRestore = () => {
+      restorePendingRef.current = true;
+      restoreAfterSeqRef.current = syncSeqRef.current;
+      refreshActive();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+      } else if (hiddenAtRef.current && Date.now() - hiddenAtRef.current > 3000) {
+        hiddenAtRef.current = 0;
+        requestRestore();
+      }
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) requestRestore();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [refreshActive]);
+
+  // Returning to the dashboard always re-reads assignments from the server.
+  useEffect(() => {
+    if (isDashboardPath(location.pathname)) refreshActive();
+  }, [location.pathname, refreshActive]);
 
   // Ensure all delivery app pages open from the very top on navigation
   useEffect(() => {
@@ -663,7 +713,7 @@ const DeliveryLayout = () => {
 
     const tick = async () => {
       if (cancelled) return;
-      if (activeOrderRef.current || suppressIncomingModal) return;
+      if (activeOrderRef.current || suppressIncomingModal || atCapacityRef.current) return;
       if (
         typeof document !== "undefined" &&
         document.visibilityState === "hidden"
@@ -821,7 +871,7 @@ const DeliveryLayout = () => {
     const getToken = getDeliveryToken;
     getOrderSocket(getToken);
     return onDeliveryBroadcast(getToken, (payload) => {
-      if (activeOrderRef.current || suppressIncomingModal) return;
+      if (activeOrderRef.current || suppressIncomingModal || atCapacityRef.current) return;
       const opened = applyFromBroadcastPayload(payload);
       if (opened) return;
       fetchAvailableOrders()
@@ -895,7 +945,7 @@ const DeliveryLayout = () => {
 
     const tick = async () => {
       if (cancelled) return;
-      if (activeOrderRef.current || suppressIncomingModal) return;
+      if (activeOrderRef.current || suppressIncomingModal || atCapacityRef.current) return;
       if (
         typeof document !== "undefined" &&
         document.visibilityState === "hidden"
@@ -1042,6 +1092,19 @@ const DeliveryLayout = () => {
     return () => clearInterval(timer);
   }, [activeOrder, skipOrder]);
 
+  useEffect(() => {
+    if (!restorePendingRef.current || syncSeq <= restoreAfterSeqRef.current) return;
+    const target = restoreTarget({
+      path: location.pathname,
+      orders: assignedOrders,
+      incomingOfferOpen: Boolean(activeOrderRef.current),
+    });
+    if (target === "wait") return; // still on splash/login
+    restorePendingRef.current = false;
+    // Push (not replace) so the back button returns to the dashboard card.
+    if (target) navigate(target);
+  }, [syncSeq, location.pathname, assignedOrders, navigate]);
+
   const handleAcceptOrder = async () => {
     if (!activeOrder || acceptInFlightRef.current) return;
     if (
@@ -1071,6 +1134,9 @@ const DeliveryLayout = () => {
       markIncomingOrderHandled(orderId);
       stopOrderRingtone();
       setActiveOrder(null);
+      // The server confirmed the assignment; pick it up in the active list so
+      // the dashboard card exists even if the rider backs out right away.
+      refreshActive();
       navigate(`/delivery/order-details/${orderId}`);
     } catch (error) {
       console.error("Delivery Alert - Accept failed:", error);
@@ -1253,6 +1319,8 @@ const DeliveryLayout = () => {
       <main
         ref={mainRef}
         className={`h-full min-h-screen overflow-y-auto ${shouldShowBottomNav ? "pb-24" : ""} no-scrollbar`}>
+        {shouldShowBottomNav &&
+          !isDashboardPath(location.pathname) && <ActiveDeliveryBanner />}
         <Outlet />
       </main>
 

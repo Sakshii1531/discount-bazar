@@ -13,6 +13,7 @@ import {
   getDeliveryCodCashSummary,
   submitDeliveryCodCashToAdmin,
   getMyDeliveryOrders,
+  getMyActiveOrders,
   requestWithdrawal,
   getDeliveryWithdrawals,
   updateDeliveryLocation,
@@ -48,6 +49,12 @@ router.get(
   verifyToken,
   allowRoles("delivery"),
   getMyDeliveryOrders,
+);
+router.get(
+  "/active-orders",
+  verifyToken,
+  allowRoles("delivery"),
+  getMyActiveOrders,
 );
 router.post("/request-withdrawal", verifyToken, requestWithdrawal);
 router.post("/location", verifyToken, updateDeliveryLocation);

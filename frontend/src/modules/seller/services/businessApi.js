@@ -15,6 +15,7 @@ export const businessApi = {
     recordPayment: (data) => axiosInstance.post(`${B}/payments`, data),
 
     listPurchases: (params) => axiosInstance.get(`${B}/purchases`, { params }),
+    getPurchase: (id) => axiosInstance.get(`${B}/purchases/${id}`),
     createPurchase: (data) => axiosInstance.post(`${B}/purchases`, data),
     updatePurchase: (id, data) => axiosInstance.put(`${B}/purchases/${id}`, data),
     confirmPurchase: (id) => axiosInstance.post(`${B}/purchases/${id}/confirm`),

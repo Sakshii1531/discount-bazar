@@ -10,6 +10,7 @@ import { freezeFinancialSnapshot } from "./finance/orderFinanceService.js";
 import { emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { roundCurrency, purchaseBaseCost, lineMrp } from "../utils/money.js";
 import { resolvePosPayment } from "./posPayment.js";
+import { resolveBillCustomerDetails } from "./posSaleService.js";
 
 const err = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 const keyOf = (product, variant) => `${product}::${variant || ""}`;
@@ -161,6 +162,19 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       order.posCashTendered = pay.posCashTendered;
       order.paymentStatus = pay.paymentStatus;
       order.payment = { ...(order.payment?.toObject ? order.payment.toObject() : order.payment || {}), ...pay.payment };
+      if (String(customerId || "") !== String(order.posCustomer || "")) {
+        // Re-linking the bill: refresh the printed name/phone unless the
+        // cashier typed their own (i.e. it wasn't blank or the old customer's).
+        const [prevCustomer, nextCustomer] = await Promise.all(
+          [order.posCustomer, customerId].map((id) =>
+            id ? PosCustomer.findOne({ _id: id, seller: sellerId }).select("name phone").session(session).lean() : null,
+          ),
+        );
+        const current = order.walkInCustomer || {};
+        if (!current.name || (prevCustomer && current.name === prevCustomer.name)) {
+          order.walkInCustomer = resolveBillCustomerDetails(null, nextCustomer);
+        }
+      }
       order.posCustomer = customerId || undefined;
       order.isTaxInclusive = isTaxInclusive;
       freezeFinancialSnapshot(order, {

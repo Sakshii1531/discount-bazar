@@ -2,12 +2,16 @@ import ExperienceSection from "../models/experienceSection.js";
 import HeroConfig from "../models/heroConfig.js";
 import Category from "../models/category.js";
 import Product from "../models/product.js";
+import Brand from "../models/brand.js";
 import handleResponse from "../utils/helper.js";
 import mongoose from "mongoose";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
 import { parseCustomerCoordinates } from "../services/customerVisibilityService.js";
-import { resolveExperienceSectionProducts } from "../services/experienceSectionService.js";
+import {
+  attachBrandCards,
+  resolveExperienceSectionProducts,
+} from "../services/experienceSectionService.js";
 import { decorateProductsWithDelivery } from "../services/deliveryQuoteService.js";
 import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
 
@@ -35,7 +39,7 @@ const validateBasePayload = async (body) => {
     throw new Error("Invalid pageType");
   }
 
-  if (!["banners", "categories", "subcategories", "products"].includes(displayType)) {
+  if (!["banners", "categories", "subcategories", "products", "brands"].includes(displayType)) {
     throw new Error("Invalid displayType");
   }
 
@@ -49,7 +53,7 @@ const validateBasePayload = async (body) => {
     }
   }
 
-  if (["categories", "subcategories", "products"].includes(displayType)) {
+  if (["categories", "subcategories", "products", "brands"].includes(displayType)) {
     if (!title || !title.trim()) {
       throw new Error("Title is required for this displayType");
     }
@@ -208,6 +212,29 @@ const validateAndNormalizeConfig = async (displayType, config = {}) => {
       rows: normalizedRows,
       columns: normalizedColumns,
       singleRowScrollable,
+    };
+    return normalized;
+  }
+
+  if (displayType === "brands") {
+    const brandIds = Array.isArray(config.brandIds)
+      ? config.brandIds.filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+      : [];
+    if (!brandIds.length) {
+      throw new Error("Select at least one brand");
+    }
+    const brands = await Brand.find({ _id: { $in: brandIds } }).select("_id");
+    if (!brands.length) {
+      throw new Error("Provided brandIds are invalid");
+    }
+    const layout = config.layout === "grid" ? "grid" : "carousel";
+    const rows = Math.max(1, Math.min(Number(config.rows) || 1, 6));
+    const maxItems = Number(config.maxItems) > 0 ? Math.min(Number(config.maxItems), 50) : undefined;
+    normalized.brands = {
+      brandIds: inRequestedOrder(brandIds, brands),
+      layout,
+      rows: layout === "carousel" ? 1 : rows,
+      maxItems,
     };
     return normalized;
   }
@@ -395,7 +422,12 @@ export const getPublicExperienceSections = async (req, res) => {
     // writes clear it, and per location bucket like offer sections).
     const coords = parseCustomerCoordinates(req.query || {});
     if (!coords.valid) {
-      return handleResponse(res, 200, "Experience sections fetched", await loadSections());
+      return handleResponse(
+        res,
+        200,
+        "Experience sections fetched",
+        await attachBrandCards(await loadSections()),
+      );
     }
     const resolvedKey = buildKey(
       "catalog",
@@ -417,7 +449,8 @@ export const getPublicExperienceSections = async (req, res) => {
       ),
     );
 
-    return handleResponse(res, 200, "Experience sections fetched", sections);
+    // Brand names/logos are attached after the cache so brand edits show at once.
+    return handleResponse(res, 200, "Experience sections fetched", await attachBrandCards(sections));
   } catch (error) {
     return handleResponse(res, 500, error.message);
   }

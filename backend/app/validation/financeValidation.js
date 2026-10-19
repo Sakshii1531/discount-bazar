@@ -53,7 +53,9 @@ export const checkoutPreviewSchema = Joi.object({
 
 export const createFinanceOrderSchema = checkoutPreviewSchema.keys({
   items: Joi.array().items(orderItemSchema).min(1).optional(),
-  paymentMode: Joi.string().valid("ONLINE", "COD").required(),
+  // WALLET = the wallet pays the whole order (checkout sends it when
+  // walletAmount covers the total); placement refuses it otherwise.
+  paymentMode: Joi.string().valid("ONLINE", "COD", "WALLET").required(),
   walletAmount: Joi.number().min(0).default(0),
 });
 
@@ -123,6 +125,8 @@ export const updateDeliverySettingsSchema = Joi.object({
     .valid("highest_category_fee", "sum_of_category_fees", "max_single_fee", "per_item_fee")
     .optional(),
   globalTaxRate: Joi.number().min(0).max(100).optional(),
+  minOrderValue: Joi.number().min(0).max(100000).precision(2).optional(),
+  minOrderValueAfterCoupon: Joi.boolean().optional(),
   codEnabled: Joi.boolean().optional(),
   onlineEnabled: Joi.boolean().optional(),
   returnDeliveryCommission: Joi.number().min(0).optional(),
@@ -141,6 +145,8 @@ export const updateDeliverySettingsSchema = Joi.object({
   "zeroDeliveryTimeMessage",
   "handlingFeeStrategy",
   "globalTaxRate",
+  "minOrderValue",
+  "minOrderValueAfterCoupon",
   "codEnabled",
   "onlineEnabled",
   "returnDeliveryCommission",

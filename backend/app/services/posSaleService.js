@@ -30,6 +30,12 @@ import { assertDayOpen } from "./businessTime.js";
 import PosCustomer from "../models/posCustomer.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
 import { resolvePosPayment } from "./posPayment.js";
+import {
+  MAX_TRANSACTION_ATTEMPTS,
+  asRetryLaterError,
+  isTransientTransactionError,
+  transactionRetryDelay,
+} from "../utils/transactionRetry.js";
 
 const IDEMPOTENCY_RECORD_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -42,6 +48,17 @@ const IDEMPOTENCY_RECORD_TTL_MS = 24 * 60 * 60 * 1000;
  */
 function buildWalkInPhone(sellerId) {
   return `+${BigInt(`0x${String(sellerId)}`).toString()}`;
+}
+
+/**
+ * Name/phone snapshot printed on the bill. Typed details win; anything left
+ * blank is filled from the linked ledger customer, so a bill for a selected
+ * customer never reads "Walk-in". Undefined when neither is given.
+ */
+export function resolveBillCustomerDetails(typed, posCustomer) {
+  const name = String(typed?.name || "").trim() || String(posCustomer?.name || "").trim();
+  const phone = String(typed?.phone || "").trim() || String(posCustomer?.phone || "").trim();
+  return name || phone ? { name, phone } : undefined;
 }
 
 /**
@@ -365,7 +382,7 @@ export async function previewPosSale({ sellerId, payload }) {
  * Settings.posCouponsEnabled respectively (see buildPosBreakdown and the
  * couponService.computeOrderDiscount call below).
  */
-export async function createPosSale({ sellerId, payload, idempotencyKey }) {
+export async function createPosSale({ sellerId, payload, idempotencyKey, attempt = 1 }) {
   if (!validateIdempotencyKey(idempotencyKey)) {
     const error = new Error(
       "Idempotency-Key header is required (32-64 alphanumeric/hyphen characters)",
@@ -444,6 +461,7 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
 
     const walkInCustomerId = await resolveWalkInCustomer({ sellerId, session });
     const orderId = await generateUniquePublicOrderId({ session });
+    const customerDetails = resolveBillCustomerDetails(payload.walkInCustomer, posCustomer);
 
     const { lowStockAlerts, stockUpdates } = await reserveStockForItems({
       items,
@@ -511,7 +529,7 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
       posAmountPaid: upFront,
       posPayments: pay.posPayments,
       posCashTendered: pay.posCashTendered,
-      walkInCustomer: payload.walkInCustomer || undefined,
+      walkInCustomer: customerDetails,
       isTaxInclusive,
       paymentBreakdown: breakdown,
       coupon: discountResult?.coupon?._id || null,
@@ -590,6 +608,17 @@ export async function createPosSale({ sellerId, payload, idempotencyKey }) {
   } catch (error) {
     if (session.inTransaction()) {
       await session.abortTransaction();
+    }
+
+    // Nothing was written: run the whole sale again (it re-takes the lock).
+    if (isTransientTransactionError(error)) {
+      await releaseIdempotencyLock(idempotencyKey);
+      if (attempt < MAX_TRANSACTION_ATTEMPTS) {
+        session.endSession();
+        await transactionRetryDelay(attempt);
+        return createPosSale({ sellerId, payload, idempotencyKey, attempt: attempt + 1 });
+      }
+      throw asRetryLaterError(error);
     }
 
     if (isRetryableError(error)) {

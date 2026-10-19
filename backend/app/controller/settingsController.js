@@ -56,12 +56,15 @@ const ALLOWED_KEYS = [
   "zeroDeliveryTimeMessage",
   "handlingFeeStrategy",
   "globalTaxRate",
+  "minOrderValue",
+  "minOrderValueAfterCoupon",
   "codEnabled",
   "onlineEnabled",
   "lowStockAlertsEnabled",
   "posCommissionEnabled",
   "posCouponsEnabled",
   "productApproval",
+  "communication",
 ];
 
 function flattenForMongoSet(prefix, value, target) {
@@ -147,6 +150,8 @@ const updateSettingsSchema = Joi.object({
     "per_item_fee",
   ),
   globalTaxRate: Joi.number().min(0).max(100),
+  minOrderValue: Joi.number().min(0).max(100000).precision(2),
+  minOrderValueAfterCoupon: Joi.boolean(),
   codEnabled: Joi.boolean(),
   onlineEnabled: Joi.boolean(),
   lowStockAlertsEnabled: Joi.boolean(),
@@ -155,6 +160,15 @@ const updateSettingsSchema = Joi.object({
   productApproval: Joi.object({
     sellerCreateRequiresApproval: Joi.boolean(),
     sellerEditRequiresApproval: Joi.boolean(),
+  }).unknown(false),
+  communication: Joi.object({
+    chatEnabled: Joi.boolean(),
+    callEnabled: Joi.boolean(),
+    messageMaxLength: Joi.number().integer().min(50).max(2000),
+    pushPreviewEnabled: Joi.boolean(),
+    riderAssignmentDelayMinutes: Joi.number().integer().min(1).max(240),
+    pickupDelayEscalationMinutes: Joi.number().integer().min(1).max(240),
+    messageRetentionDays: Joi.number().integer().min(1).max(3650),
   }).unknown(false),
 }).unknown(false);
 
@@ -176,7 +190,7 @@ export const getPublicSettings = async (req, res) => {
       async () => {
         const existing = await Setting.findOne(filter)
           .select(
-            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee globalDeliveryTimeMinutes zeroDeliveryTimeMessage handlingFeeStrategy globalTaxRate codEnabled onlineEnabled lowStockAlertsEnabled posCommissionEnabled posCouponsEnabled productApproval createdAt",
+            "appName supportEmail supportPhone currencySymbol currencyCode timezone logoUrl faviconUrl primaryColor secondaryColor companyName taxId address aboutUsText privacyPolicyText termsConditionsText refundPolicyText deliveryPolicyText facebook twitter instagram linkedin youtube playStoreLink appStoreLink metaTitle metaDescription metaKeywords keywords returnDeliveryCommission deliveryPricingMode pricingMode customerBaseDeliveryFee riderBasePayout baseDeliveryCharge baseDistanceCapacityKm incrementalKmSurcharge deliveryPartnerRatePerKm fleetCommissionRatePerKm fixedDeliveryFee globalDeliveryTimeMinutes zeroDeliveryTimeMessage handlingFeeStrategy globalTaxRate minOrderValue minOrderValueAfterCoupon codEnabled onlineEnabled lowStockAlertsEnabled posCommissionEnabled posCouponsEnabled productApproval createdAt",
           )
           .lean();
         return existing || null;
@@ -196,6 +210,8 @@ export const getPublicSettings = async (req, res) => {
     const finance = normalizeFinanceSettings(settings);
     settings.globalDeliveryTimeMinutes = finance.globalDeliveryTimeMinutes;
     settings.zeroDeliveryTimeMessage = finance.zeroDeliveryTimeMessage;
+    settings.minOrderValue = finance.minOrderValue;
+    settings.minOrderValueAfterCoupon = finance.minOrderValueAfterCoupon;
 
     return handleResponse(res, 200, "Settings fetched successfully", settings);
   } catch (error) {

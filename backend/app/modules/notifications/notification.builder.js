@@ -473,12 +473,121 @@ function eventDefinition(eventType) {
           return `Your withdrawal request of ${amount} status is now ${payload.status}.`;
         },
       };
+    case NOTIFICATION_EVENTS.CHAT_MESSAGE:
+      // One definition per possible recipient role; only the one matching
+      // `recipientRole` yields a recipient.
+      return {
+        multi: true,
+        definitions: [
+          NOTIFICATION_ROLES.CUSTOMER,
+          NOTIFICATION_ROLES.SELLER,
+          NOTIFICATION_ROLES.DELIVERY,
+        ].map((role) => ({
+          role,
+          recipientIds: (payload) =>
+            String(payload.recipientRole || "") === role
+              ? normalizeIdList(payload.recipientId)
+              : [],
+          title: (payload) => {
+            const sender = String(payload.senderName || "New message").trim();
+            return payload.orderId ? `${sender} · Order #${payload.orderId}` : sender;
+          },
+          body: (payload) => truncateText(payload.preview, 100) || "New message",
+        })),
+      };
+    case NOTIFICATION_EVENTS.SELLER_READY_FOR_PICKUP:
+      return {
+        role: NOTIFICATION_ROLES.DELIVERY,
+        recipientIds: (payload) => normalizeIdList(payload.deliveryId),
+        title: (payload) => `Order #${payload.orderId} is ready for pickup`,
+        body: () => "The store has packed this order. Open the order for pickup details.",
+      };
+    case NOTIFICATION_EVENTS.PICKUP_ETA_UPDATED:
+      return {
+        role: NOTIFICATION_ROLES.DELIVERY,
+        recipientIds: (payload) => normalizeIdList(payload.deliveryId),
+        title: (payload) => `Order #${payload.orderId}: new ready time`,
+        body: (payload) =>
+          `The store expects the order to be ready in about ${payload.minutes} min.`,
+      };
+    case NOTIFICATION_EVENTS.COMMUNICATION_ISSUE_REPORTED:
+      return {
+        multi: true,
+        definitions: [
+          {
+            role: NOTIFICATION_ROLES.ADMIN,
+            recipientIds: (payload) => normalizeIdList(payload.adminIds),
+            title: (payload) => `Issue on order #${payload.orderId}`,
+            body: (payload) => {
+              const who =
+                payload.reporterRole === "delivery"
+                  ? "Rider"
+                  : payload.reporterRole === "seller"
+                  ? "Seller"
+                  : "Customer";
+              return `${who} reported: ${payload.reasonLabel || "an issue"}`;
+            },
+          },
+          {
+            role: NOTIFICATION_ROLES.SELLER,
+            recipientIds: (payload) => normalizeIdList(payload.sellerId),
+            title: (payload) => `Pickup issue on order #${payload.orderId}`,
+            body: (payload) => `The rider reported: ${payload.reasonLabel || "a pickup issue"}`,
+          },
+        ],
+      };
+    case NOTIFICATION_EVENTS.COMMUNICATION_ISSUE_ESCALATED:
+      return {
+        role: NOTIFICATION_ROLES.ADMIN,
+        recipientIds: (payload) => normalizeIdList(payload.adminIds),
+        title: (payload) => `Pickup delay escalated · #${payload.orderId}`,
+        body: (payload) =>
+          `A pickup issue has been open for over ${payload.minutes} minutes and needs attention.`,
+      };
     default:
       return null;
   }
 }
 
+function commLink(role, orderId, channel) {
+  const baseUrl = getFrontendBaseUrl();
+  const id = encodeURIComponent(String(orderId || "").trim());
+  const chat = channel ? `chat=${encodeURIComponent(channel)}` : "";
+  if (role === NOTIFICATION_ROLES.DELIVERY) {
+    return `${baseUrl}/delivery/order-details/${id}${chat ? `?${chat}` : ""}`;
+  }
+  if (role === NOTIFICATION_ROLES.SELLER) {
+    return `${baseUrl}/seller/orders?orderId=${id}${chat ? `&${chat}` : ""}`;
+  }
+  if (role === NOTIFICATION_ROLES.ADMIN) {
+    return `${baseUrl}/admin/order-communications?orderId=${id}`;
+  }
+  return `${baseUrl}/orders/${id}${chat ? `?${chat}` : ""}`;
+}
+
+const COMM_EVENTS = new Set([
+  NOTIFICATION_EVENTS.CHAT_MESSAGE,
+  NOTIFICATION_EVENTS.SELLER_READY_FOR_PICKUP,
+  NOTIFICATION_EVENTS.PICKUP_ETA_UPDATED,
+  NOTIFICATION_EVENTS.COMMUNICATION_ISSUE_REPORTED,
+  NOTIFICATION_EVENTS.COMMUNICATION_ISSUE_ESCALATED,
+]);
+
 function eventData(eventType, payload = {}, role) {
+  if (COMM_EVENTS.has(eventType)) {
+    // Deliberately minimal: no phone numbers, addresses or full message text.
+    const orderId = String(payload.orderId || "").trim() || undefined;
+    const channel =
+      eventType === NOTIFICATION_EVENTS.CHAT_MESSAGE ? payload.channel : undefined;
+    return {
+      eventType,
+      role,
+      orderId,
+      link: commLink(role, orderId, channel),
+      ...(payload.data || {}),
+    };
+  }
+
   if (eventType === NOTIFICATION_EVENTS.LOW_STOCK_ALERT) {
     const productId = String(payload.productId || "").trim() || undefined;
     return {

@@ -7,6 +7,7 @@ import { emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { roundCurrency } from "../utils/money.js";
 import { assertDayOpen } from "./businessTime.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
+import PosCustomer from "../models/posCustomer.js";
 
 function makeError(statusCode, message) {
   const err = new Error(message);
@@ -96,7 +97,12 @@ export async function getPosOrderForReturn({ sellerId, orderId }) {
     };
   });
 
-  return { order: { ...order, items: undefined }, items };
+  // Linked ledger customer as { _id, name, phone } for the return screen.
+  const posCustomer = order.posCustomer
+    ? (await PosCustomer.findOne({ _id: order.posCustomer, seller: sellerId }).select("name phone").lean()) || order.posCustomer
+    : undefined;
+
+  return { order: { ...order, posCustomer, items: undefined }, items };
 }
 
 export async function listPosReturns({ sellerId, page = 1, limit = 25 }) {

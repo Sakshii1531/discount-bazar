@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ProductDetailSheet from '../components/shared/ProductDetailSheet';
@@ -18,7 +18,9 @@ const BrandProductsPage = () => {
     const navigate = useNavigate();
     const { isOpen: isProductDetailOpen } = useProductDetail();
     const [sort, setSort] = useState('newest');
-    const [inStockOnly, setInStockOnly] = useState(false);
+    // Brand showcase cards link with ?instock=1 so shoppers land on what they can buy now.
+    const [searchParams] = useSearchParams();
+    const [inStockOnly, setInStockOnly] = useState(searchParams.get('instock') === '1');
 
     const brand = String(brandName).trim();
     const listing = useCatalogProducts(

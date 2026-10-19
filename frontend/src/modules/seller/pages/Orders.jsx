@@ -25,6 +25,8 @@ import {
 } from 'react-icons/hi2';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'react-router-dom';
+import { OrderContactPanel, CHANNELS } from '@shared/communication';
 
 // Helper to format return status into clean, human-readable labels
 const getReturnStatusLabel = (status) => {
@@ -132,6 +134,11 @@ const Orders = () => {
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
     const hasMountedRef = useRef(false);
+    // Notification deep link: /seller/orders?orderId=<id>&chat=seller_rider
+    const [searchParams] = useSearchParams();
+    const deepLinkOrderId = searchParams.get('orderId');
+    const deepLinkChat = searchParams.get('chat') === CHANNELS.SELLER_RIDER;
+    const deepLinkHandledRef = useRef(false);
 
     // Prevent background screen scrolling when modals are open
     useEffect(() => {
@@ -282,6 +289,14 @@ const Orders = () => {
             });
 
             setOrders(formattedOrders);
+            if (deepLinkOrderId && !deepLinkHandledRef.current) {
+                const target = formattedOrders.find((o) => String(o.id) === String(deepLinkOrderId));
+                if (target) {
+                    deepLinkHandledRef.current = true;
+                    setSelectedOrder(target);
+                    setIsDetailsModalOpen(true);
+                }
+            }
 
             const fallbackAmount = formattedOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
             setSummary({
@@ -1258,6 +1273,23 @@ const Orders = () => {
                                                         <p className="text-xs font-semibold text-slate-600 mt-0.5">{selectedOrder.customer.phone}</p>
                                                     </div>
                                                 </div>
+                                                {selectedOrder.workflowVersion >= 2 && !selectedOrder.walkInCustomer && (
+                                                    <div>
+                                                        <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                            <HiOutlineTruck className="h-3 w-3 text-brand-500" /> Pickup Rider
+                                                        </h4>
+                                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
+                                                            {/* Only the rider currently assigned to collect this order;
+                                                                closes once pickup is confirmed. */}
+                                                            <OrderContactPanel
+                                                                orderId={selectedOrder.id}
+                                                                role="seller"
+                                                                channel={CHANNELS.SELLER_RIDER}
+                                                                autoOpenChat={deepLinkChat && String(selectedOrder.id) === String(deepLinkOrderId)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="space-y-4">
                                                 <div className="bg-slate-900 p-4 rounded-3xl text-white border border-slate-800 shadow-xl relative overflow-hidden">

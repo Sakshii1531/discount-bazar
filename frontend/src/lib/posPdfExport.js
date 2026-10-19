@@ -6,6 +6,8 @@
  * table headers) with wrapping table cells so long names never overlap.
  */
 
+import { posBillCustomer } from './posCustomer';
+
 const BRAND_RED  = [220, 38, 38];     // #DC2626
 const BRAND_DARK = [15, 23, 42];      // #0F172A
 const GRAY_LINE  = [226, 232, 240];   // #E2E8F0
@@ -429,8 +431,8 @@ const billFigures = (order) => {
 };
 
 const customerOf = (o) => {
-    const name = o.walkInCustomer?.name || 'Walk-in';
-    return o.walkInCustomer?.phone ? `${name} (${o.walkInCustomer.phone})` : name;
+    const { name, phone } = posBillCustomer(o);
+    return phone ? `${name} (${phone})` : name;
 };
 
 const periodLabel = ({ from, to } = {}) => {
@@ -582,8 +584,8 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
     y = drawInfoGrid(doc, y, [
         ['Bill No.', `#${order.orderId}`],
         ['Date & Time', fmtDateTime(paidAt)],
-        ['Customer', order.walkInCustomer?.name || 'Walk-in Customer'],
-        ['Customer Phone', order.walkInCustomer?.phone || '-'],
+        ['Customer', posBillCustomer(order, 'Walk-in Customer').name],
+        ['Customer Phone', posBillCustomer(order).phone || '-'],
         ['Store', store],
         ['Cashier', sellerInfo.name || '-'],
         ['Store Address', address || '-'],

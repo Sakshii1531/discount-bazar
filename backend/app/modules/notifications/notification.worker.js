@@ -84,6 +84,35 @@ async function deactivateInvalidTokens(tokens = [], responses = []) {
   return invalidTokenIds.length;
 }
 
+async function commNotificationSuppression(notification, commCheck) {
+  try {
+    const comm = await import("../../services/communication/communicationService.js");
+    const { relevant, reason } = await comm.checkNotificationRelevance(commCheck);
+    if (!relevant) {
+      await comm.recordEvent({
+        orderId: commCheck.orderId,
+        type: "NOTIFICATION_SUPPRESSED",
+        eventKey: `suppress:${notification._id}`,
+        meta: { notificationType: notification.type, role: notification.role, reason },
+      });
+      return `Obsolete: ${reason}`;
+    }
+    if (commCheck.kind === "chat" && commCheck.conversationId) {
+      const { isRecipientViewing } = await import("../../socket/socketManager.js");
+      if (await isRecipientViewing(commCheck.conversationId, commCheck.recipientId)) {
+        return "Recipient is viewing the conversation";
+      }
+    }
+  } catch (error) {
+    // Fail open: a relevance-check outage must not drop legitimate alerts.
+    logger.warn("Communication notification relevance check failed", {
+      notificationId: String(notification._id),
+      message: error.message,
+    });
+  }
+  return null;
+}
+
 export async function deliverNotificationById(notificationId) {
   if (!notificationId) {
     return;
@@ -111,6 +140,27 @@ export async function deliverNotificationById(notificationId) {
       },
     );
     return;
+  }
+
+  // Order-communication notifications are re-validated against the live
+  // order right before push: a reassigned rider, a closed order, or a
+  // recipient already looking at the chat must not get an alert.
+  const commCheck = notification.data?.commCheck;
+  if (commCheck) {
+    const suppression = await commNotificationSuppression(notification, commCheck);
+    if (suppression) {
+      await Notification.updateOne(
+        { _id: notification._id },
+        {
+          $set: {
+            status: "skipped",
+            failureReason: suppression,
+            deliveryStats: { attempted: 0, sent: 0, failed: 0, invalidTokens: 0 },
+          },
+        },
+      );
+      return;
+    }
   }
 
   const roleFilter =
@@ -159,7 +209,8 @@ export async function deliverNotificationById(notificationId) {
           title: notification.title,
           body: notification.body || notification.message,
           message: notification.message,
-          data: notification.data || {},
+          // commCheck is server-side bookkeeping; keep it off the device.
+          data: (({ commCheck: _omit, ...rest }) => rest)(notification.data || {}),
         },
       ),
       new Promise((_, reject) =>

@@ -3,6 +3,8 @@ export const CURRENCY = "INR";
 export const PAYMENT_MODE = {
   ONLINE: "ONLINE",
   COD: "COD",
+  // Order fully paid from the customer wallet (set by placement; no cash/gateway).
+  WALLET: "WALLET",
 };
 
 export const ORDER_PAYMENT_STATUS = {

@@ -8,6 +8,15 @@ import { sellerApi } from "../services/sellerApi";
 import PurchaseProductSearch from "../components/business/PurchaseProductSearch";
 import PurchaseProductEditModal from "../components/business/PurchaseProductEditModal";
 import { formatPriceInteger } from "@shared/utils/currency";
+import Modal from "@shared/components/ui/Modal";
+import { useAuth } from "@core/context/AuthContext";
+import SaleEditPanel from "../components/pos/SaleEditPanel";
+import {
+    buildStatement,
+    printStatement,
+    downloadStatementPdf,
+    downloadStatementXlsx,
+} from "../utils/ledgerStatement";
 import {
     HiOutlineSquares2X2,
     HiOutlineShoppingBag,
@@ -37,6 +46,8 @@ import {
     HiOutlineCube,
     HiOutlineClock,
     HiOutlineChevronDown,
+    HiOutlineArrowDownTray,
+    HiOutlineTableCells,
 } from "react-icons/hi2";
 
 const REPORTS = [
@@ -158,7 +169,12 @@ const LedgerItems = ({ items }) => {
     );
 };
 
-const LedgerStatementTable = ({ entries = [] }) => {
+// Ledger rows whose bill can be corrected in place (stock + ledger reconcile on save).
+const editableBill = (e) =>
+    (e.kind === "SALE" && e.refModel === "Order" && e.refNo) ||
+    (e.kind === "PURCHASE" && e.refModel === "PurchaseBill" && e.refId);
+
+const LedgerStatementTable = ({ entries = [], onEditBill }) => {
     const [open, setOpen] = useState(() => new Set());
     const withItems = entries.filter((e) => e.items?.length > 0);
     const allOpen = withItems.length > 0 && withItems.every((e) => open.has(String(e._id)));
@@ -201,6 +217,7 @@ const LedgerStatementTable = ({ entries = [] }) => {
                             <th className="text-right px-4 py-3">Credit</th>
                             <th className="text-right px-4 py-3">Balance</th>
                             <th className="text-right px-4 py-3">Items</th>
+                            {onEditBill && <th className="text-right px-4 py-3">Bill</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -236,10 +253,25 @@ const LedgerStatementTable = ({ entries = [] }) => {
                                                 <span className="text-slate-300">—</span>
                                             )}
                                         </td>
+                                        {onEditBill && (
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                {editableBill(e) ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(ev) => { ev.stopPropagation(); onEditBill(e); }}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                                    >
+                                                        <HiOutlinePencilSquare className="h-3.5 w-3.5" /> Edit bill
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-slate-300">—</span>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                     {isOpen && count > 0 && (
                                         <tr className="bg-slate-50/60">
-                                            <td colSpan={8} className="px-4 pb-4 pt-1">
+                                            <td colSpan={onEditBill ? 9 : 8} className="px-4 pb-4 pt-1">
                                                 <LedgerItems items={e.items} />
                                             </td>
                                         </tr>
@@ -1255,6 +1287,34 @@ const PurchasesTab = () => {
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
+    // Opened from a supplier ledger's "Edit bill": load that bill into the editor.
+    const editFromLedgerId = location.state?.editPurchaseBillId;
+    useEffect(() => {
+        if (!editFromLedgerId) return;
+        let cancelled = false;
+        businessApi
+            .getPurchase(editFromLedgerId)
+            .then((r) => {
+                const bill = unwrap(r);
+                if (cancelled || !bill) return;
+                if (bill.status === "CANCELLED") {
+                    toast.error("This bill was cancelled and can't be edited");
+                } else {
+                    edit(bill);
+                    toast.info(`Editing bill ${bill.billNo}. Saving adjusts stock and the supplier ledger.`);
+                }
+            })
+            .catch((e) => toast.error(errMsg(e)))
+            .finally(() => {
+                // Consume the request so a refresh doesn't reopen it.
+                navigate(location.pathname, { replace: true, state: {} });
+            });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editFromLedgerId]);
+
     // Return form for one line of a confirmed bill; the line can be switched in the form.
     const returnLine = (b, idx) => {
         const it = b.items[idx];
@@ -2129,6 +2189,12 @@ const PartiesTab = () => {
     const [ledger, setLedger] = useState(null);
     const [pay, setPay] = useState({ amount: "", method: "CASH" });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [exporting, setExporting] = useState("");
+    // POS bill opened from a customer ledger row: { order, lines, hasReturns }
+    const [saleEdit, setSaleEdit] = useState(null);
+    const [openingBill, setOpeningBill] = useState("");
+    const { user: sellerProfile } = useAuth();
+    const navigate = useNavigate();
     const partyType = kind === "suppliers" ? "SUPPLIER" : "CUSTOMER";
 
     const load = useCallback(() => {
@@ -2225,6 +2291,53 @@ const PartiesTab = () => {
         } catch (e) {
             toast.error(errMsg(e));
         }
+    };
+
+    const statement = () =>
+        buildStatement({ kind, party: ledger.party, entries: ledger.entries, balance: ledger.balance, business: sellerProfile || {} });
+
+    const exportStatement = async (format) => {
+        if (!ledger || exporting) return;
+        setExporting(format);
+        try {
+            const st = statement();
+            if (format === "print") printStatement(st);
+            else if (format === "pdf") await downloadStatementPdf(st);
+            else downloadStatementXlsx(st);
+        } catch (e) {
+            toast.error(errMsg(e) || "Could not export the statement");
+        } finally {
+            setExporting("");
+        }
+    };
+
+    // "Edit this bill" from the ledger: POS sales open the audited bill editor
+    // here; purchase bills open in the Purchases editor. Saving reconciles
+    // stock and this ledger on the server, so no manual correction is needed.
+    const editBill = async (entry) => {
+        if (entry.refModel === "PurchaseBill") {
+            navigate("/seller/business/purchases", { state: { editPurchaseBillId: String(entry.refId) } });
+            return;
+        }
+        setOpeningBill(String(entry._id));
+        try {
+            const res = await posApi.getOrderForReturn(entry.refNo);
+            const data = unwrap(res);
+            if (!data?.order) throw new Error("Bill not found");
+            const lines = Array.isArray(data.items) ? data.items : [];
+            setSaleEdit({ order: data.order, lines, hasReturns: lines.some((l) => Number(l.returnedQuantity || 0) > 0) });
+        } catch (e) {
+            toast.error(errMsg(e) || "Could not open the bill for editing");
+        } finally {
+            setOpeningBill("");
+        }
+    };
+
+    const onSaleEdited = () => {
+        setSaleEdit(null);
+        toast.success("Bill updated — stock and ledger adjusted");
+        if (ledger) open(ledger.party);
+        load();
     };
 
     const pay1 = async () => {
@@ -2508,7 +2621,18 @@ const PartiesTab = () => {
                                     {ledger.party.phone ? `Phone: ${ledger.party.phone}` : "No phone provided"}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-1.5" role="group" aria-label="Export statement">
+                                    <button type="button" className={ghostBtn} disabled={!!exporting} onClick={() => exportStatement("print")}>
+                                        <HiOutlinePrinter className="h-3.5 w-3.5" /> Print
+                                    </button>
+                                    <button type="button" className={ghostBtn} disabled={!!exporting} onClick={() => exportStatement("pdf")}>
+                                        <HiOutlineArrowDownTray className="h-3.5 w-3.5" /> {exporting === "pdf" ? "Preparing…" : "PDF"}
+                                    </button>
+                                    <button type="button" className={ghostBtn} disabled={!!exporting} onClick={() => exportStatement("xlsx")}>
+                                        <HiOutlineTableCells className="h-3.5 w-3.5" /> Excel
+                                    </button>
+                                </div>
                                 <div className="text-right">
                                     <p className="text-[10px] uppercase font-bold text-slate-400">Current Balance</p>
                                     <p className={cn(
@@ -2556,12 +2680,35 @@ const PartiesTab = () => {
                             {/* Statement Table */}
                             <div className="space-y-2">
                                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
-                                <LedgerStatementTable key={ledger.party._id} entries={ledger.entries} />
+                                <LedgerStatementTable key={ledger.party._id} entries={ledger.entries} onEditBill={editBill} />
+                                {openingBill && <p className="text-xs text-slate-500">Opening bill…</p>}
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            <Modal
+                isOpen={!!saleEdit}
+                onClose={() => setSaleEdit(null)}
+                title={saleEdit ? `Edit bill #${saleEdit.order.orderId}` : "Edit bill"}
+                size="md"
+            >
+                {saleEdit &&
+                    (saleEdit.hasReturns ? (
+                        <p className="text-sm text-slate-600 py-4 text-center">
+                            This bill already has returns, so it can't be edited. Use Returns in POS to adjust it.
+                        </p>
+                    ) : (
+                        <SaleEditPanel
+                            order={saleEdit.order}
+                            lines={saleEdit.lines}
+                            defaultOpen
+                            onCancel={() => setSaleEdit(null)}
+                            onSaved={onSaleEdited}
+                        />
+                    ))}
+            </Modal>
         </div>
     );
 };

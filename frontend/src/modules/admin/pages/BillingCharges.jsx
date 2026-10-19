@@ -13,7 +13,8 @@ import {
     RefreshCw,
     Clock,
     CreditCard,
-    Banknote
+    Banknote,
+    ShoppingBag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@shared/components/ui/Toast';
@@ -41,6 +42,9 @@ const BillingCharges = () => {
         handlingFeeStrategy: "highest_category_fee",
         codEnabled: true,
         onlineEnabled: true,
+        // null until loaded from the server, so a failed load never saves a guess.
+        minOrderValue: null,
+        minOrderValueAfterCoupon: true,
     });
 
     const fetchSettings = async () => {
@@ -74,6 +78,8 @@ const BillingCharges = () => {
                     globalTaxRate: s.globalTaxRate ?? prev.globalTaxRate,
                     codEnabled: s.codEnabled ?? prev.codEnabled,
                     onlineEnabled: s.onlineEnabled ?? prev.onlineEnabled,
+                    minOrderValue: s.minOrderValue ?? prev.minOrderValue,
+                    minOrderValueAfterCoupon: s.minOrderValueAfterCoupon ?? prev.minOrderValueAfterCoupon,
                 }));
             } else if (platformRes.data?.success && platformRes.data.result) {
                 setConfig((prev) => ({
@@ -117,6 +123,10 @@ const BillingCharges = () => {
                     globalTaxRate: config.globalTaxRate,
                     codEnabled: config.codEnabled,
                     onlineEnabled: config.onlineEnabled,
+                    ...(config.minOrderValue != null ? {
+                        minOrderValue: Math.round(Number(config.minOrderValue) * 100) / 100,
+                        minOrderValueAfterCoupon: config.minOrderValueAfterCoupon,
+                    } : {}),
                 }),
             ]);
 
@@ -244,6 +254,69 @@ const BillingCharges = () => {
                                 </div>
                             );
                         })}
+                        <p className="md:col-span-2 text-xs text-slate-400">Click “Save Changes” at the top to apply.</p>
+                    </div>
+                </Card>
+
+                {/* Minimum order value enforced on cart, checkout and order placement */}
+                <Card className="border border-slate-200/80 shadow-sm bg-white rounded-2xl overflow-hidden transition-all">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
+                        <div className="p-2 bg-sky-50 text-sky-600 rounded-xl border border-sky-200/60">
+                            <ShoppingBag className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900 tracking-tight">Minimum Order Value</h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                Customers can't place an order until their items reach this amount. Delivery, handling, platform fees and tax never count towards it.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label htmlFor="minOrderValue" className="text-xs font-bold text-slate-700">
+                                Minimum item value per order
+                            </label>
+                            <div className="relative group">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 group-focus-within:text-slate-900 transition-colors pointer-events-none text-sm">
+                                    ₹
+                                </span>
+                                <input
+                                    id="minOrderValue"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    disabled={config.minOrderValue == null}
+                                    value={config.minOrderValue == null ? '' : config.minOrderValue}
+                                    onChange={(e) => handleInputChange('minOrderValue', e.target.value)}
+                                    className="w-full pl-9 pr-4 py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-brand-500 rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all placeholder:text-slate-300 disabled:opacity-60"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                                Checked per store on the price after product discounts. Set 0 to turn the minimum off. Orders already placed are not affected.
+                            </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 h-fit">
+                            <div>
+                                <p className="text-sm font-bold text-slate-900">Coupon discount reduces the item value</p>
+                                <p className="text-xs text-slate-500">
+                                    On: a ₹110 cart with a ₹20 coupon counts as ₹90. Off: it counts as ₹110.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={config.minOrderValueAfterCoupon !== false}
+                                aria-label="Coupon discount reduces the item value"
+                                onClick={() => setConfig((prev) => ({ ...prev, minOrderValueAfterCoupon: prev.minOrderValueAfterCoupon === false }))}
+                                className={cn(
+                                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                                    config.minOrderValueAfterCoupon !== false ? "bg-emerald-500" : "bg-slate-300"
+                                )}
+                            >
+                                <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform", config.minOrderValueAfterCoupon !== false ? "translate-x-5" : "translate-x-0.5")} />
+                            </button>
+                        </div>
                         <p className="md:col-span-2 text-xs text-slate-400">Click “Save Changes” at the top to apply.</p>
                     </div>
                 </Card>

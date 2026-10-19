@@ -51,6 +51,14 @@ const configSchema = new mongoose.Schema(
       columns: { type: Number, min: 1 },
       singleRowScrollable: { type: Boolean, default: false },
     },
+    // Brand showcase sections
+    brands: {
+      brandIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Brand" }],
+      // "carousel" = one horizontally scrollable row; "grid" = `rows` rows.
+      layout: { type: String, enum: ["carousel", "grid"], default: "carousel" },
+      rows: { type: Number, min: 1, default: 1 },
+      maxItems: { type: Number, min: 1 },
+    },
   },
   { _id: false }
 );
@@ -69,7 +77,7 @@ const experienceSectionSchema = new mongoose.Schema(
     },
     displayType: {
       type: String,
-      enum: ["banners", "categories", "subcategories", "products"],
+      enum: ["banners", "categories", "subcategories", "products", "brands"],
       required: true,
     },
     title: {

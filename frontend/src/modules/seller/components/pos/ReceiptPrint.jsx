@@ -3,6 +3,7 @@ import Button from "@shared/components/ui/Button";
 import { HiOutlineCheckCircle, HiOutlinePrinter, HiOutlineArrowDownTray } from "react-icons/hi2";
 import { toast } from "sonner";
 import { downloadPosBillPDF } from "@/lib/posPdfExport";
+import { posBillCustomer } from "@/lib/posCustomer";
 
 // Shared 80mm thermal print styles (also used by ReturnReceipt): only #pos-receipt prints.
 export const RECEIPT_PRINT_CSS = `
@@ -146,6 +147,7 @@ const ReceiptPrint = ({
     const sellerInfo = seller || order.seller || {};
     const storeTitle = shopName || sellerInfo.shopName || sellerInfo.name || "Store";
     const paymentMethod = (order.posPaymentMethod || "CASH").toUpperCase();
+    const billCustomer = posBillCustomer(order, "Walk-in Customer");
     const couponCode = order.couponSnapshot?.code || order.couponCode || "";
 
     const paidDate = new Date(paidAt);
@@ -227,13 +229,13 @@ const ReceiptPrint = ({
                             <div className="flex justify-between">
                                 <span className="font-semibold text-slate-600">Customer:</span>
                                 <span className="font-medium text-slate-900">
-                                    {order.walkInCustomer?.name || "Walk-in Customer"}
+                                    {billCustomer.name}
                                 </span>
                             </div>
-                            {order.walkInCustomer?.phone && (
+                            {billCustomer.phone && (
                                 <div className="flex justify-between">
                                     <span className="font-semibold text-slate-600">Phone:</span>
-                                    <span>{order.walkInCustomer.phone}</span>
+                                    <span>{billCustomer.phone}</span>
                                 </div>
                             )}
                         </div>

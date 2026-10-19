@@ -316,6 +316,16 @@ export default [
   },
   { route: "POST /api/seller/business/purchases/:id/confirm", name: "cannot confirm twice", as: "seller", params: (ctx) => ({ id: ctx.purchaseId }), status: [400, 409] },
   {
+    route: "GET /api/seller/business/purchases/:id",
+    as: "seller",
+    params: (ctx) => ({ id: ctx.purchaseId }),
+    check: (res) => {
+      expect(res.body.result).toEqual(expect.objectContaining({ billNo: "B-101", status: "CONFIRMED" }));
+      expect(res.body.result.supplier).toEqual(expect.objectContaining({ name: expect.any(String) }));
+    },
+  },
+  { route: "GET /api/seller/business/purchases/:id", name: "other sellers get 404", as: "otherSeller", params: (ctx) => ({ id: ctx.purchaseId }), status: 404 },
+  {
     route: "POST /api/seller/business/purchase-returns",
     as: "seller",
     body: (ctx) => ({ supplierId: ctx.supplierId, purchaseBillId: ctx.purchaseId, items: [{ productId: String(ctx.bread._id), quantity: 2, cost: 30 }], reason: "Stale" }),

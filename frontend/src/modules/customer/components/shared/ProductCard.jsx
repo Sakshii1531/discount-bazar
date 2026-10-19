@@ -18,7 +18,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Clock } from "lucide-react";
 
 import { useProductDetail } from "../../context/ProductDetailContext";
-import { getProductDeliveryFeeLabel } from "../../utils/deliveryLabels";
 
 const ProductCard = React.memo(
   ({ product, badge, className, compact = false, neutralBg = false, onProductClick }) => {
@@ -442,17 +441,7 @@ const ProductCard = React.memo(
               )}>
               {product.deliveryTime || currentLocation?.time || ""}
             </span>
-            {getProductDeliveryFeeLabel(product) && (
-              <span
-                data-testid="product-delivery-fee"
-                className={cn(
-                  "font-semibold truncate",
-                  product.isFreeDelivery ? "text-primary" : "text-gray-500",
-                  compact ? "text-[8px]" : "text-[9px] sm:text-[10px]",
-                )}>
-                · {getProductDeliveryFeeLabel(product)}
-              </span>
-            )}
+            {/* Delivery charges are shown only at checkout, not on listings. */}
           </div>
 
           {/* Price Row / ADD Button Combination for compact */}
