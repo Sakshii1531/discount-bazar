@@ -66,7 +66,12 @@ function paidRatio(order) {
       (order.items || []).reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 0), 0),
   );
   const grand = Number(pb.grandTotal ?? subtotal);
-  return subtotal > 0 ? Math.min(Math.max(grand / subtotal, 0), 1) : 1;
+  if (subtotal <= 0) return 1;
+  // Tax-exclusive bills collected GST on top of the line prices, so a return refunds
+  // that share too (ratio can exceed 1); the bill total still caps the overall refund.
+  const inclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive !== false : pb.isTaxInclusive !== false;
+  const ratio = Math.max(grand / subtotal, 0);
+  return inclusive ? Math.min(ratio, 1) : ratio;
 }
 
 /**

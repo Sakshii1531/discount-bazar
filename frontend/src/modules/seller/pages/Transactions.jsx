@@ -27,6 +27,28 @@ import { exportToCSV } from "@/lib/exportUtils";
 import { useSellerEarnings } from "../context/SellerEarningsContext";
 import Pagination from "@shared/components/ui/Pagination";
 import { formatAmount } from "@shared/utils/currency";
+import { printHtml } from "../utils/ledgerStatement";
+
+const escHtml = (v) =>
+  String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// Prints only the selected transaction's receipt (not the page behind the modal).
+const printTransactionReceipt = (txn) => {
+  const amount = Number(txn.amount ?? 0);
+  const when = txn.date && txn.time
+    ? `${txn.date} at ${txn.time}`
+    : txn.createdAt
+      ? new Date(txn.createdAt).toLocaleString("en-IN")
+      : "—";
+  const row = (k, v) => `<tr><td>${k}</td><td class="v">${escHtml(v ?? "—")}</td></tr>`;
+  printHtml(`<!doctype html><html><head><meta charset="utf-8"/><title>Transaction ${escHtml(txn.id ?? txn.ref ?? "")}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}
+.amt{font-size:22px;font-weight:800;margin:10px 0}table{width:100%;border-collapse:collapse}td{border-bottom:1px solid #e2e8f0;padding:7px 4px}
+td.v{text-align:right;font-weight:700}.muted{color:#64748b;font-size:10px;margin-top:16px}@page{size:A5;margin:12mm}</style></head><body>
+<h1>Transaction Receipt</h1><div class="amt">${amount > 0 ? "+" : amount < 0 ? "-" : ""}&#8377;${escHtml(formatAmount(Math.abs(amount)))}</div>
+<table>${row("Status", txn.status)}${row("Transaction ID", txn.id ?? txn.ref)}${row("Type", txn.type)}${row("Customer", txn.customer)}${row("Reference", txn.ref)}${row("Date &amp; time", when)}</table>
+<p class="muted">Computer-generated receipt.</p></body></html>`);
+};
 
 const Transactions = () => {
   const { earningsData: data, earningsLoading: loading } = useSellerEarnings();
@@ -486,7 +508,7 @@ const Transactions = () => {
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button
                 variant="outline"
-                onClick={() => window.print()}
+                onClick={() => printTransactionReceipt(selectedTxn)}
                 className="rounded-lg py-4 font-black bg-white">
                 PRINT RECEIPT
               </Button>

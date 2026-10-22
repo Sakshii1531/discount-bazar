@@ -145,9 +145,10 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       const isCredit = method === "CREDIT";
       // posCustomerId: omitted → keep the linked customer; "" → back to walk-in.
       const customerId = payload.posCustomerId !== undefined ? payload.posCustomerId || undefined : order.posCustomer;
-      if (isCredit) {
-        if (!customerId) throw err(400, "Select a customer for credit (udhaar) sales");
-        if (!(await PosCustomer.exists({ _id: customerId, seller: sellerId }).session(session))) throw err(404, "Customer not found");
+      if (isCredit && !customerId) throw err(400, "Select a customer for credit (udhaar) sales");
+      // Any linked customer (credit or not) must be one of this seller's own.
+      if (customerId && !(await PosCustomer.exists({ _id: customerId, seller: sellerId }).session(session))) {
+        throw err(404, "Customer not found");
       }
       const sameMethod = method === order.posPaymentMethod;
       const oldTendered = order.posCashTendered;

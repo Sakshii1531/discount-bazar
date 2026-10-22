@@ -34,6 +34,7 @@ import BulkProductUpload from "../components/product/BulkProductUpload";
 import { toast } from "sonner";
 import Pagination from "@shared/components/ui/Pagination";
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
+import { formatAmount } from "@shared/utils/currency";
 
 const ProductManagement = () => {
   const navigate = useNavigate();
@@ -62,6 +63,10 @@ const ProductManagement = () => {
         sort: sortBy,
         approvalStatus: filterApproval,
         imageStatus: filterImage !== "all" ? filterImage : undefined,
+        // Stock/status/category filter on the server so paging and totals match the filter.
+        stockStatus: { "Low Stock": "low", "Out of Stock": "out" }[filterStatus],
+        status: filterStatus === "Active" ? "active" : undefined,
+        categoryId: filterCategory !== "all" ? filterCategory : undefined,
         search: searchTerm.trim() || undefined,
       });
       if (requestId !== productsRequestRef.current) return;
@@ -281,7 +286,7 @@ const ProductManagement = () => {
       if (filterStatus === "Active") matchesStatus = p.status === "active";
       if (filterStatus === "Low Stock")
         matchesStatus = p.stock > 0 && p.stock <= resolveLowStockThreshold(p);
-      if (filterStatus === "Out of Stock") matchesStatus = p.stock === 0;
+      if (filterStatus === "Out of Stock") matchesStatus = !(Number(p.stock) > 0);
 
       let matchesPrice = true;
       const effectivePrice = Number(p.salePrice ?? p.price ?? 0);
@@ -1009,9 +1014,216 @@ const ProductManagement = () => {
         </button>
       </div>
 
-      {/* Product Table */}
+      {/* Mobile: Product Cards List */}
+      <div className="md:hidden space-y-3">
+        {filteredProducts.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center shadow-xs">
+            <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mx-auto mb-3">
+              <HiOutlineCube className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-800">No products found</p>
+            <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filters</p>
+          </div>
+        ) : (
+          filteredProducts.map((p) => {
+            const hasPhoto = Boolean(
+              p.mainImage ||
+              p.image ||
+              (Array.isArray(p.galleryImages) && p.galleryImages.length > 0)
+            );
+            const stockNum = Number(p.stock ?? 0);
+            const lowStockAlert = Number(p.lowStockAlert || 5);
+            const isOutOfStock = stockNum <= 0;
+            const isLowStock = stockNum > 0 && stockNum <= lowStockAlert;
 
-      <Card className="border-none shadow-xl ring-1 ring-slate-100 overflow-hidden rounded-xl">
+            return (
+              <div
+                key={p._id || p.id}
+                className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs space-y-3 relative overflow-hidden"
+              >
+                {/* Status indicator bar on top */}
+                <div
+                  className={cn(
+                    "absolute top-0 left-0 right-0 h-1",
+                    !hasPhoto
+                      ? "bg-amber-400"
+                      : isOutOfStock
+                      ? "bg-rose-500"
+                      : isLowStock
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  )}
+                />
+
+                {/* Main Product Info: Image + Title + Actions */}
+                <div className="flex gap-3 pt-0.5">
+                  <div
+                    onClick={() => {
+                      if (!hasPhoto) {
+                        openEditModal(p);
+                        setModalTab("photos");
+                      }
+                    }}
+                    className={cn(
+                      "h-16 w-16 rounded-xl overflow-hidden flex items-center justify-center shrink-0 relative transition-all",
+                      hasPhoto
+                        ? "bg-slate-100 ring-1 ring-slate-200"
+                        : "bg-amber-50/80 border-2 border-dashed border-amber-300 cursor-pointer active:scale-95"
+                    )}
+                    title={!hasPhoto ? "Tap to upload photo" : p.name}
+                  >
+                    {hasPhoto ? (
+                      <img
+                        src={p.mainImage || p.image || p.galleryImages?.[0]}
+                        alt={p.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-amber-600 p-1 text-center">
+                        <HiOutlinePhoto className="h-5 w-5 stroke-[1.75]" />
+                        <span className="text-[8px] font-black uppercase tracking-tight leading-none mt-0.5">No Photo</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-1">
+                      <h3 className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">
+                        {p.name}
+                      </h3>
+                      <div className="flex items-center gap-1 shrink-0 -mr-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(p)}
+                          className="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-slate-50 rounded-lg transition-colors"
+                          title="Edit Product"
+                        >
+                          <HiOutlinePencilSquare className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClick(p)}
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Delete Product"
+                        >
+                          <HiOutlineTrash className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold">
+                        {displaySku(p)}
+                      </span>
+                      {p.headerId?.name && (
+                        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase font-semibold">
+                          {p.headerId.name}
+                        </span>
+                      )}
+                      {p.categoryId?.name && (
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          • {p.categoryId.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Price & Stock info bar */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-black text-slate-900">
+                      ₹{formatAmount(p.salePrice && Number(p.salePrice) > 0 ? p.salePrice : p.price)}
+                    </span>
+                    {p.salePrice && Number(p.salePrice) > 0 && Number(p.price) > Number(p.salePrice) && (
+                      <span className="text-xs text-slate-400 line-through">
+                        ₹{formatAmount(p.price)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {isOutOfStock ? (
+                      <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                        Out of Stock
+                      </span>
+                    ) : isLowStock ? (
+                      <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        Low Stock ({stockNum})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        In Stock ({stockNum})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Badges / Status row */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <ApprovalBadge approvalStatus={p.approvalStatus} />
+
+                  {p.variants?.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewingVariants(p);
+                        setIsVariantsViewModalOpen(true);
+                      }}
+                      className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+                    >
+                      {p.variants.length} Variants
+                    </button>
+                  ) : null}
+
+                  {p.returnPolicy?.isReturnable ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Returnable ({p.returnPolicy.returnWindowDays}d)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      Non-Returnable
+                    </span>
+                  )}
+                </div>
+
+                {/* Warnings / Quick Action Alerts */}
+                {!hasPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openEditModal(p);
+                      setModalTab("photos");
+                    }}
+                    className="w-full text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                      Missing photo · Hidden from customer app
+                    </span>
+                    <span className="underline font-black text-amber-900">Upload Photo &rarr;</span>
+                  </button>
+                )}
+
+                {String(p.approvalStatus || "").toLowerCase() === "pending" && (
+                  <p className="text-[11px] font-medium text-amber-700 bg-amber-50/70 border border-amber-200/60 rounded-xl px-2.5 py-1">
+                    Hidden from customers until admin review.
+                  </p>
+                )}
+
+                {String(p.approvalStatus || "").toLowerCase() === "rejected" && (
+                  <p className="text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-2.5 py-1">
+                    {p.approvalNote ? `Rejected: ${p.approvalNote}` : "Rejected by admin. Tap edit to update."}
+                  </p>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop: Product Table (Kept 100% Unchanged) */}
+      <Card className="hidden md:block border-none shadow-xl ring-1 ring-slate-100 overflow-hidden rounded-xl">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>

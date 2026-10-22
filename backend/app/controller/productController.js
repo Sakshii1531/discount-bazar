@@ -686,10 +686,58 @@ export const getProducts = async (req, res) => {
 /* ===============================
    GET SELLER PRODUCTS
 ================================ */
+// Low stock: in stock and at/below the product's own alert level (default 5).
+const LOW_STOCK_EXPR = {
+  $and: [
+    {
+      $gt: [
+        {
+          $convert: {
+            input: "$stock",
+            to: "double",
+            onError: 0,
+            onNull: 0,
+          },
+        },
+        0,
+      ],
+    },
+    {
+      $lte: [
+        {
+          $convert: {
+            input: "$stock",
+            to: "double",
+            onError: 0,
+            onNull: 0,
+          },
+        },
+        {
+          $let: {
+            vars: {
+              rawThreshold: {
+                $convert: {
+                  input: "$lowStockAlert",
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+            in: {
+              $cond: [{ $gt: ["$$rawThreshold", 0] }, "$$rawThreshold", 5],
+            },
+          },
+        },
+      ],
+    },
+  ],
+};
+
 export const getSellerProducts = async (req, res) => {
   try {
     const sellerId = req.user.id;
-    const { stockStatus, sort, approvalStatus, imageStatus } = req.query;
+    const { stockStatus, sort, approvalStatus, imageStatus, status, categoryId } = req.query;
     const { page, limit, skip } = getPagination(req, {
       defaultLimit: 20,
       maxLimit: 100,
@@ -697,10 +745,19 @@ export const getSellerProducts = async (req, res) => {
 
     const baseSellerQuery = { sellerId };
     const query = { ...baseSellerQuery };
+    // Filters run server-side so pagination/total match what the seller filtered on.
+    const extraConditions = [];
     if (stockStatus === "in") {
       query.stock = { $gt: 0 };
     } else if (stockStatus === "out") {
-      query.stock = 0;
+      extraConditions.push({ $or: [{ stock: { $lte: 0 } }, { stock: null }] });
+    } else if (stockStatus === "low") {
+      // In stock but at/below the product's own alert level (default 5) — same rule as the summary count.
+      extraConditions.push({ stock: { $gt: 0 } }, { $expr: LOW_STOCK_EXPR });
+    }
+    if (status && String(status).toLowerCase() !== "all") query.status = String(status).toLowerCase();
+    if (categoryId && String(categoryId) !== "all" && mongoose.isValidObjectId(categoryId)) {
+      extraConditions.push({ $or: [{ headerId: categoryId }, { categoryId }, { subcategoryId: categoryId }] });
     }
 
     if (imageStatus === "with_image") {
@@ -715,6 +772,8 @@ export const getSellerProducts = async (req, res) => {
         Object.assign(query, approvalFilter);
       }
     }
+
+    if (extraConditions.length) query.$and = [...(query.$and || []), ...extraConditions];
 
     const searchTerm = String(req.query.search || "").trim();
     if (searchTerm) {
@@ -801,52 +860,7 @@ export const getSellerProducts = async (req, res) => {
       Product.countDocuments({ ...baseSellerQuery, status: "active" }),
       Product.countDocuments({
         ...baseSellerQuery,
-        $expr: {
-          $and: [
-            {
-              $gt: [
-                {
-                  $convert: {
-                    input: "$stock",
-                    to: "double",
-                    onError: 0,
-                    onNull: 0,
-                  },
-                },
-                0,
-              ],
-            },
-            {
-              $lte: [
-                {
-                  $convert: {
-                    input: "$stock",
-                    to: "double",
-                    onError: 0,
-                    onNull: 0,
-                  },
-                },
-                {
-                  $let: {
-                    vars: {
-                      rawThreshold: {
-                        $convert: {
-                          input: "$lowStockAlert",
-                          to: "double",
-                          onError: 0,
-                          onNull: 0,
-                        },
-                      },
-                    },
-                    in: {
-                      $cond: [{ $gt: ["$$rawThreshold", 0] }, "$$rawThreshold", 5],
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
+        $expr: LOW_STOCK_EXPR,
       }),
       Product.countDocuments({ ...baseSellerQuery, stock: 0 }),
       Product.countDocuments({

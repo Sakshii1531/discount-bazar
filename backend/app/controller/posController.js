@@ -37,17 +37,20 @@ export const getPosCatalog = async (req, res) => {
       conditions.push({ $or: [{ name: regex }, { sku: regex }, { barcode: regex }, { "variants.barcode": regex }, { "variants.sku": regex }] });
     }
 
-    const products = await Product.find({ $and: conditions })
-      .select("name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants purchaseCost purchaseGstType")
-      .populate("categoryId", "name")
-      .sort({ name: 1 })
-      .limit(500)
-      .lean();
-
-    // In-stock items first, out-of-stock pushed to the end (stable: keeps name order within each group).
-    const hasStock = (p) =>
-      Number(p.stock || 0) > 0 || (Array.isArray(p.variants) && p.variants.some((v) => Number(v?.stock || 0) > 0));
-    products.sort((a, b) => Number(hasStock(b)) - Number(hasStock(a)));
+    // In-stock items first (by name), out-of-stock ones only fill what is left of the
+    // 500 cap — so a large catalog never drops sellable items in favour of sold-out ones.
+    const LIMIT = 500;
+    const find = (extra, limit) =>
+      Product.find({ $and: [...conditions, extra] })
+        .select("name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants purchaseCost purchaseGstType")
+        .populate("categoryId", "name")
+        .sort({ name: 1 })
+        .limit(limit)
+        .lean();
+    const inStock = { $or: [{ stock: { $gt: 0 } }, { "variants.stock": { $gt: 0 } }] };
+    const inStockItems = await find(inStock, LIMIT);
+    const products =
+      inStockItems.length < LIMIT ? [...inStockItems, ...(await find({ $nor: [inStock] }, LIMIT - inStockItems.length))] : inStockItems;
 
     return handleResponse(res, 200, "POS catalog fetched", products);
   } catch (error) {

@@ -111,3 +111,48 @@ describe("edit bill in the register", () => {
     expect(edit.body.result.order.paymentBreakdown.grandTotal).toBe(330);
   });
 });
+
+describe("audit regressions", () => {
+  it("filters stock status on the server so later pages are reachable", async () => {
+    for (const [name, stock] of [["A", 5], ["B", 0], ["C", 2], ["D", 0], ["E", 50]]) {
+      await fx.createProduct(seller, tree, { name, price: 10, stock, lowStockAlert: 5 });
+    }
+    const out = await request(app).get("/api/products/seller/me").query({ stockStatus: "out", limit: 20 }).set("Authorization", auth);
+    expect(out.status).toBe(200);
+    expect(out.body.result.items.map((p) => p.name).sort()).toEqual(["B", "D"]);
+    expect(out.body.result.total).toBe(2);
+    const low = await request(app).get("/api/products/seller/me").query({ stockStatus: "low", limit: 20 }).set("Authorization", auth);
+    expect(low.body.result.items.map((p) => p.name).sort()).toEqual(["A", "C"]);
+  });
+
+  it("refunds the GST collected on a tax-exclusive bill", async () => {
+    const oil = await fx.createProduct(seller, tree, { name: "Oil", price: 100, stock: 10 });
+    const sale = await sell({
+      items: [{ productId: String(oil._id), quantity: 1, price: 100 }],
+      posPaymentMethod: "CASH",
+      isTaxInclusive: false,
+      taxPercent: 10,
+    });
+    const orderId = (sale.body.result.order || sale.body.result).orderId;
+    const ret = await request(app)
+      .post("/api/seller/pos/returns")
+      .set("Authorization", auth)
+      .send({ orderId, items: [{ productId: String(oil._id), quantity: 1, condition: "good" }], refundMethod: "CASH" });
+    expect([200, 201]).toContain(ret.status);
+    const refund = (ret.body.result.return || ret.body.result).refundTotal;
+    expect(refund).toBe(110);
+  });
+
+  it("rejects linking an edited bill to another seller's customer", async () => {
+    const other = await fx.createSeller();
+    const foreign = await request(app).post("/api/seller/business/customers").set("Authorization", bearer("seller", other._id)).send({ name: "Not Mine" });
+    const soap = await fx.createProduct(seller, tree, { name: "Soap", price: 20, stock: 10 });
+    const sale = await sell({ items: [{ productId: String(soap._id), quantity: 1, price: 20 }], posPaymentMethod: "CASH" });
+    const orderId = (sale.body.result.order || sale.body.result).orderId;
+    const edit = await request(app)
+      .put(`/api/seller/pos/sales/${orderId}`)
+      .set("Authorization", auth)
+      .send({ items: [{ productId: String(soap._id), quantity: 1, price: 20 }], posPaymentMethod: "CASH", posCustomerId: foreign.body.result._id });
+    expect(edit.status).toBe(404);
+  });
+});

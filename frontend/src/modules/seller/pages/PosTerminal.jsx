@@ -761,7 +761,7 @@ const PosTerminal = () => {
 
                     {/* Desktop: pinned under the top bar (top-24) and capped to the space between it and the
                         layout's bottom padding, so the line list scrolls inside and totals + Checkout stay visible. */}
-                    <div className="h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col gap-3 min-h-0">
+                    <div id="pos-cart-panel" className="h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col gap-3 min-h-0">
                         {isEditLoading && !editSession && (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-800">
                                 Loading bill for editing…
@@ -826,6 +826,39 @@ const PosTerminal = () => {
                 </div>
             ) : (
                 <OnlineOrdersPanel orders={packingQueue} onChanged={refreshOrders} shopName={user?.shopName || user?.name} />
+            )}
+
+            {/* Mobile floating quick-bar when cart has items (hidden on desktop) */}
+            {activeTab === "sale" && cart.length > 0 && (
+                <div className="fixed bottom-16 left-0 right-0 z-40 lg:hidden p-3 bg-slate-900/95 backdrop-blur-md text-white border-t border-white/10 shadow-[0_-8px_30px_rgba(0,0,0,0.3)] flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-200">
+                    <div className="min-w-0 pl-1">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
+                            {cart.length} item{cart.length === 1 ? "" : "s"} in cart
+                        </p>
+                        <p className="text-base font-black text-white">
+                            ₹{formatAmount(totalWithTax)}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const el = document.getElementById("pos-cart-panel");
+                                if (el) el.scrollIntoView({ behavior: "smooth" });
+                            }}
+                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-bold transition-all"
+                        >
+                            View Bill
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsCheckoutOpen(true)}
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-black shadow-lg shadow-primary/30 active:scale-95 transition-all flex items-center gap-1"
+                        >
+                            {editSession ? "Update" : "Checkout"} &rarr;
+                        </button>
+                    </div>
+                </div>
             )}
 
             <VariantPickerModal
