@@ -756,6 +756,32 @@ export const getSellerProducts = async (req, res) => {
     };
     const sortQuery = sortMap[String(sort || "newest").toLowerCase()] || sortMap.newest;
 
+    // In-stock products always come first and out-of-stock ones last, whatever the
+    // chosen sort: page through the in-stock slice, then continue into the rest.
+    const inStockQuery = { $and: [query, { stock: { $gt: 0 } }] };
+    const outOfStockQuery = { $and: [query, { $or: [{ stock: { $lte: 0 } }, { stock: null }] }] };
+    const findPage = (q, pageSkip, pageLimit) =>
+      Product.find(q)
+        .select(
+          "name slug description sku barcode price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes expiryDate shelfLife countryOfOrigin fssaiLicense tags",
+        )
+        .populate("headerId", "name")
+        .populate("categoryId", "name")
+        .populate("subcategoryId", "name")
+        .populate("sellerId", "shopName")
+        .sort(sortQuery)
+        .skip(pageSkip)
+        .limit(pageLimit)
+        .lean();
+    const fetchStockOrderedPage = async () => {
+      const inStockCount = await Product.countDocuments(inStockQuery);
+      const inStockItems = skip < inStockCount ? await findPage(inStockQuery, skip, limit) : [];
+      const remaining = limit - inStockItems.length;
+      const outOfStockItems =
+        remaining > 0 ? await findPage(outOfStockQuery, Math.max(0, skip - inStockCount), remaining) : [];
+      return [...inStockItems, ...outOfStockItems];
+    };
+
     const [
       products,
       total,
@@ -769,18 +795,7 @@ export const getSellerProducts = async (req, res) => {
       withImageCount,
       missingImageCount,
     ] = await Promise.all([
-      Product.find(query)
-        .select(
-          "name slug description sku barcode price salePrice stock lowStockAlert brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants returnPolicy createdAt purchaseCost gstPercent purchaseGstType productDeliveryFee productDeliveryTimeMinutes expiryDate shelfLife countryOfOrigin fssaiLicense tags",
-        )
-        .populate("headerId", "name")
-        .populate("categoryId", "name")
-        .populate("subcategoryId", "name")
-        .populate("sellerId", "shopName")
-        .sort(sortQuery)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      fetchStockOrderedPage(),
       Product.countDocuments(query),
       Product.countDocuments(baseSellerQuery),
       Product.countDocuments({ ...baseSellerQuery, status: "active" }),

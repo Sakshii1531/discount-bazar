@@ -74,3 +74,37 @@ describe('xlsx zip container', () => {
     expect([...bytes.slice(14, 18)]).toEqual([0x86, 0xa6, 0x10, 0x36]);
   });
 });
+
+describe('downloadStatementPdf', () => {
+  it('renders the bordered statement with per-bill item tables', async () => {
+    const { jsPDF } = await import('jspdf');
+    const { downloadStatementPdf } = await import('@modules/seller/utils/ledgerStatement');
+    const names = [
+      ['NIVEA Body Lotion Shea Smooth', 'Shea Smooth', 6, 81.41], ['NIVEA Body Lotion Body Milk', 'Body Milk', 6, 60.17],
+      ['NIVEA Natural Glow Smooth Skin 72h deodrant', '50ml', 3, 165.26], ['NIVEA Natural Glow Smooth Skin 72h deodrant', '25ml', 3, 82.96],
+      ['NIVEA Pearl & Beauty Radiance 72h deodrant', '50ml', 3, 165.26], ['NIVEA Pearl & Beauty Radiance 72h deodrant', '25ml', 3, 82.96],
+      ['NIVEA Soft Moisturizing Cream', '50ml', 4, 109.02], ['NIVEA Soft hydration + serum infused gel', '100ml', 4, 225.84],
+    ];
+    const items = names.map(([name, variant, quantity, rate]) => ({ name, variant, quantity, rate, gstPercent: 18, amount: Math.round(quantity * rate * 100) / 100 }));
+    const st = buildStatement({
+      kind: 'suppliers',
+      party: { name: 'AL HAYAT ENTERPRISES', phone: '7006412475' },
+      entries: [{ _id: 'b1', date: '2026-10-18', kind: 'PURCHASE', refNo: '10590', effect: 1, amount: 3678.24, balance: 3678.24, items }],
+      balance: 3678.24,
+      business: { shopName: 'Discount Bazaar', address: 'Tral', pincode: '192123', phone: '7051894355' },
+    });
+    let saved = null;
+    const original = jsPDF.API.save;
+    jsPDF.API.save = function save(name) { saved = { name, doc: this }; };
+    try {
+      await downloadStatementPdf(st);
+      expect(saved.name).toMatch(/^Supplier_Ledger_Statement_AL_HAYAT_ENTERPRISES_.*\.pdf$/);
+      if (process.env.STATEMENT_PDF_OUT) {
+        // eslint-disable-next-line no-undef
+        require('fs').writeFileSync(process.env.STATEMENT_PDF_OUT, Buffer.from(saved.doc.output('arraybuffer')));
+      }
+    } finally {
+      jsPDF.API.save = original;
+    }
+  });
+});

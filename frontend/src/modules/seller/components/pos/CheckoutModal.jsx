@@ -4,6 +4,7 @@ import { posApi } from "../../services/posApi";
 import Modal from "@shared/components/ui/Modal";
 import Button from "@shared/components/ui/Button";
 import Input from "@shared/components/ui/Input";
+import SearchableSelect from "@shared/components/ui/SearchableSelect";
 import {
     HiOutlineBanknotes,
     HiOutlineCreditCard,
@@ -54,22 +55,30 @@ const CheckoutModal = ({
     items = [],
     onConfirm,
     isSubmitting,
+    // "edit": updating a posted bill — starts from its payment/customer details (initialValues)
+    mode = "sale",
+    initialValues,
 }) => {
     const { settings } = useSettings();
-    const [paymentMethod, setPaymentMethod] = useState("CASH");
-    const [walkInName, setWalkInName] = useState("");
-    const [walkInPhone, setWalkInPhone] = useState("");
+    const isEdit = mode === "edit";
+    const init = initialValues || {};
+    const [paymentMethod, setPaymentMethod] = useState(init.paymentMethod || "CASH");
+    const [walkInName, setWalkInName] = useState(init.walkInName || "");
+    const [walkInPhone, setWalkInPhone] = useState(init.walkInPhone || "");
     const [couponCode, setCouponCode] = useState("");
     const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, couponDiscount }
     const [couponError, setCouponError] = useState("");
     const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
-    const [customTax, setCustomTax] = useState(taxTotal > 0 ? String(taxTotal) : "");
-    const [discount, setDiscount] = useState("");
+    // Edit mode mounts with the bill already loaded: leave this blank so the tax keeps
+    // following the register (quantity changes after opening) unless typed over.
+    const [customTax, setCustomTax] = useState(mode !== "edit" && taxTotal > 0 ? String(taxTotal) : "");
+    const [discount, setDiscount] = useState(init.discount || "");
     const [customers, setCustomers] = useState([]);
-    const [posCustomerId, setPosCustomerId] = useState("");
-    const [amountPaid, setAmountPaid] = useState("");
-    const [cashTendered, setCashTendered] = useState("");
-    const [split, setSplit] = useState({ CASH: "", CARD: "", QR: "", OTHER: "" });
+    const [posCustomerId, setPosCustomerId] = useState(init.posCustomerId || "");
+    const [amountPaid, setAmountPaid] = useState(init.amountPaid || "");
+    const [cashTendered, setCashTendered] = useState(init.cashTendered || "");
+    const [split, setSplit] = useState(init.split || { CASH: "", CARD: "", QR: "", OTHER: "" });
+    const [editReason, setEditReason] = useState("");
     const [showAddCustomer, setShowAddCustomer] = useState(false);
     const [newCustomerName, setNewCustomerName] = useState("");
     const [newCustomerPhone, setNewCustomerPhone] = useState("");
@@ -188,6 +197,11 @@ const CheckoutModal = ({
         const b = Number(balance) || 0;
         return b < 0 ? `advance ₹${formatAmount(-b)}` : `previous due ₹${formatAmount(b)}`;
     };
+    // Label includes the phone so the search matches by name or number.
+    const customerOptions = customers.map((c) => ({
+        id: c._id,
+        label: `${c.name}${c.phone ? ` (${c.phone})` : ""} — ${dueLabel(c.balance)}`,
+    }));
 
     const splitLines = SPLIT_TENDERS.map(([m]) => ({ method: m, amount: round2(split[m]) })).filter((l) => l.amount > 0);
     const splitSum = round2(splitLines.reduce((s, l) => s + l.amount, 0));
@@ -232,6 +246,7 @@ const CheckoutModal = ({
                 taxPercent: activeTaxPercent,
                 taxTotal: activeTaxTotal,
                 isTaxInclusive,
+                reason: isEdit ? editReason : undefined,
             });
             return;
         }
@@ -250,6 +265,7 @@ const CheckoutModal = ({
             taxPercent: activeTaxPercent,
             taxTotal: activeTaxTotal,
             isTaxInclusive,
+            reason: isEdit ? editReason : undefined,
         });
     };
 
@@ -263,7 +279,7 @@ const CheckoutModal = ({
         splitInvalid;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Complete Sale" size="md">
+        <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? "Update Bill" : "Complete Sale"} size="md">
             <div className="space-y-3.5">
                 {/* Amount Due Banner */}
                 <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-sm">
@@ -508,23 +524,18 @@ const CheckoutModal = ({
                     ) : (
                         <div className="space-y-1.5">
                             <div className={paymentMethod === "CREDIT" ? "grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2" : ""}>
-                                <select
+                                {/* Searchable picker: a native <select> only type-ahead matches and resets
+                                    between keystrokes, so "sa" ended up searching for just "a". */}
+                                <SearchableSelect
                                     value={posCustomerId}
-                                    onChange={(e) => handleSelectCustomer(e.target.value)}
-                                    className={cn(
-                                        "w-full px-3 py-2 rounded-xl border text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-primary/20 transition-colors",
-                                        ledgerRequired && !posCustomerId
-                                            ? "border-amber-300 bg-amber-50/30"
-                                            : "border-slate-200"
-                                    )}
-                                >
-                                    <option value="">— Walk-in —</option>
-                                    {customers.map((c) => (
-                                        <option key={c._id} value={c._id}>
-                                            {c.name} {c.phone ? `(${c.phone})` : ""} — {dueLabel(c.balance)}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(id) => handleSelectCustomer(id || "")}
+                                    options={customerOptions}
+                                    placeholder="— Walk-in —"
+                                    searchPlaceholder="Search name or phone..."
+                                    emptyMessage="No matching customer"
+                                    error={ledgerRequired && !posCustomerId}
+                                    className="rounded-xl text-xs font-semibold"
+                                />
                                 {paymentMethod === "CREDIT" && (
                                     <Input
                                         type="number"
@@ -589,7 +600,8 @@ const CheckoutModal = ({
                 </div>
 
                 {/* Coupon Code Section */}
-                {settings?.posCouponsEnabled && (
+                {/* Edited bills keep their discount (incl. any coupon) as a manual amount above. */}
+                {settings?.posCouponsEnabled && !isEdit && (
                     <div className="space-y-1">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                             <HiOutlineTag className="h-3 w-3" />
@@ -627,8 +639,20 @@ const CheckoutModal = ({
                     </div>
                 )}
 
+                {isEdit && (
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Reason for edit (kept in bill history)</p>
+                        <Input
+                            placeholder="e.g. wrong quantity, item returned at counter"
+                            value={editReason}
+                            maxLength={200}
+                            onChange={(e) => setEditReason(e.target.value)}
+                        />
+                    </div>
+                )}
+
                 <Button className="w-full pt-2.5 pb-2.5" size="lg" isLoading={isSubmitting} disabled={confirmDisabled} onClick={handleConfirm}>
-                    Confirm Sale
+                    {isEdit ? "Update Bill" : "Confirm Sale"}
                 </Button>
             </div>
         </Modal>

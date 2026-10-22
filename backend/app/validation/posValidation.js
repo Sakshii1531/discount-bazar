@@ -70,6 +70,11 @@ export const editPosSaleSchema = Joi.object({
   taxPercent: Joi.number().min(0).max(100).optional(),
   taxTotal: Joi.number().min(0).optional(),
   isTaxInclusive: Joi.boolean().optional(),
+  cashTendered: Joi.number().min(0).optional(),
+  walkInCustomer: Joi.object({
+    name: trimmedString.max(100).allow("").optional(),
+    phone: trimmedString.max(20).allow("").optional(),
+  }).allow(null).optional(),
   reason: trimmedString.max(200).allow("").optional(),
 });
 

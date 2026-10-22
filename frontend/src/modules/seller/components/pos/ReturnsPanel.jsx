@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
     HiOutlineMagnifyingGlass,
@@ -25,7 +26,6 @@ import Button from "@shared/components/ui/Button";
 import Input from "@shared/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { posApi } from "../../services/posApi";
-import SaleEditPanel from "./SaleEditPanel";
 import ReturnReceipt from "./ReturnReceipt";
 import { formatAmount } from "@shared/utils/currency";
 import { downloadPosReturnsReportPDF, downloadPosReturnSlipPDF, downloadPosBillPDF } from "@/lib/posPdfExport";
@@ -39,6 +39,7 @@ const REFUND_METHODS = [
 ];
 
 const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
+    const navigate = useNavigate();
     const [orderIdSearch, setOrderIdSearch] = useState(initialOrderId);
     const [slip, setSlip] = useState(null);
     const [isLooking, setIsLooking] = useState(false);
@@ -319,9 +320,15 @@ const ReturnsPanel = ({ initialOrderId = "", shopName, seller }) => {
                                 </div>
                             </div>
 
-                            {/* Optional Edit Bill Accordion */}
+                            {/* Edit bill: reopen it in the register (Update mode), like a regular sale */}
                             {lines.every((l) => !l.returnedQuantity) && (
-                                <SaleEditPanel order={order} lines={lines} onSaved={handleLookup} />
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/seller/pos?edit=${encodeURIComponent(order.orderId)}`)}
+                                    className="text-xs font-bold text-primary underline mb-3"
+                                >
+                                    Edit this bill in the register
+                                </button>
                             )}
 
                             {/* Items List */}

@@ -80,15 +80,34 @@ export async function getPosOrderForReturn({ sellerId, orderId }) {
     orderObjectId: order._id,
   });
 
+  // Current shelf stock per line, so "Edit bill" can load the bill into the
+  // register with the right quantity caps (shelf stock + what the bill already holds).
+  const products = await Product.find({ _id: { $in: (order.items || []).map((i) => i.product) }, sellerId })
+    .select("stock variants.sku variants.name variants.stock")
+    .lean();
+  const productById = new Map(products.map((p) => [String(p._id), p]));
+  const shelfStock = (item) => {
+    const p = productById.get(String(item.product));
+    if (!p) return 0;
+    const variant = item.variantSlot ? (p.variants || []).find((v) => v.sku === item.variantSlot) : null;
+    return Number((variant ? variant.stock ?? p.stock : p.stock) || 0);
+  };
+
   const ratio = paidRatio(order);
   const items = (order.items || []).map((item) => {
     const key = lineKey(item.product, item.variantSlot);
     const returnedQuantity = alreadyReturned.get(key) || 0;
+    const p = productById.get(String(item.product));
+    const variant = item.variantSlot ? (p?.variants || []).find((v) => v.sku === item.variantSlot) : null;
     return {
       product: item.product,
       name: item.name,
       variantSlot: item.variantSlot || "",
+      variantName: variant?.name || "",
       price: item.price,
+      mrp: item.mrp,
+      gstPercent: Number(item.gstPercent || 0),
+      availableStock: shelfStock(item),
       // Per-unit refund after the bill discount is shared across lines (rounded to nearest rupee).
       refundUnitPrice: Math.round(Number(item.price || 0) * ratio),
       quantity: item.quantity,

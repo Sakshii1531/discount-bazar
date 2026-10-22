@@ -48,7 +48,12 @@ const ProductManagement = () => {
   const [total, setTotal] = useState(0);
   const [summaryStats, setSummaryStats] = useState(null);
 
+  // Only the latest request may update the list, so a slow response for an
+  // earlier keystroke ("s") can't overwrite the results for the full query ("sakshi").
+  const productsRequestRef = useRef(0);
+
   const fetchProducts = async (requestedPage = 1) => {
+    const requestId = ++productsRequestRef.current;
     setIsLoading(true);
     try {
       const res = await sellerApi.getProducts({
@@ -59,6 +64,7 @@ const ProductManagement = () => {
         imageStatus: filterImage !== "all" ? filterImage : undefined,
         search: searchTerm.trim() || undefined,
       });
+      if (requestId !== productsRequestRef.current) return;
       if (res.data.success) {
         // Backend returns handleResponse(..., { items, page, limit, total, totalPages })
         const payload = res.data.result || {};
@@ -91,9 +97,9 @@ const ProductManagement = () => {
         }
       }
     } catch {
-      toast.error("Failed to fetch products");
+      if (requestId === productsRequestRef.current) toast.error("Failed to fetch products");
     } finally {
-      setIsLoading(false);
+      if (requestId === productsRequestRef.current) setIsLoading(false);
     }
   };
 

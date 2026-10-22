@@ -27,6 +27,7 @@ import {
 import Modal from '@shared/components/ui/Modal';
 import Pagination from '@shared/components/ui/Pagination';
 import BrandSelect from '@shared/components/BrandSelect';
+import SearchableSelect from '@shared/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePendingReview } from '@core/context/PendingReviewContext';
@@ -518,31 +519,18 @@ const ProductManagement = () => {
                     <div className="flex flex-wrap lg:flex-nowrap gap-2 shrink-0 w-full lg:w-auto">
                         {/* Seller Filter */}
                         <div className="relative flex-1 lg:flex-none min-w-[170px]">
-                            <select
-                                value={filterSeller}
-                                onChange={(e) => handleSellerChange(e.target.value)}
-                                className={cn(
-                                    "w-full px-4 py-2.5 bg-white ring-1 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/5 outline-none appearance-none cursor-pointer pr-8",
-                                    filterSeller !== 'all' ? "ring-primary text-primary bg-primary/5" : "ring-slate-200 text-slate-700"
-                                )}
-                            >
-                                <option value="all">All Sellers</option>
-                                {sellers.map((s) => (
-                                    <option key={s._id} value={s._id}>
-                                        {s.shopName ? `${s.shopName}${s.name ? ` (${s.name})` : ''}` : s.name || 'Unnamed Seller'}
-                                    </option>
-                                ))}
-                            </select>
-                            {filterSeller !== 'all' && (
-                                <button
-                                    type="button"
-                                    onClick={() => handleSellerChange('all')}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 p-0.5 rounded-full transition-colors"
-                                    title="Clear seller filter"
-                                >
-                                    <HiOutlineXMark className="h-3.5 w-3.5" />
-                                </button>
-                            )}
+                            <SearchableSelect
+                                value={filterSeller === 'all' ? '' : filterSeller}
+                                onChange={(id) => handleSellerChange(id || 'all')}
+                                options={sellers.map((s) => ({
+                                    id: s._id,
+                                    label: s.shopName ? `${s.shopName}${s.name ? ` (${s.name})` : ''}` : s.name || 'Unnamed Seller',
+                                }))}
+                                placeholder="All Sellers"
+                                searchPlaceholder="Search sellers..."
+                                emptyMessage="No matching seller"
+                                className={cn("rounded-xl text-xs font-bold", filterSeller !== 'all' && "border-primary text-primary bg-primary/5")}
+                            />
                         </div>
 
                         {/* Category Filter */}

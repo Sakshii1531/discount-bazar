@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { HiOutlineTrash, HiOutlineArrowDownTray } from "react-icons/hi2";
+import { HiOutlineTrash, HiOutlineArrowDownTray, HiOutlinePencilSquare } from "react-icons/hi2";
 import { useAuth } from "@core/context/AuthContext";
 import Modal from "@shared/components/ui/Modal";
 import { useSellerOrders } from "../context/SellerOrdersContext";
@@ -17,10 +17,10 @@ import {
     ReturnsPanel,
     SalesHistory,
     OnlineOrdersPanel,
-    SaleEditPanel,
     LastSaleCard,
 } from "../components/pos";
 import { formatAmount } from "@shared/utils/currency";
+import { posCustomerIdOf } from "@/lib/posCustomer";
 import { downloadPosHeldBillsPDF } from "@/lib/posPdfExport";
 
 const PACKING_WORKFLOW_STATUSES = [
@@ -68,7 +68,7 @@ const PosTerminal = () => {
 
     // Section comes from the URL (/seller/pos/:section), driven by the sidebar
     const { section } = useParams();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const activeTab =
         section === "online-orders" ? "queue" : section === "returns" ? "returns" : section === "sales" ? "sales" : "sale";
 
@@ -128,7 +128,9 @@ const PosTerminal = () => {
     const lastSaleKey = `pos:last:${user?._id || user?.id || "seller"}`;
     const [lastSale, setLastSale] = useState(() => readLastSale(lastSaleKey));
     const [reprintOrder, setReprintOrder] = useState(null);
-    const [editBill, setEditBill] = useState(null); // { order, lines, hasReturns }
+    // "Edit bill": the posted bill is loaded into the register; checkout then updates it instead of
+    // creating a new sale. { order, originalQty: { lineKey: qty }, checkoutDefaults, prevTaxInclusive }
+    const [editSession, setEditSession] = useState(null);
     const [isEditLoading, setIsEditLoading] = useState(false);
     useEffect(() => {
         setLastSale(readLastSale(lastSaleKey));
@@ -200,23 +202,31 @@ const PosTerminal = () => {
     const filteredProducts = useMemo(() => {
         // Single-character search is filtered locally (server search starts at 2 chars).
         const term = searchTerm.trim().toLowerCase();
-        if (term.length !== 1) return products;
-        return products.filter(
-            (p) =>
-                String(p.name || "").toLowerCase().includes(term) ||
-                String(p.sku || "").toLowerCase().includes(term) ||
-                String(p.barcode || "").toLowerCase().includes(term),
-        );
+        const list =
+            term.length !== 1
+                ? products
+                : products.filter(
+                      (p) =>
+                          String(p.name || "").toLowerCase().includes(term) ||
+                          String(p.sku || "").toLowerCase().includes(term) ||
+                          String(p.barcode || "").toLowerCase().includes(term),
+                  );
+        // In-stock first, out-of-stock last — re-applied locally so a line that just sold out drops to the end.
+        const hasStock = (p) =>
+            Number(p.stock || 0) > 0 || (Array.isArray(p.variants) && p.variants.some((v) => Number(v?.stock || 0) > 0));
+        return [...list].sort((a, b) => Number(hasStock(b)) - Number(hasStock(a)));
     }, [products, searchTerm]);
 
     const addLineToCart = useCallback((product, variant) => {
-        const stock = Number(variant ? variant.stock ?? product.stock : product.stock) || 0;
+        const variantSku = variant?.sku || "";
+        const lineKey = `${product._id}::${variantSku}`;
+        // While editing a bill, the units already on it are still available to that bill.
+        const reserved = Number(editSession?.originalQty?.[lineKey] || 0);
+        const stock = (Number(variant ? variant.stock ?? product.stock : product.stock) || 0) + reserved;
         if (stock <= 0) {
             toast.error(`${product.name} is out of stock`);
             return;
         }
-        const variantSku = variant?.sku || "";
-        const lineKey = `${product._id}::${variantSku}`;
         const price = resolvePrice(variant || product);
 
         setCart((prev) => {
@@ -245,7 +255,7 @@ const PosTerminal = () => {
                 },
             ];
         });
-    }, []);
+    }, [editSession]);
 
     const handleAddProduct = useCallback(
         (product) => {
@@ -467,10 +477,29 @@ const PosTerminal = () => {
         posPayments,
         taxPercent: checkoutTaxPercent,
         taxTotal: checkoutTaxTotal,
+        reason,
     }) => {
         setIsSubmitting(true);
         const resolvedTaxPercent = checkoutTaxPercent !== undefined ? Number(checkoutTaxPercent) : Number(taxPercent) || 0;
         const resolvedTaxTotal = checkoutTaxTotal !== undefined ? Number(checkoutTaxTotal) : taxAmount;
+        if (editSession) {
+            await submitBillEdit({
+                items: saleItems,
+                posPaymentMethod,
+                // "" unlinks the ledger customer (bill goes back to walk-in)
+                posCustomerId: posCustomerId || "",
+                amountPaid,
+                posPayments,
+                cashTendered,
+                discount: Number(discount) || 0,
+                taxPercent: resolvedTaxPercent,
+                taxTotal: resolvedTaxTotal,
+                isTaxInclusive,
+                walkInCustomer: walkInCustomer || { name: "", phone: "" },
+                reason: String(reason || "").trim() || "Bill correction",
+            });
+            return;
+        }
         const payload = {
             items: saleItems,
             posPaymentMethod,
@@ -536,19 +565,114 @@ const PosTerminal = () => {
     };
 
     /* ---------- last sale: reprint / edit from the counter ---------- */
-    const handleEditLastSale = async () => {
-        if (!lastSale?.orderId) return;
+    const exitEditMode = useCallback(
+        (session = editSession) => {
+            setEditSession(null);
+            setCart([]);
+            setTaxValue(0);
+            setTaxMode("PERCENT");
+            if (session) setIsTaxInclusive(session.prevTaxInclusive);
+        },
+        [editSession],
+    );
+
+    // Loads a posted bill into the register (Update mode): lines, prices, tax mode, and the
+    // payment/customer details the checkout starts from. Every "Edit bill" entry point
+    // (last sale, sales history, returns, ledgers, receipt) ends up here.
+    const loadBillForEdit = async (billOrderId) => {
+        if (!billOrderId) return;
+        if (editSession && editSession.order.orderId === billOrderId) return;
         setIsEditLoading(true);
         try {
-            const res = await posApi.getOrderForReturn(lastSale.orderId);
+            const res = await posApi.getOrderForReturn(billOrderId);
             const data = res?.data?.result;
             if (!data?.order) throw new Error("Bill not found");
             const lines = Array.isArray(data.items) ? data.items : [];
-            setEditBill({
-                order: data.order,
-                lines,
-                hasReturns: lines.some((l) => Number(l.returnedQuantity || 0) > 0),
+            if (lines.some((l) => Number(l.returnedQuantity || 0) > 0)) {
+                toast.error("This bill already has returns, so it can't be edited. Use Returns to adjust it.");
+                return;
+            }
+            const order = data.order;
+
+            // Park anything already on the till so it isn't lost.
+            if (cart.length && !editSession) {
+                holdCurrentCart();
+                toast.info("Current cart moved to Held bills");
+            }
+
+            const byKey = new Map();
+            lines.forEach((l) => {
+                const variantSku = l.variantSlot || "";
+                const lineKey = `${l.product}::${variantSku}`;
+                const prev = byKey.get(lineKey);
+                if (prev) {
+                    prev.quantity += Number(l.quantity || 0);
+                    prev.maxStock += Number(l.quantity || 0);
+                    return;
+                }
+                const name = String(l.name || "");
+                byKey.set(lineKey, {
+                    lineKey,
+                    productId: String(l.product),
+                    variantSku,
+                    variantLabel: l.variantName && !name.includes(l.variantName) ? l.variantName : "",
+                    name,
+                    price: Number(l.price || 0),
+                    gstPercent: Number(l.gstPercent || 0),
+                    quantity: Number(l.quantity || 0),
+                    maxStock: Number(l.availableStock || 0) + Number(l.quantity || 0),
+                });
             });
+            const nextCart = [...byKey.values()];
+            const originalQty = Object.fromEntries(nextCart.map((l) => [l.lineKey, l.quantity]));
+
+            // Tax: per-line GST when it reproduces the bill's tax, else the bill's effective rate.
+            const pb = order.paymentBreakdown || {};
+            const inclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive !== false : pb.isTaxInclusive !== false;
+            const billTax = Number(pb.taxTotal || 0);
+            const sub = nextCart.reduce((s, l) => s + l.price * l.quantity, 0);
+            const lineTax = nextCart.reduce((s, l) => {
+                const rate = Number(l.gstPercent || 0);
+                if (rate <= 0) return s;
+                const lineTotal = l.price * l.quantity;
+                return s + (inclusive ? lineTotal - (lineTotal * 100) / (100 + rate) : (lineTotal * rate) / 100);
+            }, 0);
+            let nextTaxMode = "PERCENT";
+            let nextTaxValue = 0;
+            if (Math.abs(lineTax - billTax) > 0.01) {
+                if (billTax <= 0) {
+                    nextTaxMode = "AMOUNT";
+                } else {
+                    const base = inclusive ? sub - billTax : sub;
+                    nextTaxValue = base > 0 ? Math.round(((billTax * 100) / base) * 100) / 100 : 0;
+                }
+            }
+
+            const method = order.posPaymentMethod || "CASH";
+            const split = { CASH: "", CARD: "", QR: "", OTHER: "" };
+            (order.posPayments || []).forEach((p) => {
+                split[p.method] = String(p.amount);
+            });
+            setEditSession({
+                order,
+                originalQty,
+                prevTaxInclusive: editSession ? editSession.prevTaxInclusive : isTaxInclusive,
+                checkoutDefaults: {
+                    paymentMethod: method,
+                    walkInName: order.walkInCustomer?.name || "",
+                    walkInPhone: order.walkInCustomer?.phone || "",
+                    posCustomerId: posCustomerIdOf(order),
+                    discount: Number(pb.discountTotal || 0) > 0 ? String(pb.discountTotal) : "",
+                    amountPaid: method === "CREDIT" && Number(order.posAmountPaid || 0) > 0 ? String(order.posAmountPaid) : "",
+                    cashTendered: method === "CASH" && order.posCashTendered != null ? String(order.posCashTendered) : "",
+                    split,
+                },
+            });
+            setCart(nextCart);
+            setIsTaxInclusive(inclusive);
+            setTaxMode(nextTaxMode);
+            setTaxValue(nextTaxValue);
+            toast.success(`Bill #${order.orderId} loaded — change items, then Update bill`);
         } catch (error) {
             toast.error(error?.response?.data?.message || "Could not open the bill for editing");
         } finally {
@@ -556,11 +680,45 @@ const PosTerminal = () => {
         }
     };
 
-    const handleLastSaleEdited = (updated) => {
-        if (updated) saveLastSale({ ...lastSale, ...updated });
-        setEditBill(null);
-        fetchCatalog(catalogParams); // edited quantities move stock
-        toast.info("Reprint the corrected bill from Last sale");
+    const handleEditLastSale = () => loadBillForEdit(lastSale?.orderId);
+
+    // Edit bill from receipt: close the receipt and load that bill into the register.
+    const editFromReceipt = (order, close) => {
+        close();
+        loadBillForEdit(order?.orderId);
+    };
+
+    // Deep link from other screens: /seller/pos?edit=<bill no> opens that bill in Update mode.
+    const editParam = activeTab === "sale" ? searchParams.get("edit") : null;
+    useEffect(() => {
+        if (!editParam) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete("edit");
+        setSearchParams(next, { replace: true });
+        loadBillForEdit(editParam);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editParam]);
+
+    const submitBillEdit = async (payload) => {
+        const session = editSession;
+        try {
+            const res = await posApi.editSale(session.order.orderId, payload);
+            const updated = res?.data?.result?.order;
+            const merged = updated || session.order;
+            exitEditMode(session);
+            setIsCheckoutOpen(false);
+            setSaleCount((n) => n + 1);
+            if (merged) {
+                saveLastSale(merged);
+                setCompletedOrder(merged); // show the corrected receipt
+            }
+            fetchCatalog(catalogParams); // edited quantities move stock
+            toast.success("Bill updated");
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Could not update the bill");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const packingQueue = useMemo(
@@ -604,13 +762,43 @@ const PosTerminal = () => {
                     {/* Desktop: pinned under the top bar (top-24) and capped to the space between it and the
                         layout's bottom padding, so the line list scrolls inside and totals + Checkout stay visible. */}
                     <div className="h-fit lg:sticky lg:top-24 lg:max-h-[calc(100vh-11rem)] flex flex-col gap-3 min-h-0">
-                        <LastSaleCard
-                            order={lastSale}
-                            onReprint={() => setReprintOrder(lastSale)}
-                            onEdit={handleEditLastSale}
-                            onDismiss={() => saveLastSale(null)}
-                            isEditLoading={isEditLoading}
-                        />
+                        {isEditLoading && !editSession && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-800">
+                                Loading bill for editing…
+                            </div>
+                        )}
+                        {editSession ? (
+                            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+                                <HiOutlinePencilSquare className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-700">Editing bill</p>
+                                    <p className="text-sm font-black text-slate-900 truncate">
+                                        #{editSession.order.orderId} · was ₹{formatAmount(editSession.order.paymentBreakdown?.grandTotal)}
+                                    </p>
+                                    <p className="text-[11px] text-slate-600">
+                                        Add, remove or change items, then <strong>Update bill</strong>. Stock moves by the difference only.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        exitEditMode();
+                                        toast.info("Edit cancelled — bill unchanged");
+                                    }}
+                                    className="text-xs font-bold text-slate-600 hover:text-rose-600 shrink-0"
+                                >
+                                    Cancel edit
+                                </button>
+                            </div>
+                        ) : (
+                            <LastSaleCard
+                                order={lastSale}
+                                onReprint={() => setReprintOrder(lastSale)}
+                                onEdit={handleEditLastSale}
+                                onDismiss={() => saveLastSale(null)}
+                                isEditLoading={isEditLoading}
+                            />
+                        )}
                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm min-h-0 flex flex-col overflow-hidden">
                             <CartPanel
                                 cart={cart}
@@ -627,9 +815,11 @@ const PosTerminal = () => {
                                 isTaxInclusive={isTaxInclusive}
                                 onToggleTaxInclusive={handleToggleTaxInclusive}
                                 totalWithTax={totalWithTax}
-                                onHold={handleHold}
+                                onHold={editSession ? undefined : handleHold}
                                 heldCount={heldBills.length}
-                                onShowHeld={() => setIsHeldOpen(true)}
+                                onShowHeld={editSession ? undefined : () => setIsHeldOpen(true)}
+                                title={editSession ? `Editing #${editSession.order.orderId}` : undefined}
+                                checkoutLabel={editSession ? "Update bill" : undefined}
                             />
                         </div>
                     </div>
@@ -645,7 +835,9 @@ const PosTerminal = () => {
             />
 
             <CheckoutModal
-                key={saleCount}
+                key={editSession ? `edit-${editSession.order.orderId}-${saleCount}` : saleCount}
+                mode={editSession ? "edit" : "sale"}
+                initialValues={editSession?.checkoutDefaults}
                 isOpen={isCheckoutOpen}
                 onClose={() => setIsCheckoutOpen(false)}
                 subtotal={subtotal}
@@ -716,6 +908,7 @@ const PosTerminal = () => {
                     shopName={user?.shopName || user?.name}
                     seller={user}
                     onClose={() => setCompletedOrder(null)}
+                    onEdit={(o) => editFromReceipt(o, () => setCompletedOrder(null))}
                 />
             )}
 
@@ -726,30 +919,9 @@ const PosTerminal = () => {
                     seller={user}
                     heading="Bill Copy"
                     onClose={() => setReprintOrder(null)}
+                    onEdit={(o) => editFromReceipt(o, () => setReprintOrder(null))}
                 />
             )}
-
-            <Modal
-                isOpen={!!editBill}
-                onClose={() => setEditBill(null)}
-                title={editBill ? `Edit bill #${editBill.order.orderId}` : "Edit bill"}
-                size="md"
-            >
-                {editBill &&
-                    (editBill.hasReturns ? (
-                        <p className="text-sm text-slate-600 py-4 text-center">
-                            This bill already has returns, so it can't be edited here. Use Returns to adjust it.
-                        </p>
-                    ) : (
-                        <SaleEditPanel
-                            order={editBill.order}
-                            lines={editBill.lines}
-                            defaultOpen
-                            onCancel={() => setEditBill(null)}
-                            onSaved={handleLastSaleEdited}
-                        />
-                    ))}
-            </Modal>
         </div>
     );
 };

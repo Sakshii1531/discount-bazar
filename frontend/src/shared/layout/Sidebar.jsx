@@ -50,13 +50,13 @@ const SidebarSubGroup = ({ child }) => {
           "w-full flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg transition-all duration-300",
           hasActive
             ? "text-white font-bold"
-            : "text-gray-500 hover:text-gray-300 hover:bg-white/5",
+            : "text-gray-300 hover:text-white hover:bg-white/5",
         )}>
         <span>{child.label}</span>
         <HiChevronDown
           className={cn(
             "h-3.5 w-3.5 transition-all duration-300",
-            expanded ? "rotate-180 text-primary" : "rotate-0 text-gray-600",
+            expanded ? "rotate-180 text-primary" : "rotate-0 text-gray-400",
           )}
         />
       </button>
@@ -72,7 +72,7 @@ const SidebarSubGroup = ({ child }) => {
                   "block text-xs py-1.5 px-2.5 rounded-lg transition-all duration-300 relative",
                   isActive
                     ? "text-white font-bold bg-white/10 shadow-sm ring-1 ring-white/5"
-                    : "text-gray-500 hover:text-gray-300 hover:bg-white/5",
+                    : "text-gray-300 hover:text-white hover:bg-white/5",
                 )
               }>
               {({ isActive }) => (
@@ -123,7 +123,7 @@ const SidebarItem = ({
             "w-full flex items-center justify-between rounded-lg px-3 pr-12 py-2.5 transition-all duration-300 group relative overflow-hidden",
             isChildActive || isOpen
               ? "bg-white/10 text-white ring-1 ring-white/10"
-              : "text-gray-400 hover:text-white",
+              : "text-gray-200 hover:text-white",
           )}>
           <AnimatePresence>
             {isHovered && (
@@ -148,14 +148,14 @@ const SidebarItem = ({
                 "p-1.5 rounded-lg transition-all duration-500 shadow-lg",
                 isChildActive || isOpen
                   ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
-                  : "bg-white/5 text-gray-500 group-hover:bg-white/10 group-hover:text-gray-300",
+                  : "bg-white/5 text-gray-300 group-hover:bg-white/10 group-hover:text-white",
               )}>
               {item.icon && <item.icon className="h-4 w-4" />}
             </div>
             <span
               className={cn(
                 "text-xs tracking-tight transition-all duration-300",
-                isChildActive || isOpen ? "font-bold" : "font-semibold",
+                isChildActive || isOpen ? "font-bold text-white" : "font-medium text-gray-200 group-hover:text-white",
               )}>
               {item.label}
             </span>
@@ -171,7 +171,7 @@ const SidebarItem = ({
                 "transition-all duration-300",
                 isOpen
                   ? "rotate-180 text-primary"
-                  : "rotate-0 text-gray-600 group-hover:text-gray-400",
+                  : "rotate-0 text-gray-400 group-hover:text-gray-200",
               )}>
               <HiChevronDown className="h-4 w-4" />
             </div>
@@ -203,7 +203,7 @@ const SidebarItem = ({
                     "block text-xs py-1.5 px-2.5 rounded-lg transition-all duration-300 relative",
                     isActive
                       ? "text-white font-bold bg-white/10 shadow-sm ring-1 ring-white/5"
-                      : "text-gray-500 hover:text-gray-300 hover:bg-white/5",
+                      : "text-gray-300 hover:text-white hover:bg-white/5",
                     showChildBadge && "pr-9",
                   )
                 }>
@@ -240,7 +240,7 @@ const SidebarItem = ({
           "flex items-center space-x-2.5 rounded-lg px-3 py-2.5 transition-all duration-300 group relative overflow-hidden",
           isActive
             ? "bg-primary text-primary-foreground"
-            : "text-gray-400 hover:text-white",
+            : "text-gray-200 hover:text-white",
         )
       }>
       {({ isActive }) => (
@@ -267,14 +267,14 @@ const SidebarItem = ({
               "p-1.5 rounded-lg transition-all duration-500 shadow-md z-10",
               isActive
                 ? "bg-white/20 text-white"
-                : "bg-white/5 text-gray-500 group-hover:bg-white/10 group-hover:text-gray-300",
+                : "bg-white/5 text-gray-300 group-hover:bg-white/10 group-hover:text-white",
             )}>
             {item.icon && <item.icon className="h-4 w-4" />}
           </div>
           <span
             className={cn(
               "text-xs tracking-tight transition-all duration-300 z-10",
-              isActive ? "font-bold" : "font-semibold",
+              isActive ? "font-bold text-white" : "font-medium text-gray-200 group-hover:text-white",
             )}>
             {item.label}
           </span>
@@ -337,7 +337,7 @@ const SidebarContent = ({ items, title, onClose, openMenu, handleToggle, hovered
         className="mt-4 px-3 space-y-1.5 flex-1 overflow-y-auto overscroll-contain custom-scrollbar-dark min-h-0 pb-6 relative z-20"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        <p className="px-3 text-[9px] font-black text-gray-600 uppercase tracking-[0.3em] mb-3">
+        <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">
           Core Management
         </p>
         <AnimatePresence>
@@ -377,7 +377,7 @@ const SidebarContent = ({ items, title, onClose, openMenu, handleToggle, hovered
               <p className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">
                 {title?.toLowerCase().includes('seller') ? 'Seller Console' : 'Admin Console'}
               </p>
-              <p className="text-[9px] text-gray-500 truncate font-black uppercase tracking-widest">
+              <p className="text-[9px] text-gray-400 truncate font-bold uppercase tracking-widest">
                 {title?.toLowerCase().includes('seller') ? 'Seller' : 'Super Admin'}
               </p>
             </div>
@@ -390,8 +390,30 @@ const SidebarContent = ({ items, title, onClose, openMenu, handleToggle, hovered
 
 const Sidebar = ({ items, title, isOpen, onClose }) => {
   const { role } = useAuth();
-  const [openMenu, setOpenMenu] = useState(null);
+  const location = useLocation();
+
+  const getActiveGroup = () => {
+    const activeItem = items?.find(
+      (item) =>
+        item.children &&
+        item.children.some(
+          (child) =>
+            location.pathname === child.path ||
+            (child.children || []).some((g) => location.pathname === g.path),
+        ),
+    );
+    return activeItem ? activeItem.label : null;
+  };
+
+  const [openMenu, setOpenMenu] = useState(() => getActiveGroup());
   const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  React.useEffect(() => {
+    const active = getActiveGroup();
+    if (active) {
+      setOpenMenu(active);
+    }
+  }, [location.pathname]);
 
   const handleToggle = (label) => {
     setOpenMenu((prev) => (prev === label ? null : label));
@@ -411,7 +433,7 @@ const Sidebar = ({ items, title, isOpen, onClose }) => {
     <>
       {/* Desktop Sidebar */}
       <aside className={cn(
-        "fixed left-0 inset-y-0 w-72 bg-[#0a0c10] text-gray-400 border-r border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.4)] md:flex flex-col z-50 transition-all duration-300",
+        "fixed left-0 inset-y-0 w-72 bg-[#0a0c10] text-gray-200 border-r border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.4)] md:flex flex-col z-50 transition-all duration-300",
         (role === "admin" || role === "seller") ? "hidden md:flex" : "flex",
       )}>
         <SidebarContent {...commonProps} />

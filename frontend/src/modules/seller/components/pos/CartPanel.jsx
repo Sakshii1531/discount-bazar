@@ -21,6 +21,8 @@ const CartPanel = ({
     onHold,
     heldCount = 0,
     onShowHeld,
+    title = "Current Sale",
+    checkoutLabel = "Checkout",
 }) => {
     const finalTotal = totalWithTax != null ? totalWithTax : (isTaxInclusive ? subtotal : subtotal + taxAmount);
     const taxableBase = Math.max(0, subtotal - taxAmount);
@@ -32,7 +34,7 @@ const CartPanel = ({
         <div className="flex flex-col flex-1 min-h-0">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 shrink-0">
                 <HiOutlineShoppingCart className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-black text-slate-900">Current Sale</h3>
+                <h3 className="text-sm font-black text-slate-900 truncate">{title}</h3>
                 <span className="ml-auto text-xs font-bold text-slate-400">{cart.length} item{cart.length === 1 ? "" : "s"}</span>
                 {onShowHeld && heldCount > 0 && (
                     <button
@@ -275,7 +277,7 @@ const CartPanel = ({
                         </Button>
                     )}
                     <Button className="flex-1" size="lg" disabled={cart.length === 0} onClick={onCheckout}>
-                        Checkout
+                        {checkoutLabel}
                     </Button>
                 </div>
             </div>

@@ -44,6 +44,11 @@ export const getPosCatalog = async (req, res) => {
       .limit(500)
       .lean();
 
+    // In-stock items first, out-of-stock pushed to the end (stable: keeps name order within each group).
+    const hasStock = (p) =>
+      Number(p.stock || 0) > 0 || (Array.isArray(p.variants) && p.variants.some((v) => Number(v?.stock || 0) > 0));
+    products.sort((a, b) => Number(hasStock(b)) - Number(hasStock(a)));
+
     return handleResponse(res, 200, "POS catalog fetched", products);
   } catch (error) {
     return handleResponse(res, 500, error.message);

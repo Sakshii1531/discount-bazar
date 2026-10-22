@@ -8,15 +8,16 @@ import { sellerApi } from "../services/sellerApi";
 import PurchaseProductSearch from "../components/business/PurchaseProductSearch";
 import PurchaseProductEditModal from "../components/business/PurchaseProductEditModal";
 import { formatPriceInteger } from "@shared/utils/currency";
-import Modal from "@shared/components/ui/Modal";
 import { useAuth } from "@core/context/AuthContext";
-import SaleEditPanel from "../components/pos/SaleEditPanel";
+import SearchableSelect from "@shared/components/ui/SearchableSelect";
 import {
     buildStatement,
     printStatement,
     downloadStatementPdf,
     downloadStatementXlsx,
 } from "../utils/ledgerStatement";
+import { buildLedgerInvoice, buildPurchaseBillInvoice, hasInvoice, printInvoice, downloadInvoicePdf } from "../utils/ledgerInvoice";
+import InvoiceModal from "../components/business/InvoiceModal";
 import {
     HiOutlineSquares2X2,
     HiOutlineShoppingBag,
@@ -174,7 +175,7 @@ const editableBill = (e) =>
     (e.kind === "SALE" && e.refModel === "Order" && e.refNo) ||
     (e.kind === "PURCHASE" && e.refModel === "PurchaseBill" && e.refId);
 
-const LedgerStatementTable = ({ entries = [], onEditBill }) => {
+const LedgerStatementTable = ({ entries = [], onEditBill, onViewInvoice }) => {
     const [open, setOpen] = useState(() => new Set());
     const withItems = entries.filter((e) => e.items?.length > 0);
     const allOpen = withItems.length > 0 && withItems.every((e) => open.has(String(e._id)));
@@ -249,7 +250,18 @@ const LedgerStatementTable = ({ entries = [], onEditBill }) => {
                                                     {isOpen ? "Hide" : "View"} items ({count})
                                                     <HiOutlineChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
                                                 </button>
-                                            ) : (
+                                            ) : null}
+                                            {onViewInvoice && hasInvoice(e) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(ev) => { ev.stopPropagation(); onViewInvoice(e); }}
+                                                    className="ml-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-primary hover:bg-slate-50 cursor-pointer"
+                                                    title="Open this bill as an invoice to print or download"
+                                                >
+                                                    <HiOutlineDocumentText className="h-3.5 w-3.5" /> Invoice
+                                                </button>
+                                            )}
+                                            {count === 0 && (
                                                 <span className="text-slate-300">—</span>
                                             )}
                                         </td>
@@ -814,6 +826,7 @@ const toLineCost = (cost, product, line) => {
 
 const PurchasesTab = () => {
     const navigate = useNavigate();
+    const { user: sellerProfile } = useAuth();
     const location = useLocation();
     const [suppliers, setSuppliers] = useState([]);
     const [products, setProducts] = useState([]);
@@ -1373,10 +1386,15 @@ const PurchasesTab = () => {
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Supplier (optional)</label>
                         <div className="flex items-center gap-1.5">
-                            <select className={inputCls} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
-                                <option value="">— No supplier —</option>
-                                {suppliers.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
-                            </select>
+                            <SearchableSelect
+                                value={form.supplierId}
+                                onChange={(id) => setForm((f) => ({ ...f, supplierId: id || "" }))}
+                                options={suppliers.map((s) => ({ id: s._id, label: s.phone ? `${s.name} (${s.phone})` : s.name }))}
+                                placeholder="— No supplier —"
+                                searchPlaceholder="Search supplier..."
+                                emptyMessage="No matching supplier"
+                                className="rounded-xl text-xs"
+                            />
                             <button
                                 type="button"
                                 onClick={openAddSupplier}
@@ -1767,12 +1785,24 @@ const PurchasesTab = () => {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                {/* Isolated print: only the invoice, not the purchases page behind this modal */}
                                 <button
                                     type="button"
-                                    onClick={() => window.print()}
+                                    onClick={() => printInvoice(buildPurchaseBillInvoice(invoiceBill, sellerProfile || {}))}
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-xs"
                                 >
                                     <HiOutlinePrinter className="h-4 w-4" /> Print
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        downloadInvoicePdf(buildPurchaseBillInvoice(invoiceBill, sellerProfile || {})).catch(() =>
+                                            toast.error("Could not generate the PDF"),
+                                        )
+                                    }
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-xs"
+                                >
+                                    <HiOutlineArrowDownTray className="h-4 w-4" /> PDF
                                 </button>
                                 <button
                                     type="button"
@@ -1888,7 +1918,18 @@ const PurchasesTab = () => {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => window.print()}
+                                onClick={() =>
+                                    downloadInvoicePdf(buildPurchaseBillInvoice(invoiceBill, sellerProfile || {})).catch(() =>
+                                        toast.error("Could not generate the PDF"),
+                                    )
+                                }
+                                className={ghostBtn}
+                            >
+                                <HiOutlineArrowDownTray className="h-4 w-4" /> Download PDF
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => printInvoice(buildPurchaseBillInvoice(invoiceBill, sellerProfile || {}))}
                                 className={btnCls}
                             >
                                 <HiOutlinePrinter className="h-4 w-4" /> Print Invoice
@@ -2190,9 +2231,8 @@ const PartiesTab = () => {
     const [pay, setPay] = useState({ amount: "", method: "CASH" });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [exporting, setExporting] = useState("");
-    // POS bill opened from a customer ledger row: { order, lines, hasReturns }
-    const [saleEdit, setSaleEdit] = useState(null);
-    const [openingBill, setOpeningBill] = useState("");
+    // Single bill opened from a ledger row as a printable / downloadable invoice
+    const [invoice, setInvoice] = useState(null);
     const { user: sellerProfile } = useAuth();
     const navigate = useNavigate();
     const partyType = kind === "suppliers" ? "SUPPLIER" : "CUSTOMER";
@@ -2311,33 +2351,15 @@ const PartiesTab = () => {
         }
     };
 
-    // "Edit this bill" from the ledger: POS sales open the audited bill editor
-    // here; purchase bills open in the Purchases editor. Saving reconciles
-    // stock and this ledger on the server, so no manual correction is needed.
-    const editBill = async (entry) => {
+    // "Edit this bill" from the ledger: POS sales reopen in the POS register in
+    // Update mode (add/scan/remove items like a regular sale); purchase bills open
+    // in the Purchases editor. Saving reconciles stock and this ledger on the server.
+    const editBill = (entry) => {
         if (entry.refModel === "PurchaseBill") {
             navigate("/seller/business/purchases", { state: { editPurchaseBillId: String(entry.refId) } });
             return;
         }
-        setOpeningBill(String(entry._id));
-        try {
-            const res = await posApi.getOrderForReturn(entry.refNo);
-            const data = unwrap(res);
-            if (!data?.order) throw new Error("Bill not found");
-            const lines = Array.isArray(data.items) ? data.items : [];
-            setSaleEdit({ order: data.order, lines, hasReturns: lines.some((l) => Number(l.returnedQuantity || 0) > 0) });
-        } catch (e) {
-            toast.error(errMsg(e) || "Could not open the bill for editing");
-        } finally {
-            setOpeningBill("");
-        }
-    };
-
-    const onSaleEdited = () => {
-        setSaleEdit(null);
-        toast.success("Bill updated — stock and ledger adjusted");
-        if (ledger) open(ledger.party);
-        load();
+        navigate(`/seller/pos?edit=${encodeURIComponent(entry.refNo)}`);
     };
 
     const pay1 = async () => {
@@ -2680,35 +2702,30 @@ const PartiesTab = () => {
                             {/* Statement Table */}
                             <div className="space-y-2">
                                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
-                                <LedgerStatementTable key={ledger.party._id} entries={ledger.entries} onEditBill={editBill} />
-                                {openingBill && <p className="text-xs text-slate-500">Opening bill…</p>}
+                                <LedgerStatementTable
+                                    key={ledger.party._id}
+                                    entries={ledger.entries}
+                                    onEditBill={editBill}
+                                    onViewInvoice={(entry) =>
+                                        setInvoice(
+                                            buildLedgerInvoice({
+                                                kind,
+                                                entry,
+                                                entries: ledger.entries,
+                                                party: ledger.party,
+                                                business: sellerProfile || {},
+                                            }),
+                                        )
+                                    }
+                                />
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            <Modal
-                isOpen={!!saleEdit}
-                onClose={() => setSaleEdit(null)}
-                title={saleEdit ? `Edit bill #${saleEdit.order.orderId}` : "Edit bill"}
-                size="md"
-            >
-                {saleEdit &&
-                    (saleEdit.hasReturns ? (
-                        <p className="text-sm text-slate-600 py-4 text-center">
-                            This bill already has returns, so it can't be edited. Use Returns in POS to adjust it.
-                        </p>
-                    ) : (
-                        <SaleEditPanel
-                            order={saleEdit.order}
-                            lines={saleEdit.lines}
-                            defaultOpen
-                            onCancel={() => setSaleEdit(null)}
-                            onSaved={onSaleEdited}
-                        />
-                    ))}
-            </Modal>
+            <InvoiceModal invoice={invoice} onClose={() => setInvoice(null)} />
+
         </div>
     );
 };

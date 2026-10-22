@@ -7,6 +7,7 @@ import {
     HiOutlineArrowUturnLeft,
     HiOutlineReceiptPercent,
     HiOutlineArrowDownTray,
+    HiOutlinePencilSquare,
 } from "react-icons/hi2";
 import Button from "@shared/components/ui/Button";
 import Input from "@shared/components/ui/Input";
@@ -21,7 +22,7 @@ const inr = (n) => `${Number(n || 0) < 0 ? "-" : ""}₹${formatAmount(Math.abs(N
 
 /**
  * Past POS bills: search by bill number / customer name / phone, filter by
- * date, reprint a bill copy, or jump to Returns to return or edit it.
+ * date, reprint a bill copy, reopen it in the register to edit, or jump to Returns.
  */
 const SalesHistory = ({ shopName, seller }) => {
     const navigate = useNavigate();
@@ -36,6 +37,8 @@ const SalesHistory = ({ shopName, seller }) => {
     const [applied, setApplied] = useState({});
     const [isExporting, setIsExporting] = useState(false);
     const [billPdfId, setBillPdfId] = useState(null);
+    // Edit = back to the register (New Sale) with the bill loaded in Update mode.
+    const editBill = (orderId) => navigate(`/seller/pos?edit=${encodeURIComponent(orderId)}`);
 
     const load = useCallback(
         (nextPage = 1) => {
@@ -205,12 +208,19 @@ const SalesHistory = ({ shopName, seller }) => {
                                                 </button>
                                                 <button
                                                     type="button"
+                                                    onClick={() => editBill(o.orderId)}
+                                                    className="flex items-center gap-1 font-bold text-slate-600 hover:text-primary"
+                                                >
+                                                    <HiOutlinePencilSquare className="h-4 w-4" /> Edit bill
+                                                </button>
+                                                <button
+                                                    type="button"
                                                     onClick={() =>
                                                         navigate(`/seller/pos/returns?order=${encodeURIComponent(o.orderId)}`)
                                                     }
                                                     className="flex items-center gap-1 font-bold text-slate-600 hover:text-primary"
                                                 >
-                                                    <HiOutlineArrowUturnLeft className="h-4 w-4" /> Return / Edit
+                                                    <HiOutlineArrowUturnLeft className="h-4 w-4" /> Return
                                                 </button>
                                             </div>
                                         </td>
@@ -248,6 +258,7 @@ const SalesHistory = ({ shopName, seller }) => {
                     seller={seller}
                     heading="Bill Copy"
                     onClose={() => setReprint(null)}
+                    onEdit={(o) => editBill(o.orderId)}
                 />
             )}
         </div>

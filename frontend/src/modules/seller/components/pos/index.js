@@ -9,5 +9,4 @@ export { default as ReturnsPanel } from "./ReturnsPanel";
 export { default as ReturnReceipt } from "./ReturnReceipt";
 export { default as SalesHistory } from "./SalesHistory";
 export { default as OnlineOrdersPanel } from "./OnlineOrdersPanel";
-export { default as SaleEditPanel } from "./SaleEditPanel";
 export { default as LastSaleCard } from "./LastSaleCard";

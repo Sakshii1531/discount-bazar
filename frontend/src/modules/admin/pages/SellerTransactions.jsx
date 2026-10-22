@@ -3,6 +3,7 @@ import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
 import Modal from '@shared/components/ui/Modal';
 import Pagination from '@shared/components/ui/Pagination';
+import SearchableSelect from '@shared/components/ui/SearchableSelect';
 import { adminApi } from '../services/adminApi';
 import { toast } from 'sonner';
 import { exportToCSV } from '@/lib/exportUtils';
@@ -307,14 +308,17 @@ const SellerTransactions = () => {
 
                         <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl ring-1 ring-slate-100">
                             <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                            <select
-                                value={selectedSeller}
-                                onChange={(e) => setSelectedSeller(e.target.value)}
-                                className="bg-transparent text-[10px] font-bold text-slate-600 uppercase outline-none cursor-pointer max-w-[150px]"
-                            >
-                                <option value="all">All Merchants</option>
-                                {sellers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                            </select>
+                            <div className="w-[170px]">
+                                <SearchableSelect
+                                    value={selectedSeller === 'all' ? '' : selectedSeller}
+                                    onChange={(name) => setSelectedSeller(name || 'all')}
+                                    options={sellers.map((s) => ({ id: s.name, label: s.name }))}
+                                    placeholder="All Merchants"
+                                    searchPlaceholder="Search merchants..."
+                                    emptyMessage="No matching merchant"
+                                    className="border-0 bg-transparent px-1 py-0.5 text-[10px] font-bold text-slate-600 uppercase"
+                                />
+                            </div>
                         </div>
 
                         <div className="flex bg-slate-100 p-1 rounded-xl">

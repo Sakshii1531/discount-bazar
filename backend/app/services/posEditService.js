@@ -123,11 +123,16 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
           );
         }
       } else {
+        // No tax sent: keep the bill's effective tax rate on the new subtotal
+        // (re-using the old rupee amount would leave tax stale after a qty change).
+        const oldSubtotal = Number(pb.productSubtotal || 0);
         computedTax = payload.taxTotal != null
           ? roundCurrency(payload.taxTotal)
           : payload.taxPercent != null
             ? roundCurrency((subtotal * payload.taxPercent) / 100)
-            : roundCurrency(pb.taxTotal || 0);
+            : oldSubtotal > 0
+              ? roundCurrency(((pb.taxTotal || 0) * subtotal) / oldSubtotal)
+              : roundCurrency(pb.taxTotal || 0);
       }
 
       const grand = isTaxInclusive
@@ -138,7 +143,8 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
 
       const method = payload.posPaymentMethod || order.posPaymentMethod;
       const isCredit = method === "CREDIT";
-      const customerId = payload.posCustomerId || order.posCustomer;
+      // posCustomerId: omitted → keep the linked customer; "" → back to walk-in.
+      const customerId = payload.posCustomerId !== undefined ? payload.posCustomerId || undefined : order.posCustomer;
       if (isCredit) {
         if (!customerId) throw err(400, "Select a customer for credit (udhaar) sales");
         if (!(await PosCustomer.exists({ _id: customerId, seller: sellerId }).session(session))) throw err(404, "Customer not found");
@@ -150,8 +156,13 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
         grandTotal: grand,
         amountPaid: payload.amountPaid ?? order.posAmountPaid ?? 0,
         payments: payload.posPayments ?? (sameMethod ? order.posPayments : undefined),
-        // Keep the recorded cash handed over only while it still covers the new total.
-        cashTendered: sameMethod && oldTendered != null && oldTendered >= grand ? oldTendered : undefined,
+        // Cash handed over: as re-entered at checkout, else the recorded amount while it still covers the new total.
+        cashTendered:
+          payload.cashTendered != null
+            ? payload.cashTendered
+            : sameMethod && oldTendered != null && oldTendered >= grand
+              ? oldTendered
+              : undefined,
       });
       const paid = pay.posAmountPaid;
 
@@ -162,7 +173,13 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       order.posCashTendered = pay.posCashTendered;
       order.paymentStatus = pay.paymentStatus;
       order.payment = { ...(order.payment?.toObject ? order.payment.toObject() : order.payment || {}), ...pay.payment };
-      if (String(customerId || "") !== String(order.posCustomer || "")) {
+      if (payload.walkInCustomer !== undefined) {
+        // Name/phone re-entered at checkout; blanks fall back to the linked customer.
+        const linked = customerId
+          ? await PosCustomer.findOne({ _id: customerId, seller: sellerId }).select("name phone").session(session).lean()
+          : null;
+        order.walkInCustomer = resolveBillCustomerDetails(payload.walkInCustomer, linked);
+      } else if (String(customerId || "") !== String(order.posCustomer || "")) {
         // Re-linking the bill: refresh the printed name/phone unless the
         // cashier typed their own (i.e. it wasn't blank or the old customer's).
         const [prevCustomer, nextCustomer] = await Promise.all(

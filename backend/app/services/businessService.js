@@ -103,27 +103,31 @@ export async function partyLedger(sellerId, partyType, partyId, { from, to } = {
   const q = { seller: sellerId, partyType, party: partyId };
   if (from || to) q.date = { ...(from && { $gte: from }), ...(to && { $lte: to }) };
   const entries = await PartyLedgerEntry.find(q).sort({ date: 1, createdAt: 1 }).lean();
-  const itemsByRef = await ledgerBillItems(sellerId, entries);
+  const { itemsByRef, billByRef } = await ledgerBillItems(sellerId, entries);
   let running = 0;
   const rows = entries.map((e) => {
     running = roundCurrency(running + e.amount * e.effect);
     // Payments share the bill's ref but carry no goods of their own.
-    const items = e.kind !== "PAYMENT" && e.refId ? itemsByRef.get(`${e.refModel}:${e.refId}`) || [] : [];
-    return { ...e, items, balance: running };
+    const ref = `${e.refModel}:${e.refId}`;
+    const items = e.kind !== "PAYMENT" && e.refId ? itemsByRef.get(ref) || [] : [];
+    // Bill-level figures (discount / tax / whether prices include GST) for the printable invoice.
+    const bill = e.kind !== "PAYMENT" && e.refId ? billByRef.get(ref) : undefined;
+    return { ...e, items, ...(bill ? { bill } : {}), balance: running };
   });
   return { entries: rows, balance: running };
 }
 
 // Item lines of the bills/returns behind ledger entries, normalised to
-// { name, variant, quantity, rate, gstPercent, amount } and keyed "refModel:refId".
+// { name, variant, quantity, rate, gstPercent, amount, taxInclusive } and keyed "refModel:refId",
+// plus each bill's own totals ({ subtotal, discount, tax, total, taxInclusive }).
 async function ledgerBillItems(sellerId, entries) {
   const idsOf = (model) => [
     ...new Set(entries.filter((e) => e.kind !== "PAYMENT" && e.refModel === model && e.refId).map((e) => String(e.refId))),
   ];
   const [orders, bills, purchaseReturns, posReturns] = await Promise.all([
-    idsOf("Order").length ? Order.find({ _id: { $in: idsOf("Order") }, seller: sellerId }).select("items").lean() : [],
-    idsOf("PurchaseBill").length ? PurchaseBill.find({ _id: { $in: idsOf("PurchaseBill") }, seller: sellerId }).select("items").lean() : [],
-    idsOf("PurchaseReturn").length ? PurchaseReturn.find({ _id: { $in: idsOf("PurchaseReturn") }, seller: sellerId }).select("items").lean() : [],
+    idsOf("Order").length ? Order.find({ _id: { $in: idsOf("Order") }, seller: sellerId }).select("items isTaxInclusive paymentBreakdown").lean() : [],
+    idsOf("PurchaseBill").length ? PurchaseBill.find({ _id: { $in: idsOf("PurchaseBill") }, seller: sellerId }).select("items subtotal gstTotal total").lean() : [],
+    idsOf("PurchaseReturn").length ? PurchaseReturn.find({ _id: { $in: idsOf("PurchaseReturn") }, seller: sellerId }).select("items subtotal gstTotal total").lean() : [],
     idsOf("PosReturn").length ? PosReturn.find({ _id: { $in: idsOf("PosReturn") }, seller: sellerId }).select("items").lean() : [],
   ]);
 
@@ -141,12 +145,34 @@ async function ledgerBillItems(sellerId, entries) {
     (sku && variantNames.get(`${productId}:${String(sku).toLowerCase()}`)) || sku || "";
 
   const map = new Map();
-  const put = (model, docs, toLine) => docs.forEach((d) => map.set(`${model}:${d._id}`, (d.items || []).map(toLine)));
-  put("Order", orders, (i) => ({
+  const billByRef = new Map();
+  const put = (model, docs, toLine) => docs.forEach((d) => map.set(`${model}:${d._id}`, (d.items || []).map((i) => toLine(i, d))));
+  const orderInclusive = (o) => (o.isTaxInclusive !== undefined ? o.isTaxInclusive !== false : o.paymentBreakdown?.isTaxInclusive !== false);
+  put("Order", orders, (i, o) => ({
     name: i.name || "", variant: variantOf(i.product, i.variantSlot), quantity: i.quantity,
     rate: Number(i.price || 0), gstPercent: Number(i.gstPercent || 0),
     amount: roundCurrency(Number(i.price || 0) * Number(i.quantity || 0)),
+    taxInclusive: orderInclusive(o),
   }));
+  orders.forEach((o) => {
+    const pb = o.paymentBreakdown || {};
+    billByRef.set(`Order:${o._id}`, {
+      subtotal: roundCurrency(pb.productSubtotal || 0),
+      discount: roundCurrency(pb.discountTotal || 0),
+      tax: roundCurrency(pb.taxTotal || 0),
+      total: roundCurrency(pb.grandTotal || 0),
+      taxInclusive: orderInclusive(o),
+    });
+  });
+  [["PurchaseBill", bills], ["PurchaseReturn", purchaseReturns]].forEach(([model, docs]) =>
+    docs.forEach((d) => {
+      if (d.total == null) return;
+      billByRef.set(`${model}:${d._id}`, {
+        subtotal: roundCurrency(d.subtotal || 0), discount: 0, tax: roundCurrency(d.gstTotal || 0),
+        total: roundCurrency(d.total || 0), taxInclusive: false,
+      });
+    }),
+  );
   // Purchase lines are named "Product (SKU)"; the SKU moves to the variant column.
   const purchaseLine = (i) => ({
     name: i.variantSku && String(i.name || "").endsWith(` (${i.variantSku})`)
@@ -155,14 +181,16 @@ async function ledgerBillItems(sellerId, entries) {
     variant: variantOf(i.product, i.variantSku), quantity: i.quantity,
     rate: Number(i.cost || 0), gstPercent: Number(i.gstPercent || 0),
     amount: roundCurrency(Number(i.lineTotal) || Number(i.cost || 0) * Number(i.quantity || 0)),
+    // lineTotal already carries GST either way (see priceItems)
+    taxInclusive: Number(i.lineTotal) > 0 || String(i.purchaseGstType || "").toUpperCase() === "INCLUSIVE",
   });
   put("PurchaseBill", bills, purchaseLine);
   put("PurchaseReturn", purchaseReturns, purchaseLine);
   put("PosReturn", posReturns, (i) => ({
     name: i.productName || "", variant: variantOf(i.product, i.variantSlot), quantity: i.quantity,
-    rate: Number(i.unitPrice || 0), gstPercent: 0, amount: Number(i.refundAmount || 0),
+    rate: Number(i.unitPrice || 0), gstPercent: 0, amount: Number(i.refundAmount || 0), taxInclusive: true,
   }));
-  return map;
+  return { itemsByRef: map, billByRef };
 }
 
 export async function recordPayment(sellerId, { partyType, partyId, amount, method = "CASH", note = "", date }) {
