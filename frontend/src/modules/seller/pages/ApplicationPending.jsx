@@ -125,7 +125,7 @@ const ApplicationPending = () => {
         ) {
           handleApproved(result);
         }
-      } catch (err) {
+      } catch {
         // Silently retry on interval
       }
     };

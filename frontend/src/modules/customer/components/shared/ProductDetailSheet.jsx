@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { motion, AnimatePresence, useAnimation, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { X, ChevronDown, Share2, Heart, Search, Clock, Minus, Plus, ShoppingBag, Star, MessageSquare, ArrowLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { useProductDetail } from '../../context/ProductDetailContext';

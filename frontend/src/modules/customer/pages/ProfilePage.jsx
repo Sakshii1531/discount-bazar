@@ -6,9 +6,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@core/context/AuthContext';
 import { useSettings } from '@core/context/SettingsContext';
-import { customerApi } from '../services/customerApi';
-import { toast } from 'sonner';
-
 const ProfilePage = () => {
     const navigate = useNavigate();
     const { user, role, logout, refreshUser } = useAuth();

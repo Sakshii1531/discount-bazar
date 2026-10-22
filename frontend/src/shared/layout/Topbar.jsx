@@ -142,7 +142,7 @@ const Topbar = ({ onMenuClick }) => {
             if (isSeller) await sellerApi.markNotificationRead(id);
             if (isAdmin) await adminApi.markNotificationRead(id);
             fetchNotifications();
-        } catch (error) {
+        } catch {
             toast.error("Failed to mark as read");
         }
     };
@@ -153,7 +153,7 @@ const Topbar = ({ onMenuClick }) => {
             if (isAdmin) await adminApi.markAllNotificationsRead();
             fetchNotifications();
             toast.success("All caught up!");
-        } catch (error) {
+        } catch {
             toast.error("Failed to mark all as read");
         }
     };

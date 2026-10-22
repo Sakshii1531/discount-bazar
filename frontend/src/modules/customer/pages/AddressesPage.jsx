@@ -166,7 +166,7 @@ const AddressesPage = () => {
     const [addForm, setAddForm] = useState(() => {
         const saved = sessionStorage.getItem('addAddressForm');
         if (saved) {
-            try { return JSON.parse(saved); } catch (e) {}
+            try { return JSON.parse(saved); } catch {}
         }
         return {
             type: 'home',
@@ -262,7 +262,7 @@ const AddressesPage = () => {
                         toast.dismiss(toastId);
                         toast.error("Could not fetch address for this location");
                     }
-                } catch (error) {
+                } catch {
                     toast.dismiss(toastId);
                     toast.error("Failed to detect address details");
                 }

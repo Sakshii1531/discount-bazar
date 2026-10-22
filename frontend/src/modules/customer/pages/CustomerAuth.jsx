@@ -657,11 +657,6 @@ const CustomerAuth = () => {
 
                 </div>
             </div>
-
-            {/* Desktop Message */}
-            <div className="hidden md:block absolute bottom-10 right-10 text-white/20 text-xs font-bold uppercase tracking-[4px]">
-                Adaptive Theme Simulator
-            </div>
         </div>
     );
 };

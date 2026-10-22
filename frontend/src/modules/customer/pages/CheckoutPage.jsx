@@ -7,7 +7,6 @@ import { useAuth } from "@core/context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { customerApi } from "../services/customerApi";
 import { useLocation as useAppLocation } from "../context/LocationContext";
-import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import { loadRazorpayScript } from "@shared/utils/razorpayLoader";
 import {
   MapPin,

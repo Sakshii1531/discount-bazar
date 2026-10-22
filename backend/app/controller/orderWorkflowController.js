@@ -23,6 +23,7 @@ import { sendSmsIndiaHubOtp } from "../services/smsIndiaHubService.js";
 import { creditWallet } from "../services/finance/walletService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
+import { getEmailBranding } from "../services/emailService.js";
 
 // Rider-step responses are merged into the rider's open order screen, so they must carry the
 // same populated store/customer as GET /orders/details (a bare seller ID there wipes the
@@ -321,14 +322,18 @@ export const getOrderRoute = async (req, res) => {
 export const requestReturnPickupOtp = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const result = await generateReturnPickupOtp(orderId);
+    const result = await generateReturnPickupOtp(orderId, req.user);
     if (!result.success) {
       return handleResponse(res, 400, result.error);
     }
 
+    const order = await Order.findOne(orderMatchQueryFromRouteParam(orderId))
+      .select("customer address")
+      .lean();
+
     // ── Emit OTP to customer via Socket.IO/SMS ──────────────────────────────────
     try {
-      const customerId = order.customer?.toString();
+      const customerId = order?.customer?.toString();
       if (customerId) {
         emitToCustomer(customerId, {
           event: "return:pickup:otp",
@@ -346,10 +351,11 @@ export const requestReturnPickupOtp = async (req, res) => {
             const customerObj = await Customer.findById(customerId).lean();
             const phone = customerObj?.phone || order.address?.phone;
             if (phone) {
+              const { appName } = await getEmailBranding();
               await sendSmsIndiaHubOtp({
                 phone,
                 otp: result.otp,
-                message: `Your return pickup OTP for order #${orderId} is ${result.otp}. Noyo-kart.`,
+                message: `Your return pickup OTP for order #${orderId} is ${result.otp}. ${appName}.`,
               });
             }
           } catch (smsErr) {
@@ -384,6 +390,14 @@ export const verifyReturnPickupOtp = async (req, res) => {
       return handleResponse(res, 400, "OTP code is required");
     }
 
+    const orderKey = orderMatchQueryFromRouteParam(orderId);
+    const order = await Order.findOne(orderKey);
+    if (!order) return handleResponse(res, 404, "Order not found");
+
+    if (req.user?.role === "delivery" && order.returnDeliveryBoy?.toString() !== userId) {
+      return handleResponse(res, 403, "Not assigned to this return");
+    }
+
     const validation = await validateReturnPickupOtp(orderId, enteredCode);
     if (!validation.valid) {
       return handleResponse(res, 400, validation.message, {
@@ -391,10 +405,6 @@ export const verifyReturnPickupOtp = async (req, res) => {
         attemptsRemaining: validation.attemptsRemaining,
       });
     }
-
-    const orderKey = orderMatchQueryFromRouteParam(orderId);
-    const order = await Order.findOne(orderKey);
-    if (!order) return handleResponse(res, 404, "Order not found");
 
     order.returnStatus = "return_in_transit";
     order.returnPickedAt = new Date();
@@ -472,10 +482,11 @@ export const requestReturnDropOtp = async (req, res) => {
           try {
             const sellerPhone = order.seller?.phone;
             if (sellerPhone) {
+              const { appName } = await getEmailBranding();
               await sendSmsIndiaHubOtp({
                 phone: sellerPhone,
                 otp: result.otp,
-                message: `Return drop OTP for order #${orderId} is ${result.otp}. Noyo-kart.`,
+                message: `Return drop OTP for order #${orderId} is ${result.otp}. ${appName}.`,
               });
             }
           } catch (smsErr) {

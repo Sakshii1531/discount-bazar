@@ -287,7 +287,7 @@ const SupportTickets = () => {
                 setSelectedTicket((prev) => prev?.id === id ? { ...prev, status } : prev);
                 showToast(`Ticket status updated: ${status}`, 'success');
             }
-        } catch (error) {
+        } catch {
             showToast("Failed to update status", "error");
         } finally {
             setMenuOpen(false);
@@ -326,7 +326,7 @@ const SupportTickets = () => {
                 setReply('');
                 showToast('Reply sent successfully', 'success');
             }
-        } catch (error) {
+        } catch {
             showToast("Failed to send reply", "error");
         }
     };

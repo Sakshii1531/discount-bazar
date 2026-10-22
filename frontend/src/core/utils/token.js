@@ -3,7 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 export const decodeToken = (token) => {
     try {
         return jwtDecode(token);
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -14,7 +14,7 @@ export const isTokenExpired = (token) => {
         if (!decoded.exp) return false;
         const now = Date.now() / 1000;
         return decoded.exp < now;
-    } catch (error) {
+    } catch {
         return true;
     }
 };

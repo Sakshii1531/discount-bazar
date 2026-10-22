@@ -20,6 +20,38 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@shared/components/ui/Toast';
 
+// Declared outside EnvSettings so inputs keep focus across re-renders.
+const InputField = ({ label, name, type = 'text', icon: Icon, isSecret = false, placeholder = '', value, revealed, onChange, onToggleSecret }) => (
+    <div className="space-y-3">
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            {label}
+            {name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] lowercase font-mono">{name}</span>}
+        </label>
+        <div className="relative group">
+            {Icon && <Icon className="absolute left-5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />}
+            <input
+                type={isSecret ? (revealed ? 'text' : 'password') : type}
+                value={value ?? ''}
+                onChange={(e) => onChange(name, e.target.value)}
+                placeholder={placeholder}
+                className={cn(
+                    "w-full pr-12 py-4 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all font-mono",
+                    Icon ? "pl-12" : "pl-5"
+                )}
+            />
+            {isSecret && (
+                <button
+                    type="button"
+                    onClick={() => onToggleSecret(name)}
+                    className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                    {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+            )}
+        </div>
+    </div>
+);
+
 const EnvSettings = () => {
     const { showToast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
@@ -75,36 +107,6 @@ const EnvSettings = () => {
             showToast('Environment variables updated successfully. Server restart may be required.', 'success');
         }, 1500);
     };
-
-    const InputField = ({ label, name, type = 'text', icon: Icon, isSecret = false, placeholder = '' }) => (
-        <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                {label}
-                {name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] lowercase font-mono">{name}</span>}
-            </label>
-            <div className="relative group">
-                {Icon && <Icon className="absolute left-5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />}
-                <input
-                    type={isSecret ? (showSecrets[name] ? 'text' : 'password') : type}
-                    value={config[name]}
-                    onChange={(e) => handleInputChange(name, e.target.value)}
-                    placeholder={placeholder}
-                    className={cn(
-                        "w-full pr-12 py-4 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500/10 transition-all font-mono",
-                        Icon ? "pl-12" : "pl-5"
-                    )}
-                />
-                {isSecret && (
-                    <button
-                        onClick={() => toggleSecret(name)}
-                        className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                        {showSecrets[name] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                )}
-            </div>
-        </div>
-    );
 
     return (
         <div className="ds-section-spacing animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
@@ -178,8 +180,8 @@ const EnvSettings = () => {
                                 </h3>
                             </div>
                             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="API Base URL" name="VITE_API_BASE_URL" icon={Server} placeholder="https://api.yourdomain.com/v1" />
-                                <InputField label="Google Maps API Key" name="VITE_GOOGLE_MAPS_API_KEY" icon={Key} isSecret={true} />
+                                <InputField value={config.VITE_API_BASE_URL} revealed={!!showSecrets.VITE_API_BASE_URL} onChange={handleInputChange} onToggleSecret={toggleSecret} label="API Base URL" name="VITE_API_BASE_URL" icon={Server} placeholder="https://api.yourdomain.com/v1" />
+                                <InputField value={config.VITE_GOOGLE_MAPS_API_KEY} revealed={!!showSecrets.VITE_GOOGLE_MAPS_API_KEY} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Google Maps API Key" name="VITE_GOOGLE_MAPS_API_KEY" icon={Key} isSecret={true} />
                             </div>
                         </Card>
 
@@ -191,15 +193,15 @@ const EnvSettings = () => {
                                 </h3>
                             </div>
                             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="API Key" name="VITE_FIREBASE_API_KEY" icon={Key} isSecret={true} />
-                                <InputField label="Auth Domain" name="VITE_FIREBASE_AUTH_DOMAIN" icon={Shield} />
-                                <InputField label="Project ID" name="VITE_FIREBASE_PROJECT_ID" icon={Database} />
-                                <InputField label="Storage Bucket" name="VITE_FIREBASE_STORAGE_BUCKET" icon={Database} />
-                                <InputField label="Messaging Sender ID" name="VITE_FIREBASE_MESSAGING_SENDER_ID" icon={MessageSquare} />
-                                <InputField label="App ID" name="VITE_FIREBASE_APP_ID" icon={Database} />
-                                <InputField label="Measurement ID" name="VITE_FIREBASE_MEASUREMENT_ID" icon={Database} />
+                                <InputField value={config.VITE_FIREBASE_API_KEY} revealed={!!showSecrets.VITE_FIREBASE_API_KEY} onChange={handleInputChange} onToggleSecret={toggleSecret} label="API Key" name="VITE_FIREBASE_API_KEY" icon={Key} isSecret={true} />
+                                <InputField value={config.VITE_FIREBASE_AUTH_DOMAIN} revealed={!!showSecrets.VITE_FIREBASE_AUTH_DOMAIN} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Auth Domain" name="VITE_FIREBASE_AUTH_DOMAIN" icon={Shield} />
+                                <InputField value={config.VITE_FIREBASE_PROJECT_ID} revealed={!!showSecrets.VITE_FIREBASE_PROJECT_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Project ID" name="VITE_FIREBASE_PROJECT_ID" icon={Database} />
+                                <InputField value={config.VITE_FIREBASE_STORAGE_BUCKET} revealed={!!showSecrets.VITE_FIREBASE_STORAGE_BUCKET} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Storage Bucket" name="VITE_FIREBASE_STORAGE_BUCKET" icon={Database} />
+                                <InputField value={config.VITE_FIREBASE_MESSAGING_SENDER_ID} revealed={!!showSecrets.VITE_FIREBASE_MESSAGING_SENDER_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Messaging Sender ID" name="VITE_FIREBASE_MESSAGING_SENDER_ID" icon={MessageSquare} />
+                                <InputField value={config.VITE_FIREBASE_APP_ID} revealed={!!showSecrets.VITE_FIREBASE_APP_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="App ID" name="VITE_FIREBASE_APP_ID" icon={Database} />
+                                <InputField value={config.VITE_FIREBASE_MEASUREMENT_ID} revealed={!!showSecrets.VITE_FIREBASE_MEASUREMENT_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Measurement ID" name="VITE_FIREBASE_MEASUREMENT_ID" icon={Database} />
                                 <div className="md:col-span-2">
-                                    <InputField label="VAPID Key (Web Push)" name="VITE_FIREBASE_VAPID_KEY" icon={Key} isSecret={true} />
+                                    <InputField value={config.VITE_FIREBASE_VAPID_KEY} revealed={!!showSecrets.VITE_FIREBASE_VAPID_KEY} onChange={handleInputChange} onToggleSecret={toggleSecret} label="VAPID Key (Web Push)" name="VITE_FIREBASE_VAPID_KEY" icon={Key} isSecret={true} />
                                 </div>
                             </div>
                         </Card>
@@ -217,13 +219,13 @@ const EnvSettings = () => {
                                 </h3>
                             </div>
                             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="Frontend URL (CORS)" name="FRONTEND_URL" icon={Globe} />
-                                <InputField label="Server Port" name="PORT" icon={Server} type="number" />
+                                <InputField value={config.FRONTEND_URL} revealed={!!showSecrets.FRONTEND_URL} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Frontend URL (CORS)" name="FRONTEND_URL" icon={Globe} />
+                                <InputField value={config.PORT} revealed={!!showSecrets.PORT} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Server Port" name="PORT" icon={Server} type="number" />
                                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                    <InputField label="JWT Secret" name="JWT_SECRET" icon={Lock} isSecret={true} />
-                                    <InputField label="JWT Refresh Secret" name="JWT_REFRESH_SECRET" icon={Lock} isSecret={true} />
-                                    <InputField label="Token Expiry" name="JWT_EXPIRES_IN" icon={Terminal} placeholder="7d" />
-                                    <InputField label="Refresh Token Expiry" name="JWT_REFRESH_EXPIRES_IN" icon={Terminal} placeholder="7d" />
+                                    <InputField value={config.JWT_SECRET} revealed={!!showSecrets.JWT_SECRET} onChange={handleInputChange} onToggleSecret={toggleSecret} label="JWT Secret" name="JWT_SECRET" icon={Lock} isSecret={true} />
+                                    <InputField value={config.JWT_REFRESH_SECRET} revealed={!!showSecrets.JWT_REFRESH_SECRET} onChange={handleInputChange} onToggleSecret={toggleSecret} label="JWT Refresh Secret" name="JWT_REFRESH_SECRET" icon={Lock} isSecret={true} />
+                                    <InputField value={config.JWT_EXPIRES_IN} revealed={!!showSecrets.JWT_EXPIRES_IN} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Token Expiry" name="JWT_EXPIRES_IN" icon={Terminal} placeholder="7d" />
+                                    <InputField value={config.JWT_REFRESH_EXPIRES_IN} revealed={!!showSecrets.JWT_REFRESH_EXPIRES_IN} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Refresh Token Expiry" name="JWT_REFRESH_EXPIRES_IN" icon={Terminal} placeholder="7d" />
                                 </div>
                             </div>
                         </Card>
@@ -240,9 +242,9 @@ const EnvSettings = () => {
                                 <div className="space-y-4">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase">Cloudinary (Media)</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <InputField label="Cloud Name" name="CLOUDINARY_CLOUD_NAME" icon={Cloud} />
-                                        <InputField label="API Key" name="CLOUDINARY_API_KEY" icon={Key} isSecret={true} />
-                                        <InputField label="API Secret" name="CLOUDINARY_API_SECRET" icon={Lock} isSecret={true} />
+                                        <InputField value={config.CLOUDINARY_CLOUD_NAME} revealed={!!showSecrets.CLOUDINARY_CLOUD_NAME} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Cloud Name" name="CLOUDINARY_CLOUD_NAME" icon={Cloud} />
+                                        <InputField value={config.CLOUDINARY_API_KEY} revealed={!!showSecrets.CLOUDINARY_API_KEY} onChange={handleInputChange} onToggleSecret={toggleSecret} label="API Key" name="CLOUDINARY_API_KEY" icon={Key} isSecret={true} />
+                                        <InputField value={config.CLOUDINARY_API_SECRET} revealed={!!showSecrets.CLOUDINARY_API_SECRET} onChange={handleInputChange} onToggleSecret={toggleSecret} label="API Secret" name="CLOUDINARY_API_SECRET" icon={Lock} isSecret={true} />
                                     </div>
                                 </div>
 
@@ -251,10 +253,10 @@ const EnvSettings = () => {
                                 <div className="space-y-4 pt-4 border-t border-slate-100">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase">SMS India Hub</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <InputField label="Username" name="SMS_INDIA_HUB_USERNAME" icon={Terminal} />
-                                        <InputField label="Sender ID" name="SMS_INDIA_HUB_SENDER_ID" icon={MessageSquare} />
-                                        <InputField label="API Key" name="SMS_INDIA_HUB_API_KEY" icon={Key} isSecret={true} />
-                                        <InputField label="DLT Template ID" name="SMS_INDIA_HUB_DLT_TEMPLATE_ID" icon={Terminal} />
+                                        <InputField value={config.SMS_INDIA_HUB_USERNAME} revealed={!!showSecrets.SMS_INDIA_HUB_USERNAME} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Username" name="SMS_INDIA_HUB_USERNAME" icon={Terminal} />
+                                        <InputField value={config.SMS_INDIA_HUB_SENDER_ID} revealed={!!showSecrets.SMS_INDIA_HUB_SENDER_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="Sender ID" name="SMS_INDIA_HUB_SENDER_ID" icon={MessageSquare} />
+                                        <InputField value={config.SMS_INDIA_HUB_API_KEY} revealed={!!showSecrets.SMS_INDIA_HUB_API_KEY} onChange={handleInputChange} onToggleSecret={toggleSecret} label="API Key" name="SMS_INDIA_HUB_API_KEY" icon={Key} isSecret={true} />
+                                        <InputField value={config.SMS_INDIA_HUB_DLT_TEMPLATE_ID} revealed={!!showSecrets.SMS_INDIA_HUB_DLT_TEMPLATE_ID} onChange={handleInputChange} onToggleSecret={toggleSecret} label="DLT Template ID" name="SMS_INDIA_HUB_DLT_TEMPLATE_ID" icon={Terminal} />
                                     </div>
                                 </div>
                             </div>

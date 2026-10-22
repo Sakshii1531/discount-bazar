@@ -332,6 +332,9 @@ const orderSchema = new mongoose.Schema(
       codRemittedAmount: { type: Number, default: 0 },
       codPendingAmount: { type: Number, default: 0 },
       walletAmount: { type: Number, default: 0 },
+      // True when grandTotal is already net of walletAmount. Older orders
+      // (false) kept the wallet inside grandTotal.
+      walletNettedInGrandTotal: { type: Boolean, default: false },
       distanceKmActual: { type: Number, default: 0 },
       distanceKmRounded: { type: Number, default: 0 },
       snapshots: {

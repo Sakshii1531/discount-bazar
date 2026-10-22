@@ -149,12 +149,13 @@ export const FINANCE_AUDIT_ACTION = {
 // `walletService.debitWallet` so a `LedgerEntry` row is written inside
 // the same transaction as the order documents.
 //
-// When the flag is off, the legacy buggy behaviour is preserved bit-for-bit
-// to make rollback trivial (env flip back). Default is OFF for production
-// safety — flip to "true" only after backfilling historical over-charges
-// (see audit PHASE 5 rollout plan).
+// When the flag is off, the legacy behaviour (wallet debited but NOT taken
+// off grandTotal, so online payments are charged the full amount and COD
+// accounting expects the full amount in cash) is preserved for rollback.
+// Default is ON; set WALLET_REDEMPTION_REDUCES_PAYABLE=false to roll back.
+// Orders priced this way carry `paymentBreakdown.walletNettedInGrandTotal`.
 export function isWalletRedemptionReducesPayableEnabled() {
-  return String(process.env.WALLET_REDEMPTION_REDUCES_PAYABLE || "").toLowerCase() === "true";
+  return String(process.env.WALLET_REDEMPTION_REDUCES_PAYABLE || "true").toLowerCase() === "true";
 }
 
 // Audit Phase 5 (C-2 + C-4 + H-2 + H-6 + H-7): when this flag is on, the

@@ -605,7 +605,7 @@ const DeliveryAuth = () => {
         if (result?.isApproved || result?.delivery?.isVerified) {
           handleApproved(result);
         }
-      } catch (err) {
+      } catch {
         // Silently retry on next tick
       }
     };

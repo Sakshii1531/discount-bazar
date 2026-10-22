@@ -45,7 +45,7 @@ const playRingtoneChime = () => {
 
         osc.start();
         osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
+    } catch {
         /* ignore synth errors */
     }
 };
@@ -92,7 +92,7 @@ const playRingingTone = () => {
         gain2.connect(audioCtx.destination);
         osc2.start(now + delay);
         osc2.stop(now + delay + 0.5);
-    } catch (e) {
+    } catch {
         /* ignore synth errors */
     }
 };
@@ -257,7 +257,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                             playRingingTone();
                         });
                         withdrawalAudioRef.current = fallback;
-                    } catch (_) {
+                    } catch {
                         playRingingTone();
                     }
                 });
@@ -281,7 +281,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
             try {
                 withdrawalAudioRef.current.pause();
                 withdrawalAudioRef.current.currentTime = 0;
-            } catch (_) {}
+            } catch {}
         }
     };
 

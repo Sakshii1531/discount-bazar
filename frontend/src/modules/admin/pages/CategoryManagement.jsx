@@ -69,7 +69,7 @@ const CategoryManagement = () => {
             if (parentsRes.data.success) {
                 setParentUnits(parentsRes.data.results || parentsRes.data.result || []);
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to fetch data');
         } finally {
             setIsLoading(false);
@@ -218,7 +218,7 @@ const CategoryManagement = () => {
             setIsDeleteModalOpen(false);
             setDeleteTarget(null);
             fetchCategories();
-        } catch (error) {
+        } catch {
             toast.error('Failed to delete category');
         }
     };

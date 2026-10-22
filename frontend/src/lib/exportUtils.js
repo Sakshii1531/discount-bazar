@@ -30,8 +30,8 @@ export const downloadBlob = async (blob, fileName) => {
         link.click();
         // Revoke after 5 minutes — safe for any network speed / device lag
         setTimeout(() => {
-            try { document.body.removeChild(link); } catch (e) {}
-            try { URL.revokeObjectURL(url); } catch (e) {}
+            try { document.body.removeChild(link); } catch {}
+            try { URL.revokeObjectURL(url); } catch {}
         }, 5 * 60 * 1000);
     };
 
@@ -50,7 +50,7 @@ export const downloadBlob = async (blob, fileName) => {
                     document.body.appendChild(link);
                     link.click();
                     setTimeout(() => {
-                        try { document.body.removeChild(link); } catch (e) {}
+                        try { document.body.removeChild(link); } catch {}
                         resolve();
                     }, 1000);
                 } catch (err) {
@@ -64,7 +64,7 @@ export const downloadBlob = async (blob, fileName) => {
 
     try {
         triggerBlobDownload();
-    } catch (e) {
+    } catch {
         try {
             await triggerDataUrlDownload();
         } catch (e2) {

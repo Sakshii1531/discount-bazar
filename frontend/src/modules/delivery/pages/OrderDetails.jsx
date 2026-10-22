@@ -764,7 +764,11 @@ const OrderDetails = () => {
             !isReturn &&
             step < 4 && (
               <span className={`mt-1 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-sm animate-pulse bg-orange-600`}>
-                COLLECT CASH: {formatCurrencyInteger(Math.max(0, (order.pricing?.total || 0) - (order.pricing?.walletAmount || 0)))}
+                COLLECT CASH: {formatCurrencyInteger(
+                  order.paymentBreakdown?.walletNettedInGrandTotal
+                    ? Math.max(0, order.pricing?.total || 0)
+                    : Math.max(0, (order.pricing?.total || 0) - (order.pricing?.walletAmount || 0)),
+                )}
               </span>
             )}
         </div>

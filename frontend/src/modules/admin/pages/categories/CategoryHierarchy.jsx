@@ -55,7 +55,7 @@ const CategoryHierarchy = () => {
       if (res.data.success) {
         setCategories(res.data.results || res.data.result || []);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch category hierarchy");
     } finally {
       setIsLoading(false);

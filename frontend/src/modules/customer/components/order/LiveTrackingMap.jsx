@@ -126,7 +126,7 @@ const LiveTrackingMap = memo(({
       console.warn("[LiveTrackingMap] Error focusing on rider:", err);
       try {
         map.panTo({ lat: rider.lat, lng: rider.lng });
-      } catch (_) {}
+      } catch {}
     }
   }, []);
 

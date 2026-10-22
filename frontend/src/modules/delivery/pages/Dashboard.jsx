@@ -76,7 +76,7 @@ const Dashboard = () => {
       if (response.data.success && response.data.result) {
         setUnreadCount(response.data.result.unreadCount || 0);
       }
-    } catch (error) {
+    } catch {
       console.error("Failed to fetch notifications");
     }
   };
@@ -114,7 +114,7 @@ const Dashboard = () => {
       } else {
         toast.info("You are now OFFLINE. No new orders.");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to update status");
     }
   };

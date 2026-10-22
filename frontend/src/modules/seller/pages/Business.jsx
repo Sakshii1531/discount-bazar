@@ -883,7 +883,7 @@ const PurchasesTab = () => {
                 }
                 sessionStorage.removeItem("seller_purchases_draft");
             }
-        } catch (e) {}
+        } catch {}
 
         load();
 
@@ -897,7 +897,7 @@ const PurchasesTab = () => {
             processedCreatedProductIdRef.current = createdId;
             try {
                 window.history.replaceState({}, document.title);
-            } catch (e) {}
+            } catch {}
         }
 
         posApi.getCatalog({}).then((r) => {
@@ -1030,7 +1030,7 @@ const PurchasesTab = () => {
                 "seller_purchases_draft",
                 JSON.stringify({ form, lines, targetLineIndex: lineIdx, editingId })
             );
-        } catch (e) {}
+        } catch {}
         navigate("/seller/products/add?returnTo=/seller/business/purchases", {
             state: { returnTo: "/seller/business/purchases", targetLineIndex: lineIdx }
         });

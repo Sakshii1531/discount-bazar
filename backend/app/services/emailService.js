@@ -100,7 +100,7 @@ function escapeHtml(value) {
   })[c]);
 }
 
-async function getEmailBranding() {
+export async function getEmailBranding() {
   try {
     const { default: mongoose } = await import("mongoose");
     // Skip the lookup when the DB isn't connected; mongoose would otherwise buffer the query and hang.

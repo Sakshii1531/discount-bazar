@@ -44,16 +44,7 @@ import {
   useOrderIdentifiers,
   resolveOrderIdentifiers,
 } from "../hooks/useOrderIdentifiers";
-import {
-  getOrderSocket,
-  joinOrderRoom,
-  leaveOrderRoom,
-  onOrderStatusUpdate,
-  onCustomerOtp,
-  onReturnPickupOtp,
-  onReturnDropOtp,
-  onDeliveryOtpValidated,
-} from "@/core/services/orderSocket";
+import { getOrderSocket, joinOrderRoom, leaveOrderRoom, onOrderStatusUpdate, onCustomerOtp, onReturnPickupOtp, onDeliveryOtpValidated } from "@/core/services/orderSocket";
 import { getLegacyStatusFromOrder } from "@/shared/utils/orderStatus";
 import { createSocketTokenReader } from "@core/utils/authStorage";
 import { STORAGE_KEYS } from "@core/utils/storage";
@@ -867,7 +858,7 @@ const OrderDetailPage = () => {
           });
         }
         if (url) newImages.push(url);
-      } catch (err) {
+      } catch {
         toast.error("Failed to process image.");
       }
     }
@@ -1459,7 +1450,10 @@ const OrderDetailPage = () => {
                 Total Amount
               </span>
               <span className="text-xl font-black text-brand-600">
-                {formatCurrencyInteger(order.pricing?.total || 0)}
+                {formatCurrencyInteger(
+                  Number(order.pricing?.total || 0) +
+                    (order.paymentBreakdown?.walletNettedInGrandTotal ? Number(order.pricing?.walletAmount || 0) : 0),
+                )}
               </span>
             </div>
           </div>
@@ -1468,7 +1462,10 @@ const OrderDetailPage = () => {
           {(() => {
             const rawMethod = (order.payment?.method || order.paymentMode || order.paymentMethod || "").toLowerCase();
             const walletAmt = Number(order.walletAmount || order.pricing?.walletAmount || order.paymentBreakdown?.walletDebitedAmount || 0);
-            const totalAmt = Number(order.pricing?.total || order.payableAmount || order.paymentBreakdown?.grandTotal || 0);
+            // Compare against the pre-wallet total; newer orders store it net of the wallet.
+            const totalAmt =
+              Number(order.pricing?.total || order.payableAmount || order.paymentBreakdown?.grandTotal || 0) +
+              (order.paymentBreakdown?.walletNettedInGrandTotal ? walletAmt : 0);
             const isFullyWallet = rawMethod === "wallet" || (walletAmt > 0 && (walletAmt >= totalAmt || totalAmt === 0));
             const isPartialWallet = walletAmt > 0 && walletAmt < totalAmt;
 

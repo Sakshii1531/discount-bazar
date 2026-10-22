@@ -90,7 +90,7 @@ const FAQManagement = () => {
             setFaqs(data);
             setTotal(typeof payload.total === 'number' ? payload.total : data.length);
             setPage(typeof payload.page === 'number' ? payload.page : requestedPage);
-        } catch (error) {
+        } catch {
             showToast('Failed to fetch FAQs', 'error');
         } finally {
             setIsLoading(false);
@@ -143,7 +143,7 @@ const FAQManagement = () => {
             setIsAddModalOpen(false);
             setEditingFaqId(null);
             setNewFaq({ question: '', answer: '', category: 'Customer', status: 'published' });
-        } catch (error) {
+        } catch {
             showToast('Failed to save FAQ', 'error');
         }
     };
@@ -164,7 +164,7 @@ const FAQManagement = () => {
             await adminApi.deleteFAQ(id);
             fetchFaqs(page);
             showToast('FAQ deleted successfully', 'warning');
-        } catch (error) {
+        } catch {
             showToast('Failed to delete FAQ', 'error');
         }
     };
@@ -175,7 +175,7 @@ const FAQManagement = () => {
             await adminApi.updateFAQ(faq._id, { status: newStatus });
             fetchFaqs(page);
             showToast('Visibility state updated', 'info');
-        } catch (error) {
+        } catch {
             showToast('Failed to update status', 'error');
         }
     };

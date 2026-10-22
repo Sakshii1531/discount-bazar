@@ -47,7 +47,7 @@ const AdminProfile = () => {
                 email: data.email,
                 role: data.role || 'Admin'
             });
-        } catch (error) {
+        } catch {
             toast.error('Failed to fetch admin profile');
         } finally {
             setIsLoading(false);

@@ -92,7 +92,7 @@ const StockManagement = () => {
                             : (p.stock <= (p.lowStockAlert || 5) ? 'Low Stock' : 'In Stock')
                 }))
             );
-        } catch (error) {
+        } catch {
             toast.error("Failed to load inventory");
         } finally {
             if (!silent) setIsLoading(false);
@@ -106,7 +106,7 @@ const StockManagement = () => {
             if (res.data.success) {
                 setHistory(res.data.result || []);
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to load stock history");
         } finally {
             if (!silent) setIsLoading(false);

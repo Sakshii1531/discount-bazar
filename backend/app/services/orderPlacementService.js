@@ -572,10 +572,12 @@ export async function placeOrderAtomic({
       const persistedCouponId = pricingSnapshot.couponSnapshot?.couponId || null;
       const persistedCouponSnapshot = pricingSnapshot.couponSnapshot || undefined;
 
-      const isOrderFullyWalletCovered =
-        proportionateWallet > 0 &&
-        (proportionateWallet >= Number(entry.breakdown.grandTotal || 0) ||
-          Number(entry.breakdown.payableAmount || entry.breakdown.grandTotal || 0) === 0);
+      // grandTotal is already net of the wallet when it was netted out;
+      // otherwise the wallet still has to be subtracted from it.
+      const amountStillDue = entry.breakdown.walletNettedInGrandTotal
+        ? Number(entry.breakdown.grandTotal || 0)
+        : Math.max(0, Number(entry.breakdown.grandTotal || 0) - proportionateWallet);
+      const isOrderFullyWalletCovered = proportionateWallet > 0 && amountStillDue <= 0;
       // Wallet-only orders skip the payment-method switches, so they must
       // really be fully paid by the wallet (no sneaking in a COD order).
       if (normalizedPayload.walletOnly && !isOrderFullyWalletCovered) {
@@ -680,13 +682,24 @@ export async function placeOrderAtomic({
     //     correct) and is a no-op for fresh customers.
     //   - When the flag is OFF the legacy code path is preserved bit-for-bit
     //     so rollback is an env flip.
-    if (walletAmount > 0) {
-      if (isWalletRedemptionReducesPayableEnabled()) {
+    // Debit only what was actually taken off the orders: the allocation is
+    // capped at the order total, so an oversized walletAmount is not lost.
+    const walletNetted = isWalletRedemptionReducesPayableEnabled();
+    const walletDebitAmount = walletNetted
+      ? roundCurrency(
+          pricingSnapshot.sellerBreakdownEntries.reduce(
+            (sum, entry) => sum + Number(entry.breakdown?.walletAmount || 0),
+            0,
+          ),
+        )
+      : walletAmount;
+    if (walletDebitAmount > 0) {
+      if (walletNetted) {
         await seedCanonicalCustomerWalletFromUser({ customerId, user, session });
         await debitWallet({
           ownerType: OWNER_TYPE.CUSTOMER,
           ownerId: customerId,
-          amount: walletAmount,
+          amount: walletDebitAmount,
           bucket: "available",
           session,
           ledgerType: LEDGER_TRANSACTION_TYPE.WALLET_PAYMENT,
@@ -708,7 +721,7 @@ export async function placeOrderAtomic({
           user: customerId,
           userModel: "User",
           type: "Wallet Payment",
-          amount: -walletAmount,
+          amount: -walletDebitAmount,
           status: "Settled",
           reference: `WLT-CHOUT-${checkoutGroupId}`,
           meta: { checkoutGroupId },

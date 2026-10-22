@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import {
@@ -90,7 +90,7 @@ const ProductManagement = () => {
           setPage(requestedPage);
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch products");
     } finally {
       setIsLoading(false);
@@ -103,7 +103,7 @@ const ProductManagement = () => {
       if (res.data.success) {
         setDbCategories(res.data.results || res.data.result || []);
       }
-    } catch (error) {
+    } catch {
       // fail silently
     }
   };
@@ -537,7 +537,7 @@ const ProductManagement = () => {
       setIsDeleteModalOpen(false);
       setItemToDelete(null);
       fetchProducts();
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete product");
     }
   };

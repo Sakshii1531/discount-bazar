@@ -15,7 +15,6 @@ import {
   Image,
   Filter,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { adminApi } from "../../services/adminApi";
 import { toast } from "sonner";
@@ -171,7 +170,7 @@ const SubCategories = () => {
         setLevel2Categories(allCats.filter((c) => c.type === "category"));
         setHeaderCategories(allCats.filter((c) => c.type === "header"));
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch categories");
     } finally {
       setIsLoading(false);

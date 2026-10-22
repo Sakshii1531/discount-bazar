@@ -35,7 +35,7 @@ const Notifications = () => {
       if (response.data.success) {
         setNotifications(response.data.result.notifications);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch notifications");
     } finally {
       setLoading(false);
@@ -70,7 +70,7 @@ const Notifications = () => {
     try {
       await deliveryApi.markNotificationRead(id);
       setNotifications(notifications.map(n => (n._id === id || n.id === id) ? { ...n, isRead: true } : n));
-    } catch (error) {
+    } catch {
       toast.error("Failed to update status");
     }
   };
@@ -80,7 +80,7 @@ const Notifications = () => {
       await deliveryApi.markAllNotificationsRead();
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
       toast.success("Marked all as read");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update status");
     }
   };

@@ -105,7 +105,7 @@ const ProductManagement = () => {
             if (response.data.success) {
                 setCategories(response.data.results || response.data.result || []);
             }
-        } catch (error) {
+        } catch {
             console.error('Failed to fetch categories');
         }
     };
@@ -116,7 +116,7 @@ const ProductManagement = () => {
             if (response.data.success) {
                 setSellers(response.data.results || response.data.result || []);
             }
-        } catch (error) {
+        } catch {
             console.error('Failed to fetch sellers');
         }
     };
@@ -171,7 +171,7 @@ const ProductManagement = () => {
                     outOfStock: Number(payload?.counts?.outOfStock || 0),
                 });
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to fetch products');
         } finally {
             setIsLoading(false);
@@ -249,7 +249,7 @@ const ProductManagement = () => {
             toast.success('Product deleted');
             setIsDeleteModalOpen(false);
             fetchProducts(page);
-        } catch (error) {
+        } catch {
             toast.error('Failed to delete product');
         }
     };

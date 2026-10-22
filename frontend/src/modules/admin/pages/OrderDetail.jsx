@@ -49,7 +49,7 @@ const OrderDetail = () => {
             if (response.data.success) {
                 setOrder(response.data.result);
             }
-        } catch (error) {
+        } catch {
             showToast("Failed to load order details", "error");
         } finally {
             setIsLoading(false);
@@ -118,7 +118,7 @@ const OrderDetail = () => {
                                     styleSheets[i].deleteRule(j);
                                 }
                             }
-                        } catch (e) {
+                        } catch {
                             // Skip cross-origin stylesheets that we can't access
                         }
                     }

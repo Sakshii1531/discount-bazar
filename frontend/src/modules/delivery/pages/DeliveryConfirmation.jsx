@@ -36,7 +36,7 @@ const DeliveryConfirmation = () => {
         if (res.data.success) {
           setOrder(res.data.result);
         }
-      } catch (error) {
+      } catch {
         toast.error("Failed to load order details");
       } finally {
         setLoading(false);

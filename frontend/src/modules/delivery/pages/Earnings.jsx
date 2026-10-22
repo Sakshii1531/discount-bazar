@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   RotateCcw,
   Download,
+  IndianRupee,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -52,11 +53,30 @@ const Earnings = () => {
     chartData: [],
     recentTransactions: []
   });
+  const [codCash, setCodCash] = useState({
+    systemFloatCOD: 0,
+    cashInHand: 0,
+    toCollect: [],
+    toRemit: [],
+  });
 
   const fetchEarnings = async () => {
     try {
       setLoading(true);
-      const earningsRes = await deliveryApi.getEarnings();
+      // COD summary is secondary: a failure there must not hide earnings.
+      const [earningsRes, codRes] = await Promise.all([
+        deliveryApi.getEarnings(),
+        deliveryApi.getCodCashSummary().catch(() => null),
+      ]);
+      const codResult = codRes?.data?.success ? codRes.data.result : null;
+      if (codResult) {
+        setCodCash({
+          systemFloatCOD: Number(codResult.systemFloatCOD) || 0,
+          cashInHand: Number(codResult.cashInHand) || 0,
+          toCollect: Array.isArray(codResult.toCollect) ? codResult.toCollect : [],
+          toRemit: Array.isArray(codResult.toRemit) ? codResult.toRemit : [],
+        });
+      }
       if (earningsRes.data.success && earningsRes.data.result) {
         const result = earningsRes.data.result;
         setEarningsData({
@@ -69,7 +89,7 @@ const Earnings = () => {
           recentTransactions: result.transactions || result.recentTransactions || []
         });
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch earnings data");
     } finally {
       setLoading(false);
@@ -225,7 +245,7 @@ const Earnings = () => {
                   {"\u20B9"}{Number(codCash.systemFloatCOD || 0).toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Net cash to remit (gross âˆ’ your commission)
+                  Net cash to remit (gross − your commission)
                 </p>
               </div>
               <div className="p-3 rounded-xl bg-orange-50 text-orange-600">
@@ -283,7 +303,7 @@ const Earnings = () => {
                       Order #{row.orderId}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Remit to platform â€¢ Net of commission
+                      Remit to platform • Net of commission
                     </p>
                   </div>
                   <p className="text-sm font-extrabold text-gray-900">

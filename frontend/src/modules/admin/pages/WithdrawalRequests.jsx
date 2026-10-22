@@ -262,7 +262,7 @@ const WithdrawalRequests = () => {
                 fetchData(sellerPage, deliveryPage);
                 setActionModal({ isOpen: false, type: null, request: null });
             }
-        } catch (error) {
+        } catch {
             toast.error("Action failed");
         } finally {
             setLoading(false);

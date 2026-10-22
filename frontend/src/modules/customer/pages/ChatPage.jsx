@@ -237,7 +237,7 @@ const ChatPage = () => {
             },
           ]);
         }
-      } catch (error) {
+      } catch {
         if (!mounted) return;
         showToast("Failed to load support chat", "error");
       } finally {
@@ -468,7 +468,7 @@ const ChatPage = () => {
       setInputText("");
       setSelectedImage(null);
       setSelectedImageFile(null);
-    } catch (error) {
+    } catch {
       showToast("Failed to send message", "error");
     } finally {
       setIsSending(false);

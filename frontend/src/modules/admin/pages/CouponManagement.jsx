@@ -142,7 +142,7 @@ const CouponManagement = () => {
                 const list = res.data.result || res.data.results || [];
                 setCoupons(list);
             }
-        } catch (error) {
+        } catch {
             showToast('Failed to load coupons', 'error');
         } finally {
             setIsLoading(false);
@@ -262,7 +262,7 @@ const CouponManagement = () => {
             setCoupons(coupons.filter(c => c._id !== id));
             setDeleteTarget(null);
             showToast('Coupon removed', 'warning');
-        } catch (error) {
+        } catch {
             showToast('Failed to delete coupon', 'error');
         }
     };

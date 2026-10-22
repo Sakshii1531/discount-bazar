@@ -790,6 +790,17 @@ export async function verifyRazorpayPaymentSignature({
     throw err;
   }
 
+  // The signature only proves razorpayOrderId was paid. It must be the
+  // gateway order created for THIS payment, otherwise a cheap paid order
+  // could be replayed against another checkout found via merchantOrderId.
+  const expectedRazorpayOrderId =
+    payment.rawGatewayResponse?.razorpayOrderId || payment.gatewayOrderId;
+  if (String(expectedRazorpayOrderId) !== String(razorpayOrderId)) {
+    const err = new Error("Payment details do not match this order");
+    err.statusCode = 400;
+    throw err;
+  }
+
   const provider = getActivePaymentProvider();
   if (typeof provider.validatePaymentSignature !== "function") {
     const err = new Error(`Active provider ${provider.providerName} does not support Razorpay signature verification`);

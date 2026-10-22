@@ -20,7 +20,7 @@ const tryLockPortrait = () => {
         if (typeof window !== 'undefined' && window.screen?.orientation?.lock) {
             window.screen.orientation.lock('portrait').catch(() => {});
         }
-    } catch (e) {
+    } catch {
         // Unsupported or fullscreen needed - gracefully ignored
     }
 };

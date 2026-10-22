@@ -25,7 +25,7 @@ const SECTIONS = {
       '/terms': /Terms/,
       '/privacy': /Privacy Policy/,
       '/payment-status': /PAYMENT/i,
-      '/login': /Welcome Back/i,
+      '/login': /Login or Sign Up/i,
       '/seller/auth': /Seller Login/i,
       '/admin/auth': /Login/,
       '/delivery/auth': /Partner Login/i,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Button from "@shared/components/ui/Button";
 import Badge from "@shared/components/ui/Badge";
 import {
@@ -213,7 +213,7 @@ const AddProduct = () => {
         localStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(TAB_STORAGE_KEY);
-      } catch (e) {}
+      } catch {}
       setFormData(initialFormData);
       setModalTab("general");
     }
@@ -258,14 +258,14 @@ const AddProduct = () => {
       const serialized = JSON.stringify(toSave);
       try {
         localStorage.setItem(STORAGE_KEY, serialized);
-      } catch (err) {
+      } catch {
         // In case localStorage is exceeded by base64 images, save text fields without images
         const { mainImage, galleryImages, ...textOnly } = toSave;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(textOnly));
       }
       try {
         sessionStorage.setItem(STORAGE_KEY, serialized);
-      } catch (e) {
+      } catch {
         // ignore
       }
     } catch (e) {
@@ -280,7 +280,7 @@ const AddProduct = () => {
         const serialized = JSON.stringify(toSave);
         localStorage.setItem(STORAGE_KEY, serialized);
         sessionStorage.setItem(STORAGE_KEY, serialized);
-      } catch (e) {}
+      } catch {}
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -319,7 +319,7 @@ const AddProduct = () => {
         if (res.data.success) {
           setDbCategories(res.data.results || res.data.result || []);
         }
-      } catch (error) {
+      } catch {
         toast.error("Failed to load categories");
       } finally {
         setIsLoadingCats(false);
@@ -502,7 +502,7 @@ const AddProduct = () => {
         localStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(TAB_STORAGE_KEY);
-      } catch (e) {}
+      } catch {}
 
       const createdProd = response?.data?.result;
       if (returnTo) {

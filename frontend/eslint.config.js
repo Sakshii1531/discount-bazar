@@ -14,7 +14,7 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 'latest',
       globals: globals.browser,
       parserOptions: {
         ecmaFeatures: {
@@ -27,6 +27,22 @@ export default defineConfig([
         'warn',
         { allowConstantExport: true },
       ],
+      // Components (and framer-motion's `motion`) used only in JSX look
+      // unused without eslint-plugin-react.
+      // `{ icon: Icon }` props are rendered as <Icon />, and `{ a, ...rest }`
+      // deliberately drops `a`.
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^([A-Z_]|motion$)',
+        argsIgnorePattern: '^[A-Z_]',
+        ignoreRestSiblings: true,
+      }],
+    },
+  },
+  {
+    // Firebase messaging service worker loads the compat SDK via importScripts.
+    files: ['src/sw/**/*.js', 'public/**/*sw*.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker, firebase: 'readonly' },
     },
   },
   {

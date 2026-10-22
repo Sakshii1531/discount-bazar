@@ -17,7 +17,6 @@ import VerifiedIcon from "@mui/icons-material/Verified";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { isMobileOrWebView } from "@/core/utils/deviceUtils";
 import { customerApi } from "../services/customerApi";
-import { toast } from "sonner";
 import ProductCard from "../components/shared/ProductCard";
 import MainLocationHeader from "../components/shared/MainLocationHeader";
 import { useProductDetail } from "../context/ProductDetailContext";
@@ -331,7 +330,7 @@ const Home = () => {
       setExperienceSections(sections);
       const cached = homePageDataCache.get(cacheKey);
       if (cached) homePageDataCache.set(cacheKey, { ...cached, experienceSections: sections });
-    } catch (e) {}
+    } catch {}
   };
 
   const fetchData = async ({ forceRefresh = false } = {}) => {
@@ -440,7 +439,7 @@ const Home = () => {
         heroConfigCache.current[cacheKey] = resolved;
         if (cacheKey === "__home__") { const homeCacheKey = getHomePageDataCacheKey(currentLocation); const cachedHomeData = homePageDataCache.get(homeCacheKey); if (cachedHomeData) homePageDataCache.set(homeCacheKey, { ...cachedHomeData, heroConfig: resolved }); }
         setHeroConfig(resolved);
-      } catch (e) { setHeroConfig(EMPTY_HERO_CONFIG); }
+      } catch { setHeroConfig(EMPTY_HERO_CONFIG); }
     };
     fetchHeroConfig();
   }, [activeCategory, currentLocation?.latitude, currentLocation?.longitude]);

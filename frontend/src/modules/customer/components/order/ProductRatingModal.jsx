@@ -59,7 +59,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
       }
     } catch (err) {
       showToast(err.response?.data?.message || "Failed to load product rating information", "error");
-    } fontally: {
+    } finally {
       setLoading(false);
     }
   };

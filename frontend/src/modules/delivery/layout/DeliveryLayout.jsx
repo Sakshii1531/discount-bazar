@@ -109,15 +109,18 @@ const extractOrderValueAndDiscount = (payloadOrOrder) => {
   const pricing = payloadOrOrder.pricing || {};
   const pb = payloadOrOrder.paymentBreakdown || {};
 
-  const total = typeof p.total === "number" ? p.total : (pricing.total ?? pb.grandTotal ?? (Number(p.total) || 0));
+  const walletAmount = typeof p.walletAmount === "number"
+    ? p.walletAmount
+    : (pricing.walletAmount ?? pb.walletAmount ?? (payloadOrOrder.walletAmount ? Number(payloadOrOrder.walletAmount) : 0));
+
+  const grandTotal = typeof p.total === "number" ? p.total : (pricing.total ?? pb.grandTotal ?? (Number(p.total) || 0));
+  // Newer orders store grandTotal net of the wallet; show the pre-wallet total.
+  const walletNetted = Boolean(p.walletNettedInGrandTotal ?? pb.walletNettedInGrandTotal);
+  const total = walletNetted ? grandTotal + walletAmount : grandTotal;
   const rawSubtotal = pricing.subtotal ?? pb.subtotal ?? pb.itemTotal ?? total;
   const couponDiscount = pricing.discount ?? pricing.couponDiscount ?? pb.discountTotal ?? pb.couponDiscount ?? payloadOrOrder.couponSnapshot?.discountAmountApplied ?? 0;
   const couponCode = payloadOrOrder.coupon?.code || payloadOrOrder.couponSnapshot?.code || "";
   const subtotal = rawSubtotal > total ? rawSubtotal : (total + couponDiscount);
-
-  const walletAmount = typeof p.walletAmount === "number"
-    ? p.walletAmount
-    : (pricing.walletAmount ?? pb.walletAmount ?? (payloadOrOrder.walletAmount ? Number(payloadOrOrder.walletAmount) : 0));
 
   const paymentMethod = (
     p.paymentMethod ||
@@ -185,7 +188,7 @@ const playRingtoneChime = () => {
 
     osc.start();
     osc.stop(audioCtx.currentTime + 0.4);
-  } catch (e) {
+  } catch {
     /* ignore synth errors */
   }
 };
@@ -382,7 +385,7 @@ const DeliveryLayout = () => {
     if (appSettings.vibration && typeof navigator !== "undefined" && navigator.vibrate) {
       try {
         navigator.vibrate([400, 200, 400, 200, 400]);
-      } catch (e) {}
+      } catch {}
     }
 
     if (!ringtoneRetryTimerRef.current) {

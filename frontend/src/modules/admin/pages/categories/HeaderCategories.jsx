@@ -12,7 +12,6 @@ import {
   Image,
   Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { adminApi } from "../../services/adminApi";
 import { toast } from "sonner";
@@ -149,7 +148,7 @@ const HeaderCategories = () => {
         setTotal(typeof payload.total === "number" ? payload.total : headers.length);
         setPage(typeof payload.page === "number" ? payload.page : requestedPage);
       }
-    } catch (error) {
+    } catch {
       if (fetchId === latestFetchRef.current) {
         toast.error("Failed to fetch header categories");
       }

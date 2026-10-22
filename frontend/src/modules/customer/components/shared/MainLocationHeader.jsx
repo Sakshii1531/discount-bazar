@@ -11,12 +11,7 @@ import { useSettings } from "@core/context/SettingsContext";
 import { useCart } from "../../context/CartContext";
 import { cn } from "@/lib/utils";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
-import {
-  buildHeaderGradient,
-  buildMiniCartColor,
-  buildSearchBarBackgroundColor,
-  shiftHex,
-} from "../../utils/headerTheme";
+import { buildHeaderGradient, buildMiniCartColor, buildSearchBarBackgroundColor } from "../../utils/headerTheme";
 
 
 // MUI Icons

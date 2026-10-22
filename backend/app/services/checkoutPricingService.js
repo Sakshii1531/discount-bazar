@@ -391,6 +391,7 @@ function applyWalletAllocationToSellerBreakdowns(
     allocation = Math.max(0, Math.min(allocation, grandTotal));
 
     breakdown.walletAmount = round2(Number(breakdown.walletAmount || 0) + allocation);
+    if (allocation > 0) breakdown.walletNettedInGrandTotal = true;
     breakdown.grandTotal = round2(grandTotal - allocation);
     breakdown.payableAmount = breakdown.grandTotal;
   });

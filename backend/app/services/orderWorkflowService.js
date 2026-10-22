@@ -71,8 +71,12 @@ function deliveryBroadcastPayloadFromOrder(order, extra = {}) {
   const walletAmount = order.pricing?.walletAmount ?? order.paymentBreakdown?.walletAmount ?? 0;
   const paymentMethod = order.payment?.method || (order.paymentMode === "ONLINE" ? "online" : "cash");
   const isPaidOnline = paymentMethod === "online" || order.paymentStatus === "PAID" || order.payment?.status === "completed";
-  const isFullyWalletPaid = paymentMethod === "wallet" || (walletAmount > 0 && walletAmount >= total);
-  const payableAmount = isPaidOnline || isFullyWalletPaid ? 0 : Math.max(0, total - walletAmount);
+  // Newer orders already have the wallet taken off the total.
+  const dueAmount = order.paymentBreakdown?.walletNettedInGrandTotal
+    ? Math.max(0, total)
+    : Math.max(0, total - walletAmount);
+  const isFullyWalletPaid = paymentMethod === "wallet" || (walletAmount > 0 && dueAmount <= 0);
+  const payableAmount = isPaidOnline || isFullyWalletPaid ? 0 : dueAmount;
 
   return {
     orderId: order.orderId,
@@ -84,6 +88,7 @@ function deliveryBroadcastPayloadFromOrder(order, extra = {}) {
       drop,
       total,
       walletAmount,
+      walletNettedInGrandTotal: Boolean(order.paymentBreakdown?.walletNettedInGrandTotal),
       payableAmount,
       paymentMethod,
       earnings: order.paymentBreakdown?.riderPayoutTotal ?? order.riderEarnings ?? 0,

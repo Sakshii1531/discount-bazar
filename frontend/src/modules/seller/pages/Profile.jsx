@@ -80,7 +80,7 @@ const SellerProfile = () => {
             ...(typeof pref.sound === "boolean" && { sound: pref.sound }),
             ...(typeof pref.vibration === "boolean" && { vibration: pref.vibration }),
           };
-          try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged)); } catch (_) {}
+          try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged)); } catch {}
           return merged;
         });
       })
@@ -91,13 +91,13 @@ const SellerProfile = () => {
     const nextVal = !notifSettings[key];
     const updated = { ...notifSettings, [key]: nextVal };
     setNotifSettings(updated);
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch (_) {}
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch {}
 
     if (key === "pushNotifications" && nextVal) {
       try {
         const { ensureFcmTokenRegistered } = await import("@core/firebase/pushClient");
         await ensureFcmTokenRegistered({ role: "seller", platform: "web" });
-      } catch (err) {
+      } catch {
         toast.error("Please grant notification permission in your browser.");
       }
     }
@@ -149,7 +149,7 @@ const SellerProfile = () => {
         address: data.address || "",
         pincode: extractedPincode,
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to fetch profile");
     } finally {
       setIsLoading(false);
@@ -219,7 +219,7 @@ const SellerProfile = () => {
       await sellerApi.updateProfile({ isActive: newStatus });
       setProfile((prev) => ({ ...prev, isActive: newStatus }));
       toast.success(`Shop is now ${newStatus ? "Active" : "Inactive"}`);
-    } catch (error) {
+    } catch {
       toast.error("Failed to update shop status");
     }
   };

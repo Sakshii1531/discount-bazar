@@ -91,7 +91,7 @@ const DeliveryFunds = () => {
             await adminApi.bulkSettleDelivery();
             toast.success("Bulk settlement processed");
             fetchTransactions(page);
-        } catch (error) {
+        } catch {
             toast.error("Bulk settlement failed");
         } finally {
             setIsProcessing(false);
@@ -103,7 +103,7 @@ const DeliveryFunds = () => {
             await adminApi.settleTransaction(id);
             toast.success("Transaction settled");
             fetchTransactions(page);
-        } catch (error) {
+        } catch {
             toast.error("Settlement failed");
         }
     };

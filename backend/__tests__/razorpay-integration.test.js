@@ -139,6 +139,56 @@ describe("RazorpayAdapter & Integration Verification", () => {
     expect(isFakeSignatureValid).toBe(false);
   });
 
+  it("rejects a valid signature for a different Razorpay order than the payment's", async () => {
+    const { verifyRazorpayPaymentSignature } = await import("../app/services/paymentService.js");
+
+    const cheapOrderId = "order_cheap_1";
+    const paymentId = "pay_cheap_1";
+    const signature = crypto
+      .createHmac("sha256", TEST_KEY_SECRET)
+      .update(`${cheapOrderId}|${paymentId}`)
+      .digest("hex");
+    const expensivePayment = {
+      customer: "cust1",
+      gatewayOrderId: "CHK-EXPENSIVE-A1",
+      rawGatewayResponse: { razorpayOrderId: "order_expensive_1" },
+      save: jest.fn(),
+    };
+    mockPaymentFindOne.mockResolvedValueOnce(expensivePayment);
+
+    await expect(
+      verifyRazorpayPaymentSignature({
+        merchantOrderId: "CHK-EXPENSIVE-A1",
+        razorpayOrderId: cheapOrderId,
+        razorpayPaymentId: paymentId,
+        razorpaySignature: signature,
+        userId: "cust1",
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Payment details do not match this order" });
+    expect(expensivePayment.save).not.toHaveBeenCalled();
+  });
+
+  it("checks the signature when the Razorpay order matches the payment", async () => {
+    const { verifyRazorpayPaymentSignature } = await import("../app/services/paymentService.js");
+
+    mockPaymentFindOne.mockResolvedValueOnce({
+      customer: "cust1",
+      gatewayOrderId: "CHK-1-A1",
+      rawGatewayResponse: { razorpayOrderId: "order_1" },
+      save: jest.fn(),
+    });
+
+    await expect(
+      verifyRazorpayPaymentSignature({
+        merchantOrderId: "CHK-1-A1",
+        razorpayOrderId: "order_1",
+        razorpayPaymentId: "pay_1",
+        razorpaySignature: "tampered",
+        userId: "cust1",
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Invalid payment signature" });
+  });
+
   it("verifies valid Razorpay webhook signature over raw Buffer", async () => {
     const { RazorpayAdapter } = await import(
       "../app/services/payment/providers/razorpay.adapter.js"

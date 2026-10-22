@@ -94,7 +94,7 @@ const Auth = () => {
           email: { ...createInitialVerificationState(), ...(parsed?.email || {}), isSending: false, isVerifying: false },
           phone: { ...createInitialVerificationState(), ...(parsed?.phone || {}), isSending: false, isVerifying: false },
         };
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
@@ -166,7 +166,7 @@ const Auth = () => {
           ...parsed,
           password: "",
         };
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
@@ -391,7 +391,7 @@ const Auth = () => {
         } else {
           updateVerificationState(name, { exists: false });
         }
-      } catch (err) {
+      } catch {
         // ignore errors on blur
       }
     }

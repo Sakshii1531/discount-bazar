@@ -594,6 +594,7 @@ export async function generateOrderPaymentBreakdown({
     grossTotal,
     grandTotal,
     walletAmount: walletAllocation,
+    walletNettedInGrandTotal: walletAllocation > 0,
     payableAmount: grandTotal,
     sellerPayoutTotal,
     adminProductCommissionTotal,
