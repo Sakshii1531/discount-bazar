@@ -11,6 +11,7 @@ import LiveTrackingMap from "../components/order/LiveTrackingMap";
 import DeliveryOtpDisplay from "../components/DeliveryOtpDisplay";
 import OrderProgressTracker from "../components/order/OrderProgressTracker";
 import ReturnProgressTracker from "../components/order/ReturnProgressTracker";
+import OrderCancellationCard from "../components/order/OrderCancellationCard";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import { loadRazorpayScript } from "@shared/utils/razorpayLoader";
 import {
@@ -1508,6 +1509,21 @@ const OrderDetailPage = () => {
               </div>
             );
           })()}
+        </motion.div>
+
+        {/* Cancellation — eligibility comes from the backend on every load */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32 }}
+        >
+          <OrderCancellationCard
+            orderId={order.orderId || orderId}
+            refreshKey={`${order.workflowStatus || ""}|${order.status || ""}|${order.pickupConfirmedAt || ""}|${order.paymentStatus || ""}`}
+            onChanged={() => fetchOrderDetails(true)}
+            onContactSupport={() => setShowHelp(true)}
+            autoOpen={searchParams.get("cancel") === "1"}
+          />
         </motion.div>
 
         {/* Buy Again / Reorder CTA */}

@@ -860,6 +860,10 @@ export async function reverseOrderFinanceOnCancellation(
         }
       }
       order.paymentStatus = ORDER_PAYMENT_STATUS.REFUNDED;
+      order.financeFlags = {
+        ...(order.financeFlags || {}),
+        onlineRefundApplied: true,
+      };
     }
 
     // NEW: Refund Wallet Amount Used

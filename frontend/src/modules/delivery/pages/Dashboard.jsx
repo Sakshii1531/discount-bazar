@@ -23,6 +23,7 @@ import { useAuth } from "@core/context/AuthContext";
 import { deliveryApi } from "../services/deliveryApi";
 import { formatAmount } from "@shared/utils/currency";
 import ActiveDeliveriesSection from "../components/ActiveDeliveriesSection";
+import CancelledReturnTasks from "../components/CancelledReturnTasks";
 import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
 
 const Dashboard = () => {
@@ -199,6 +200,7 @@ const Dashboard = () => {
 
       {/* Accepted, in-progress orders — always above the new-order search */}
       <div className="px-6 pt-5">
+        <CancelledReturnTasks />
         <ActiveDeliveriesSection />
       </div>
 

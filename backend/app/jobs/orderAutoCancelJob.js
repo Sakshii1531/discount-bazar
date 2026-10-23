@@ -7,6 +7,8 @@ import {
   processReturnPickupTimeoutJob,
 } from "../services/orderWorkflowService.js";
 import { compensateOrderCancellation } from "../services/orderCompensation.js";
+import { reconcileOrderPaymentStatus } from "../services/paymentService.js";
+import { recordExternalCancellation } from "../services/cancellation/orderCancellationService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import logger from "../services/logger.js";
@@ -108,6 +110,10 @@ const autoCancelExpiredOrders = async () => {
 
     for (const row of paymentExpiredOrders) {
       try {
+        // The client may have shown "failed" while the gateway actually
+        // captured the money — ask the gateway before timing the order out.
+        const outcome = await reconcileOrderPaymentStatus(row._id);
+        if (outcome.status === "CAPTURED" || outcome.status === "UNKNOWN") continue;
         const updated = await Order.findOneAndUpdate(
           {
             _id: row._id,
@@ -127,6 +133,7 @@ const autoCancelExpiredOrders = async () => {
         );
         if (updated) {
           await compensateOrderCancellation(updated, updated.orderId);
+          await recordExternalCancellation(updated._id, { type: "SYSTEM", reason: "Payment timeout" });
           emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
             orderId: updated.orderId,
             customerId: updated.customer,
@@ -162,6 +169,7 @@ const autoCancelExpiredOrders = async () => {
 
       try {
         await compensateOrderCancellation(order, order.orderId);
+        await recordExternalCancellation(order._id, { type: "SYSTEM", reason: "Seller timeout" });
       } catch (e) {
         logger.error('legacy compensation failed', {
           jobName: 'orderAutoCancelJob',

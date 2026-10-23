@@ -107,6 +107,18 @@ export const customerApi = {
     axiosInstance.get(`/orders/workflow/${orderId}/route`, { params }),
   cancelOrder: (orderId, data) =>
     axiosInstance.put(`/orders/cancel/${orderId}`, data),
+  // Cancellation flow — eligibility is always decided by the backend and
+  // never cached, so a stale screen cannot offer an invalid action.
+  getOrderCancellation: (orderId) =>
+    axiosInstance.get(`/cancellations/orders/${encodeURIComponent(String(orderId ?? "").trim())}`),
+  submitOrderCancellation: (orderId, data, idempotencyKey) =>
+    axiosInstance.post(
+      `/cancellations/orders/${encodeURIComponent(String(orderId ?? "").trim())}`,
+      data,
+      idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : undefined,
+    ),
+  withdrawOrderCancellation: (orderId) =>
+    axiosInstance.post(`/cancellations/orders/${encodeURIComponent(String(orderId ?? "").trim())}/withdraw`),
   requestReturn: (orderId, data) =>
     axiosInstance.post(`/orders/${orderId}/returns`, data),
   getReturnDetails: (orderId) =>

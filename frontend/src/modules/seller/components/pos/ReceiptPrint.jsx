@@ -4,7 +4,7 @@ import Button from "@shared/components/ui/Button";
 import { HiOutlineCheckCircle, HiOutlinePrinter, HiOutlineArrowDownTray, HiOutlinePencilSquare } from "react-icons/hi2";
 import { toast } from "sonner";
 import { downloadPosBillPDF } from "@/lib/posPdfExport";
-import { posBillCustomer } from "@/lib/posCustomer";
+import { computeBillFigures, TENDER_LABELS } from "@/lib/billFigures";
 
 // Shared 80mm thermal print styles (also used by ReturnReceipt): only #pos-receipt prints.
 export const RECEIPT_PRINT_CSS = `
@@ -72,8 +72,6 @@ const RECEIPT_TAGLINE = "Experience Excellence in shopping";
 const RECEIPT_NOTICE = "Exchange offer is not available at this time.";
 const RECEIPT_TERMS = [];
 
-const TENDER_LABELS = { CASH: "Cash", CARD: "Card", QR: "UPI", CREDIT: "Credit", OTHER: "Other", SPLIT: "Split" };
-
 // Whole rupees print without decimals ("10"), anything else with two ("8.47").
 const amt = (n) => {
     const v = Math.round((Number(n) || 0) * 100) / 100;
@@ -89,7 +87,7 @@ const ReceiptRow = ({ label, value, strong = false }) => (
 );
 
 // Unit MRP snapshot on the bill line; bills saved before it existed fall back to the selling price.
-const unitMrp =(item) => Math.max(Number(item?.mrp) || 0, Number(item?.price) || 0);
+const unitMrp = (item) => Math.max(Number(item?.mrp) || 0, Number(item?.price) || 0);
 
 /**
  * Standard POS Receipt (80mm thermal receipt slip / browser print format)
@@ -125,72 +123,22 @@ const ReceiptPrint = ({
 
     if (!order) return null;
 
-    const breakdown = order.paymentBreakdown || order.pricing || {};
-    const lineItems = Array.isArray(order.items) ? order.items : [];
+    const f = computeBillFigures(order);
+    const lineItems = f.items;
     const paidAt = order.deliveredAt || order.createdAt || new Date().toISOString();
-
-    const lineItemsSubtotal = lineItems.reduce((sum, item) => {
-        const q = Number(item.quantity || item.qty || 1);
-        const p = Number(item.price || 0);
-        return sum + q * p;
-    }, 0);
-
-    const subtotal = Number(breakdown.productSubtotal || breakdown.subtotal || lineItemsSubtotal);
-    const taxTotal = Number(breakdown.taxTotal || 0);
-    const discountTotal = Number(breakdown.discountTotal || breakdown.discount || 0);
-    const isTaxInclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive : (breakdown.isTaxInclusive !== false);
-    const grandTotal = Number(
-        breakdown.grandTotal ||
-        breakdown.total ||
-        (isTaxInclusive ? Math.max(0, subtotal - discountTotal) : Math.max(0, subtotal + taxTotal - discountTotal))
-    );
-    const amountPaid = order.posAmountPaid != null ? Number(order.posAmountPaid) : grandTotal;
-
-    const isCredit = String(order.posPaymentMethod || "").toUpperCase() === "CREDIT";
-    const balanceDue = isCredit ? Math.max(0, grandTotal - amountPaid) : 0;
-    const cashTendered = order.posCashTendered != null ? Number(order.posCashTendered) : null;
-    const changeAmount = !isCredit && cashTendered != null && cashTendered > grandTotal ? cashTendered - grandTotal : 0;
-    const splitPayments = Array.isArray(order.posPayments) ? order.posPayments : [];
-
-    // Bill discount is spread across lines before
-    // splitting each rate into taxable value + CGST/SGST (intra-state counter sale).
-    const discountRatio = subtotal > 0 ? (isTaxInclusive ? grandTotal / subtotal : (subtotal - discountTotal) / subtotal) : 1;
-    const gstByRate = new Map();
-    lineItems.forEach((item) => {
-        const rate = Number(item.gstPercent || 0);
-        if (rate <= 0) return;
-        const lineTotal = Number(item.price || 0) * Number(item.quantity || item.qty || 1);
-        if (isTaxInclusive) {
-            const value = lineTotal * discountRatio;
-            const taxable = (value * 100) / (100 + rate);
-            const prev = gstByRate.get(rate) || { taxable: 0, tax: 0 };
-            gstByRate.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + (value - taxable) });
-        } else {
-            const taxable = lineTotal * discountRatio;
-            const tax = (taxable * rate) / 100;
-            const prev = gstByRate.get(rate) || { taxable: 0, tax: 0 };
-            gstByRate.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + tax });
-        }
-    });
-
-    // Fallback: If individual lines did not record gstPercent, use the bill-level taxTotal/taxPercent
-    if (gstByRate.size === 0 && taxTotal > 0) {
-        const taxable = isTaxInclusive ? Math.max(0, (subtotal - discountTotal) - taxTotal) : Math.max(0, subtotal - discountTotal);
-        const rate = taxable > 0 ? Math.round(((taxTotal / taxable) * 100) * 10) / 10 : Number(breakdown.taxPercent || order.taxPercent || 0);
-        gstByRate.set(rate, { taxable, tax: taxTotal });
-    }
-
-    const gstRows = Array.from(gstByRate.entries()).sort((a, b) => a[0] - b[0]);
+    const { lineItemsSubtotal, subtotal, taxTotal, discountTotal, isTaxInclusive, grandTotal, amountPaid, balanceDue, cashTendered, tenderLines } = f;
+    const changeAmount = f.change;
+    const gstRows = f.gstRows;
     const gstTotal = gstRows.reduce((sum, [, r]) => sum + r.tax, 0);
     const taxableTotal = gstRows.reduce((sum, [, r]) => sum + r.taxable, 0);
-    const totalUnits = lineItems.reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0);
-    const mrpTotal = lineItems.reduce((sum, item) => sum + unitMrp(item) * Number(item.quantity || item.qty || 1), 0);
-    const mrpSavings = Math.round((mrpTotal - grandTotal) * 100) / 100;
+    const totalUnits = f.units;
+    const mrpTotal = f.mrpTotal;
+    const mrpSavings = f.mrpSavings;
 
     const sellerInfo = seller || order.seller || {};
     const storeTitle = shopName || sellerInfo.shopName || sellerInfo.name || "Store";
     const paymentMethod = (order.posPaymentMethod || "CASH").toUpperCase();
-    const billCustomer = posBillCustomer(order, "Walk-in Customer");
+    const billCustomer = f.customer;
     const couponCode = order.couponSnapshot?.code || order.couponCode || "";
 
     const paidDate = new Date(paidAt);
@@ -206,19 +154,11 @@ const ReceiptPrint = ({
     const storeAddress = [sellerInfo.address, sellerInfo.city, sellerInfo.state, sellerInfo.pincode && `PIN ${sellerInfo.pincode}`]
         .filter((part) => typeof part === "string" && part.trim())
         .join(", ");
-    const methodLabel = TENDER_LABELS[paymentMethod] || paymentMethod;
+    const methodLabel = f.online ? f.payment?.label : TENDER_LABELS[paymentMethod] || paymentMethod;
     // A walk-in bill names the tender ("Cash"), like the template.
     const customerName = billCustomer.isWalkIn ? methodLabel : billCustomer.name;
-    // Amount taken per tender: split lines, the up-front part of a credit bill, else the whole bill.
-    const tenderLines = splitPayments.length
-        ? splitPayments.map((p) => ({ method: p.method, label: TENDER_LABELS[p.method] || p.method, amount: Number(p.amount || 0) }))
-        : isCredit
-          ? amountPaid > 0
-              ? [{ method: "CASH", label: "Cash", amount: amountPaid }]
-              : []
-          : [{ method: paymentMethod, label: methodLabel, amount: grandTotal }];
-    const modeParts = [...tenderLines, ...(isCredit && balanceDue > 0 ? [{ label: "Credit", amount: balanceDue }] : [])];
-    const paymentModeText = modeParts.length ? modeParts.map((t) => `${t.label}-${amt(t.amount)}`).join(", ") : methodLabel;
+    const paymentModeText = f.modeParts.length ? f.modeParts.map((t) => `${t.label}-${amt(t.amount)}`).join(", ") : methodLabel;
+    const orderClosed = f.online && f.status === "cancelled";
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:bg-white print:p-0 print:static print:backdrop-blur-none print-modal-wrapper">
@@ -261,6 +201,7 @@ const ReceiptPrint = ({
                             </div>
                         </div>
                         <p>Mob No. : {billCustomer.phone}</p>
+                        {billCustomer.address && <p className="break-words">Address : {billCustomer.address}</p>}
 
                         {/* Items */}
                         <table className="w-full border-collapse mt-1 table-fixed">
@@ -316,6 +257,9 @@ const ReceiptPrint = ({
                         <div className="border-t border-dashed border-black pt-1 space-y-0.5">
                             <ReceiptRow label="Gross Rate" value={amt(subtotal)} />
                             {!isTaxInclusive && taxTotal > 0 && <ReceiptRow label="GST (CGST + SGST)" value={amt(taxTotal)} />}
+                            {f.charges.map((c) => (
+                                <ReceiptRow key={c.key} label={c.label} value={amt(c.value)} />
+                            ))}
                             {discountTotal > 0 && (
                                 <ReceiptRow label={`Discount${couponCode ? ` (${couponCode})` : ""}`} value={`-${amt(discountTotal)}`} />
                             )}
@@ -333,6 +277,7 @@ const ReceiptPrint = ({
                             <div className="pt-1" />
                             <ReceiptRow label="Total Due" value={balanceDue > 0 ? amt(balanceDue) : ""} />
                             <ReceiptRow label="Payment Mode" value={paymentModeText} />
+                            {orderClosed && <ReceiptRow label="Order Status" value="CANCELLED" />}
                             {mrpSavings > 0 && <ReceiptRow label="You Saved (on MRP)" value={amt(mrpSavings)} />}
                         </div>
 

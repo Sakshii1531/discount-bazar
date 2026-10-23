@@ -282,6 +282,42 @@ export class RazorpayAdapter extends PaymentProviderPort {
 
     return PAYMENT_STATUS.PENDING;
   }
+
+  /** Razorpay refund states: pending | processed | failed. */
+  mapRefundStatus(state) {
+    const s = String(state || "").toLowerCase();
+    if (s === "processed") return "SUCCESSFUL";
+    if (s === "failed") return "FAILED";
+    return "PROCESSING";
+  }
+
+  async refundPayment({ gatewayPaymentId, amountPaise, notes = {}, receipt }) {
+    const client = getRazorpayClient();
+    const refund = await client.payments.refund(gatewayPaymentId, {
+      amount: amountPaise,
+      speed: "normal",
+      notes,
+      ...(receipt ? { receipt } : {}),
+    });
+    return { refundId: refund.id, status: this.mapRefundStatus(refund.status), raw: refund };
+  }
+
+  async getRefundStatus({ gatewayPaymentId, gatewayRefundId }) {
+    const client = getRazorpayClient();
+    const refund = await client.payments.fetchRefund(gatewayPaymentId, gatewayRefundId);
+    return { refundId: refund.id, status: this.mapRefundStatus(refund.status), raw: refund };
+  }
+
+  async findRefunds({ gatewayPaymentId }) {
+    const client = getRazorpayClient();
+    const list = await client.payments.fetchMultipleRefund(gatewayPaymentId, { count: 100 });
+    return (list?.items || []).map((refund) => ({
+      refundId: refund.id,
+      status: this.mapRefundStatus(refund.status),
+      notes: refund.notes || {},
+      amountPaise: refund.amount,
+    }));
+  }
 }
 
 export default RazorpayAdapter;

@@ -152,12 +152,24 @@ const OrdersList = () => {
 
     const handleStatusUpdate = async (orderId, newStatus) => {
         try {
+            if (newStatus === 'cancelled') {
+                // Manual cancellation needs a reason for the audit log.
+                const reason = window.prompt("Reason for cancelling this order (required):", "");
+                if (!reason || reason.trim().length < 3) {
+                    if (reason !== null) showToast("A reason of at least 3 characters is required", "error");
+                    return;
+                }
+                await adminApi.adminCancelOrder(orderId, { reason: reason.trim() });
+                showToast("Order cancelled", "success");
+                fetchOrders();
+                return;
+            }
             await adminApi.updateOrderStatus(orderId, { status: newStatus });
             showToast(`Order status updated to ${newStatus}`, "success");
             fetchOrders(); // Refresh table
         } catch (error) {
             console.error("Failed to update status:", error);
-            showToast("Failed to update status", "error");
+            showToast(error?.response?.data?.message || "Failed to update status", "error");
         }
     };
 

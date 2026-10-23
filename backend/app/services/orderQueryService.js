@@ -469,7 +469,7 @@ export async function getCustomerOrders(customerId, pagination) {
       const [orders, total] = await Promise.all([
         Order.find({ customer: customerId })
           .select(
-            "orderId checkoutGroupId customer seller items address payment pricing status orderStatus workflowStatus workflowVersion returnStatus deliveredAt timeSlot createdAt",
+            "orderId checkoutGroupId customer seller items address payment pricing status orderStatus workflowStatus workflowVersion returnStatus deliveredAt timeSlot createdAt cancellation cancelledAt pickupConfirmedAt sellerReadyAt paymentMode paymentStatus orderSource financeFlags.onlinePaymentCaptured",
           )
           .sort({ createdAt: -1, _id: -1 })
           .skip(skip)
@@ -479,8 +479,12 @@ export async function getCustomerOrders(customerId, pagination) {
         Order.countDocuments({ customer: customerId }),
       ]);
 
+      const { decorateOrdersWithCancellation } = await import("./cancellation/orderCancellationService.js");
+      const decorated = await decorateOrdersWithCancellation(
+        orders.map((o) => decorateOrderWithReturnEligibility(o)),
+      );
       return {
-        items: orders.map((o) => decorateOrderWithReturnEligibility(o)),
+        items: decorated,
         page,
         limit,
         total,
@@ -542,7 +546,8 @@ export async function getOrderWithAccess(orderId, userId, role) {
     .populate("returnItems.product", "name mainImage price salePrice unit variants weight pack")
     .populate("deliveryBoy", "name phone profileImage documents ratingAverage ratingCount vehicleType location")
     .populate("returnDeliveryBoy", "name phone profileImage documents ratingAverage ratingCount vehicleType")
-    .populate("seller", "shopName name address phone location")
+    // Store details printed on the order invoice (same header as a POS bill).
+    .populate("seller", "shopName name address phone location city state pincode")
     .lean();
 
   if (!order) {

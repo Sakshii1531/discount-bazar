@@ -16,6 +16,10 @@ export const deliveryApi = {
     axiosInstance.get("/delivery/order-history", { params, ...config }),
   // Server-authoritative list of the rider's in-progress assignments.
   getActiveOrders: (config = {}) => axiosInstance.get("/delivery/active-orders", config),
+  // Orders cancelled after pickup that must go back to the store.
+  getCancellationReturns: () => axiosInstance.get("/cancellations/rider/returns"),
+  confirmCancellationReturn: (id, data = {}) =>
+    axiosInstance.post(`/cancellations/rider/returns/${id}/confirm`, data),
   getAvailableOrders: (params = {}, config = {}) =>
     axiosInstance.get("/orders/available", { params, ...config }),
   acceptOrder: (orderId, idempotencyKey) =>

@@ -7,6 +7,7 @@
  */
 
 import { posBillCustomer } from './posCustomer';
+import { computeBillFigures } from './billFigures';
 
 const BRAND_RED  = [220, 38, 38];     // #DC2626
 const BRAND_DARK = [15, 23, 42];      // #0F172A
@@ -100,7 +101,7 @@ const ensureSpace = (doc, y, needed, title) => {
 };
 
 /** Branded header band on page 1. Returns the y to continue from. */
-const drawHeader = (doc, { shopName, title, subtitle }) => {
+const drawHeader = (doc, { shopName, title, subtitle, tag = 'DISCOUNT BAZAR  |  SELLER POS' }) => {
     const W = pageW(doc);
     doc.setFillColor(...BRAND_RED);
     doc.rect(0, 0, W, 30, 'F');
@@ -112,7 +113,7 @@ const drawHeader = (doc, { shopName, title, subtitle }) => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text('DISCOUNT BAZAR  |  SELLER POS', W - MARGIN, 12, { align: 'right' });
+    doc.text(tag, W - MARGIN, 12, { align: 'right' });
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -375,60 +376,7 @@ const drawNote = (doc, y, text, docTitle) => {
 /* ══════════════ DATA HELPERS ══════════════ */
 
 /** Same bill math as ReceiptPrint so the PDF always matches the printed bill. */
-const billFigures = (order) => {
-    const breakdown = order.paymentBreakdown || order.pricing || {};
-    const items = Array.isArray(order.items) ? order.items : [];
-    const qtyOf = (it) => num(it.quantity || it.qty || 1);
-    const lineSum = items.reduce((s, it) => s + qtyOf(it) * num(it.price), 0);
-    const subtotal = num(breakdown.productSubtotal || breakdown.subtotal || lineSum);
-    const taxTotal = num(breakdown.taxTotal || 0);
-    const discountTotal = num(breakdown.discountTotal || breakdown.discount || 0);
-    const isTaxInclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive : (breakdown.isTaxInclusive !== false);
-    const grandTotal = num(
-        breakdown.grandTotal ||
-        breakdown.total ||
-        (isTaxInclusive ? Math.max(0, subtotal - discountTotal) : Math.max(0, subtotal + taxTotal - discountTotal))
-    );
-    const amountPaid = order.posAmountPaid != null ? num(order.posAmountPaid) : grandTotal;
-    const isCredit = String(order.posPaymentMethod || '').toUpperCase() === 'CREDIT';
-    const balanceDue = isCredit ? Math.max(0, grandTotal - amountPaid) : 0;
-    const cashTendered = order.posCashTendered != null ? num(order.posCashTendered) : null;
-    const change = !isCredit && cashTendered != null && cashTendered > grandTotal ? cashTendered - grandTotal : 0;
-    const units = items.reduce((s, it) => s + qtyOf(it), 0);
-
-    const ratio = subtotal > 0 ? (isTaxInclusive ? grandTotal / subtotal : (subtotal - discountTotal) / subtotal) : 1;
-    const gst = new Map();
-    items.forEach((it) => {
-        const rate = num(it.gstPercent);
-        if (rate <= 0) return;
-        const lineTotal = num(it.price) * qtyOf(it);
-        if (isTaxInclusive) {
-            const value = lineTotal * ratio;
-            const taxable = (value * 100) / (100 + rate);
-            const prev = gst.get(rate) || { taxable: 0, tax: 0 };
-            gst.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + (value - taxable) });
-        } else {
-            const taxable = lineTotal * ratio;
-            const tax = (taxable * rate) / 100;
-            const prev = gst.get(rate) || { taxable: 0, tax: 0 };
-            gst.set(rate, { taxable: prev.taxable + taxable, tax: prev.tax + tax });
-        }
-    });
-
-    // Fallback: If individual lines did not record gstPercent, use the bill-level taxTotal/taxPercent
-    if (gst.size === 0 && taxTotal > 0) {
-        const taxable = isTaxInclusive ? Math.max(0, (subtotal - discountTotal) - taxTotal) : Math.max(0, subtotal - discountTotal);
-        const rate = taxable > 0 ? Math.round(((taxTotal / taxable) * 100) * 10) / 10 : num(breakdown.taxPercent || order.taxPercent || 0);
-        gst.set(rate, { taxable, tax: taxTotal });
-    }
-
-    const gstRows = Array.from(gst.entries()).sort((a, b) => a[0] - b[0]);
-
-    return {
-        items, qtyOf, subtotal, taxTotal, discountTotal, grandTotal, amountPaid,
-        isCredit, balanceDue, cashTendered, change, units, gstRows, isTaxInclusive,
-    };
-};
+const billFigures = (order) => computeBillFigures(order);
 
 const customerOf = (o) => {
     const { name, phone } = posBillCustomer(o);
@@ -575,22 +523,32 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
     const store = shopName || sellerInfo.shopName || sellerInfo.name || 'Store';
     const title = `${heading} - Bill #${order.orderId}`;
     const f = billFigures(order);
-    let y = drawHeader(doc, { shopName: store, title: heading, subtitle: `Bill No: #${order.orderId}` });
+    let y = drawHeader(doc, {
+        shopName: store,
+        title: heading,
+        subtitle: `Bill No: #${order.orderId}`,
+        ...(f.online ? { tag: 'DISCOUNT BAZAR  |  ONLINE ORDER' } : {}),
+    });
 
     const address = [sellerInfo.address, sellerInfo.city, sellerInfo.pincode].filter(Boolean).join(', ');
     const paidAt = order.deliveredAt || order.createdAt;
 
+    // Online orders: delivery customer + online/COD payment instead of the counter fields.
+    const paymentModeLabel = f.online
+        ? f.modeParts.map((t) => t.label).join(' + ') || '-'
+        : methodLabel(order.posPaymentMethod);
     y = drawSection(doc, y, 'Bill Details', title);
     y = drawInfoGrid(doc, y, [
         ['Bill No.', `#${order.orderId}`],
         ['Date & Time', fmtDateTime(paidAt)],
-        ['Customer', posBillCustomer(order, 'Walk-in Customer').name],
-        ['Customer Phone', posBillCustomer(order).phone || '-'],
+        ['Customer', f.online ? f.customer.name : posBillCustomer(order, 'Walk-in Customer').name],
+        ['Customer Phone', (f.online ? f.customer.phone : posBillCustomer(order).phone) || '-'],
+        ...(f.online ? [['Delivery Address', f.customer.address || '-']] : []),
         ['Store', store],
-        ['Cashier', sellerInfo.name || '-'],
+        ...(f.online ? [] : [['Cashier', sellerInfo.name || '-']]),
         ['Store Address', address || '-'],
         ['Store Phone', sellerInfo.phone ? `+91 ${sellerInfo.phone}` : '-'],
-        ...(sellerInfo.gstNumber ? [['GSTIN', sellerInfo.gstNumber], ['Payment Mode', methodLabel(order.posPaymentMethod)]] : [['Payment Mode', methodLabel(order.posPaymentMethod)]]),
+        ...(sellerInfo.gstNumber ? [['GSTIN', sellerInfo.gstNumber], ['Payment Mode', paymentModeLabel]] : [['Payment Mode', paymentModeLabel]]),
     ], title);
 
     y = drawSection(doc, y, 'Items Purchased', title);
@@ -633,8 +591,10 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
             { label: 'SGST Amount', value: `+ ${money(f.taxTotal / 2)}` },
             { label: 'Total Tax / GST', value: `+ ${money(f.taxTotal)}` },
         ] : []),
+        ...f.charges.map((c) => ({ label: c.label, value: `+ ${money(c.value)}` })),
         ...(f.discountTotal > 0 ? [{ label: `Discount${couponCode ? ` (${couponCode})` : ''}`, value: `- ${money(f.discountTotal)}`, color: GREEN }] : []),
-        { label: f.isTaxInclusive ? 'TOTAL AMOUNT (Incl. GST)' : 'TOTAL AMOUNT', value: money(f.grandTotal), strong: true },
+        // Online bills with no tax don't mention GST at all.
+        { label: f.isTaxInclusive && (!f.online || gstTotal > 0) ? 'TOTAL AMOUNT (Incl. GST)' : 'TOTAL AMOUNT', value: money(f.grandTotal), strong: true },
     ], title);
 
     if (f.gstRows.length) {
@@ -654,12 +614,17 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
         });
     }
 
-    const splits = Array.isArray(order.posPayments) ? order.posPayments : [];
+    const splits = f.online
+        ? f.tenderLines
+        : (Array.isArray(order.posPayments) ? order.posPayments : []);
+    const paymentStatus = f.online
+        ? (f.status === 'cancelled' ? 'ORDER CANCELLED' : f.balanceDue > 0 ? (f.amountPaid > 0 ? 'PARTIALLY PAID' : 'PAYMENT DUE') : 'PAID')
+        : (f.isCredit && f.balanceDue > 0 ? 'PARTIALLY PAID' : 'PAID');
     y = drawSection(doc, y, 'Payment Details', title);
     y = drawInfoGrid(doc, y, [
-        ['Payment Mode', methodLabel(order.posPaymentMethod)],
-        ['Payment Status', f.isCredit && f.balanceDue > 0 ? 'PARTIALLY PAID' : 'PAID'],
-        ...splits.map((p) => [`Paid by ${methodLabel(p.method)}`, money(p.amount)]),
+        ['Payment Mode', paymentModeLabel],
+        ['Payment Status', paymentStatus],
+        ...splits.map((p) => [`${f.online ? '' : 'Paid by '}${f.online ? p.label : methodLabel(p.method)}${f.online ? ' Amount' : ''}`, money(p.amount)]),
         ['Amount Paid', money(f.amountPaid)],
         ...(f.cashTendered != null ? [['Cash Received', money(f.cashTendered)]] : []),
         ...(f.balanceDue > 0 ? [['Balance Due', money(f.balanceDue)]] : []),
@@ -671,8 +636,8 @@ export const downloadPosBillPDF = async ({ order, shopName, seller = {}, heading
     }
     drawNote(doc, y + 2, 'Thank you for shopping with us! This is a computer generated invoice and does not require a signature.', title);
 
-    drawFooter(doc, 'Computer generated POS invoice');
-    doc.save(`pos-bill-${safeFile(order.orderId)}.pdf`);
+    drawFooter(doc, f.online ? 'Computer generated invoice' : 'Computer generated POS invoice');
+    doc.save(`${f.online ? 'invoice' : 'pos-bill'}-${safeFile(order.orderId)}.pdf`);
 };
 
 /** POS Returns & Refunds report. */

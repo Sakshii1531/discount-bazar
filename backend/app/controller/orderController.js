@@ -17,7 +17,6 @@ import {
   sellerAcceptAtomic,
   sellerRejectAtomic,
   deliveryAcceptAtomic,
-  customerCancelV2,
   startReturnPickupBroadcast,
   removeReturnPickupTimeoutJob,
 } from "../services/orderWorkflowService.js";
@@ -27,6 +26,8 @@ import {
   reverseOrderFinanceOnCancellation,
 } from "../services/finance/orderFinanceService.js";
 import { compensateOrderCancellation } from "../services/orderCompensation.js";
+// Loaded lazily: the cancellation service pulls in the payment stack.
+const cancellationService = () => import("../services/cancellation/orderCancellationService.js");
 import {
   generateOrderPaymentBreakdown,
   hydrateOrderItems,
@@ -291,79 +292,29 @@ export const getOrderDetails = async (req, res) => {
    CANCEL ORDER
 ================================ */
 export const cancelOrder = async (req, res) => {
+  // Legacy endpoint (PUT /orders/cancel/:orderId). Same rules as
+  // POST /cancellations/orders/:orderId — eligibility, atomic commit,
+  // stock, refund and notifications all live in the cancellation service.
   try {
-    const { orderId } = req.params;
-    const { reason } = req.body;
-    const customerId = req.user.id;
-
-    const orderKey = orderMatchQueryFromRouteParam(orderId);
-    if (!orderKey) {
-      return handleResponse(res, 404, "Order not found");
-    }
-
-    const order = await Order.findOne({ ...orderKey, customer: customerId });
-
-    if (!order) {
-      return handleResponse(res, 404, "Order not found");
-    }
-
-    if (order.workflowVersion >= 2) {
-      try {
-        const updated = await customerCancelV2(
-          customerId,
-          order.orderId,
-          reason,
-        );
-        return handleResponse(res, 200, "Order cancelled successfully", updated);
-      } catch (e) {
-        return handleResponse(res, e.statusCode || 500, e.message);
-      }
-    }
-
-    if (order.status !== "pending") {
-      return handleResponse(
-        res,
-        400,
-        "Order cannot be cancelled after confirmation",
-      );
-    }
-
-    order.status = "cancelled";
-    order.orderStatus = "cancelled";
-    order.cancelledBy = "customer";
-    order.cancelReason = reason || "Cancelled by user";
-    await order.save();
-
-    try {
-      await invalidate(buildKey("orders", "customer", `${customerId}:*`));
-    } catch (cacheErr) {
-      logger.warn("cancelOrder cache invalidation failed", {
-        scope: "cancelOrder",
-        orderId: order.orderId,
-        customerId,
-        correlationId: req.correlationId,
-        error: cacheErr.message,
-      });
-    }
-
-    try {
-      await compensateOrderCancellation(order, order.orderId, {
-        actorId: customerId,
-        reason: reason || "Cancelled by customer before acceptance",
-      });
-    } catch (compensationError) {
-      logger.warn("cancelOrder compensation failed", {
-        scope: "cancelOrder",
-        orderId: order.orderId,
-        customerId,
-        correlationId: req.correlationId,
-        error: compensationError.message,
-      });
-    }
-
-    return handleResponse(res, 200, "Order cancelled successfully", order);
+    const { reason, reasonCode } = req.body || {};
+    const { submitCustomerCancellation } = await cancellationService();
+    const { record, duplicate } = await submitCustomerCancellation({
+      customerId: req.user.id,
+      orderParam: req.params.orderId,
+      mode: "CANCEL",
+      reasonCode: reasonCode || "OTHER",
+      reasonText: reason || null,
+      idempotencyKey: String(req.headers?.["idempotency-key"] || "").trim() || null,
+    });
+    const order = await Order.findById(record.order);
+    return handleResponse(
+      res,
+      200,
+      duplicate ? "Order already cancelled" : "Order cancelled successfully",
+      order,
+    );
   } catch (error) {
-    return handleResponse(res, 500, error.message);
+    return handleResponse(res, error.statusCode || 500, error.message, error.eligibility ? { eligibility: error.eligibility } : {});
   }
 };
 
@@ -426,12 +377,36 @@ export const updateOrderStatus = async (req, res) => {
 
     const canonicalOrderId = order.orderId;
 
+    // Cancellation by an administrator goes through the cancellation flow
+    // (mandatory reason, atomic commit, exactly-once stock / refund, audit).
+    if (status === "cancelled" && role === "admin") {
+      try {
+        const { adminCancelOrder } = await cancellationService();
+        const { record } = await adminCancelOrder({
+          adminId: userId,
+          orderParam: canonicalOrderId,
+          reason: req.body?.reason || req.body?.cancelReason,
+          reasonCode: req.body?.reasonCode,
+        });
+        const refreshed = await Order.findById(record.order);
+        return handleResponse(res, 200, "Order cancelled", refreshed);
+      } catch (e) {
+        return handleResponse(res, e.statusCode || 500, e.message);
+      }
+    }
+
     if (order.workflowVersion >= 2 && role === "seller") {
       if (status === "confirmed") {
         try {
           const updated = await sellerAcceptAtomic(userId, canonicalOrderId);
           return handleResponse(res, 200, "Order accepted", updated);
         } catch (e) {
+          // Never fall back onto an order that was cancelled meanwhile — the
+          // fallback save below would resurrect it.
+          const fresh = await Order.findById(order._id).select("status workflowStatus").lean();
+          if (fresh?.status === "cancelled" || fresh?.workflowStatus === WORKFLOW_STATUS.CANCELLED) {
+            return handleResponse(res, 409, "This order was cancelled by the customer.");
+          }
           logger.warn("sellerAcceptAtomic failed, falling back to direct status update", {
             orderId: canonicalOrderId,
             error: e.message,
@@ -470,14 +445,13 @@ export const updateOrderStatus = async (req, res) => {
         }
       }
       if (status === "cancelled") {
+        // A seller can only decline an order it has not accepted yet; later
+        // cancellations go through support so stock / refunds stay correct.
         try {
           const updated = await sellerRejectAtomic(userId, canonicalOrderId);
           return handleResponse(res, 200, "Order rejected", updated);
         } catch (e) {
-          logger.warn("sellerRejectAtomic failed, falling back to direct status update", {
-            orderId: canonicalOrderId,
-            error: e.message,
-          });
+          return handleResponse(res, e.statusCode || 409, e.message);
         }
       }
     }
@@ -577,36 +551,37 @@ export const updateOrderStatus = async (req, res) => {
       else if (status === "out_for_delivery") order.deliveryRiderStep = 3;
     }
 
-    // Handle Cancellation (Stock Reversal & Transaction Update)
+    // Legacy (v1) seller cancellation of a pending order. Commit the state
+    // change conditionally so a concurrent customer cancel cannot restock
+    // twice; compensation releases the reservation exactly once.
     if (status === "cancelled" && oldStatus !== "cancelled") {
-      // 1. Reverse Stock
-      for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: item.quantity },
-        });
-
-        await StockHistory.create({
-          product: item.product,
-          seller: order.seller,
-          type: "Correction",
-          quantity: item.quantity,
-          note: `Order #${canonicalOrderId} Cancelled`,
-          order: order._id,
-        });
-      }
-
-      // 2. Update Transaction
-      await Transaction.findOneAndUpdate(
-        { reference: canonicalOrderId },
-        { status: "Failed" },
+      const cancelled = await Order.findOneAndUpdate(
+        { _id: order._id, status: { $nin: ["cancelled", "delivered", "out_for_delivery"] } },
+        {
+          $set: {
+            status: "cancelled",
+            orderStatus: "cancelled",
+            cancelledBy: role === "seller" ? "seller" : "admin",
+            cancelReason: req.body?.reason || "Cancelled by seller",
+            cancelledAt: new Date(),
+          },
+        },
+        { new: true },
       );
-
+      if (!cancelled) {
+        return handleResponse(res, 409, "Order status changed — please refresh");
+      }
+      await compensateOrderCancellation(cancelled, canonicalOrderId);
+      const { recordExternalCancellation } = await cancellationService();
+      await recordExternalCancellation(cancelled._id, { type: "SELLER", actorRole: role, reason: cancelled.cancelReason });
       emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
         orderId: canonicalOrderId,
         customerId: order.customer,
         userId: order.customer,
         sellerId: order.seller,
       });
+      emitOrderStatusUpdate(canonicalOrderId, { status: "cancelled" }, order.customer);
+      return handleResponse(res, 200, "Order status updated", cancelled);
     }
 
     // Handle Confirmation/Delivery (Settle Transaction for Demo)
@@ -618,6 +593,12 @@ export const updateOrderStatus = async (req, res) => {
       // - mark COD cash collected (system float)
       await order.save();
       await applyDeliveredSettlement(order, canonicalOrderId);
+      try {
+        const { onOrderDelivered } = await cancellationService();
+        await onOrderDelivered(order._id);
+      } catch (hookError) {
+        logger.warn("onOrderDelivered hook failed", { orderId: canonicalOrderId, error: hookError.message });
+      }
 
       emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_DELIVERED, {
         orderId: canonicalOrderId,

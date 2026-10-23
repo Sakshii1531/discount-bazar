@@ -238,6 +238,25 @@ const OrdersPage = () => {
                                                 ⭐ Rate Products
                                             </button>
                                         )}
+                                        {/* Shown only when the backend says cancellation is allowed; the detail page re-checks before confirming. */}
+                                        {(order.cancellationEligibility?.canSelfCancel || order.cancellationEligibility?.canRequest) && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    navigate(`/orders/${order.orderId}?cancel=1`);
+                                                }}
+                                                className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-full text-[10.5px] font-bold transition-colors shadow-xs shrink-0"
+                                            >
+                                                {order.cancellationEligibility.canSelfCancel ? 'Cancel Order' : 'Request Cancel'}
+                                            </button>
+                                        )}
+                                        {['REQUESTED', 'UNDER_REVIEW'].includes(order.cancellation?.status) && (
+                                            <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[10.5px] font-bold shrink-0">
+                                                Cancel requested
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                         <span className="text-[10px] font-medium text-slate-400">Total</span>

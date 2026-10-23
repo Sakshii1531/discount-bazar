@@ -31,6 +31,7 @@ import { registerScheduledJob, startScheduledJobs } from "./app/services/distrib
 import { getOrderAutoCancelJobHandler, getOrderAutoCancelJobInterval } from "./app/jobs/orderAutoCancelJob.js";
 import { getReturnWindowReleaseJobHandler, getReturnWindowReleaseJobInterval } from "./app/jobs/returnWindowReleaseJob.js";
 import { getCommunicationEscalationJobHandler, getCommunicationEscalationJobInterval } from "./app/jobs/communicationEscalationJob.js";
+import { getCancellationReconcileJobHandler, getCancellationReconcileJobInterval } from "./app/jobs/cancellationReconcileJob.js";
 import {
   getPayoutBatchJobHandler,
   getPayoutBatchJobInterval,
@@ -405,6 +406,13 @@ async function startScheduler() {
     getCommunicationEscalationJobHandler()
   );
 
+  // Retry cancellation refunds / settlement / notifications until settled
+  registerScheduledJob(
+    'cancellationReconcileJob',
+    getCancellationReconcileJobInterval(),
+    getCancellationReconcileJobHandler()
+  );
+
   // Register payout batch job (if enabled)
   if (isPayoutBatchJobEnabled()) {
     registerScheduledJob(
@@ -440,7 +448,7 @@ async function startScheduler() {
   await startScheduledJobs();
   registerSchedulerStopper(stopScheduledJobs);
 
-  const scheduledJobs = ['orderAutoCancelJob', 'returnWindowReleaseJob', 'communicationEscalationJob'];
+  const scheduledJobs = ['orderAutoCancelJob', 'returnWindowReleaseJob', 'communicationEscalationJob', 'cancellationReconcileJob'];
   if (isPayoutBatchJobEnabled()) scheduledJobs.push('payoutBatchJob');
   if (isWalletLedgerVerifierEnabled()) scheduledJobs.push('walletLedgerVerifierJob');
   if (isFirebaseTrackingCleanupJobEnabled()) scheduledJobs.push('firebaseTrackingCleanupJob');

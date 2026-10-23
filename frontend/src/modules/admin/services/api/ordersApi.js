@@ -24,6 +24,34 @@ export const adminOrdersApi = {
         axiosInstance.put(`/orders/returns/${orderId}/assign-delivery`, data),
     updateReturnQc: (orderId, data) =>
         axiosInstance.put(`/orders/returns/${orderId}/qc`, data),
+
+    // Order cancellations
+    getCancellations: (params) =>
+        axiosInstance.get('/cancellations/admin', { params }),
+    getCancellation: (id) =>
+        axiosInstance.get(`/cancellations/admin/${id}`),
+    getCancellationReports: (params) =>
+        axiosInstance.get('/cancellations/admin/reports', { params }),
+    reviewCancellation: (id) =>
+        axiosInstance.post(`/cancellations/admin/${id}/review`),
+    approveCancellation: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/approve`, data),
+    rejectCancellation: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/reject`, data),
+    retryCancellationRefund: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/refund/retry`, data),
+    resolveCancellationRefund: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/refund/resolve`, data),
+    confirmCancellationReturn: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/return/confirm`, data),
+    inspectCancellationReturn: (id, data) =>
+        axiosInstance.post(`/cancellations/admin/${id}/inspection`, data),
+    adminCancelOrder: (orderId, data) =>
+        axiosInstance.post(`/cancellations/admin/orders/${orderId}/cancel`, data),
+    getCancellationPolicy: () =>
+        axiosInstance.get('/cancellations/admin/policy'),
+    updateCancellationPolicy: (data) =>
+        axiosInstance.put('/cancellations/admin/policy', data),
 };
 
 export default adminOrdersApi;

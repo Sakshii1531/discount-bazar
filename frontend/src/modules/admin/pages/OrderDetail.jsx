@@ -1,11 +1,10 @@
 // Ultimate Order Intelligence Dossier
-import React, { useState, useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-import { useSettings } from '@core/context/SettingsContext';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
+import Modal from '@shared/components/ui/Modal';
+import ReceiptPrint from '@/modules/seller/components/pos/ReceiptPrint';
 import { formatCurrencyInteger, formatAmount } from "@shared/utils/currency";
 import { adminApi } from '../services/adminApi';
 import {
@@ -37,10 +36,12 @@ const OrderDetail = () => {
     const { orderId } = useParams();
     const navigate = useNavigate();
     const { showToast } = useToast();
-    const { settings } = useSettings();
     const [order, setOrder] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const invoiceRef = useRef(null);
+    const [showInvoice, setShowInvoice] = useState(false);
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelling, setCancelling] = useState(false);
 
     const fetchDetail = async () => {
         setIsLoading(true);
@@ -57,13 +58,41 @@ const OrderDetail = () => {
     };
 
     const handleStatusUpdate = async (newStatus) => {
+        // Cancellation has its own flow: a reason is mandatory and the backend
+        // handles stock, refunds, rider recall and the audit trail.
+        if (newStatus === 'cancelled') {
+            setCancelReason('');
+            setCancelOpen(true);
+            return;
+        }
         try {
             await adminApi.updateOrderStatus(orderId, { status: newStatus });
             showToast(`Order status updated to ${newStatus}`, "success");
             fetchDetail(); // Refresh data
         } catch (error) {
             console.error("Failed to update status:", error);
-            showToast("Failed to update status", "error");
+            showToast(error?.response?.data?.message || "Failed to update status", "error");
+        }
+    };
+
+    const handleAdminCancel = async () => {
+        if (cancelReason.trim().length < 3 || cancelling) return;
+        setCancelling(true);
+        try {
+            const res = await adminApi.adminCancelOrder(order?.orderId || orderId, { reason: cancelReason.trim() });
+            const record = res?.data?.result;
+            showToast(
+                record?.status === 'APPROVED'
+                    ? "Order cancelled — the rider has been told to return the parcel"
+                    : "Order cancelled",
+                "success",
+            );
+            setCancelOpen(false);
+            fetchDetail();
+        } catch (error) {
+            showToast(error?.response?.data?.message || "Failed to cancel order", "error");
+        } finally {
+            setCancelling(false);
         }
     };
 
@@ -93,73 +122,8 @@ const OrderDetail = () => {
         }
     };
 
-    const handlePrintInvoice = async () => {
-        const element = invoiceRef.current;
-        if (!element) return;
-        
-        showToast("Generating PDF Invoice...", "info");
-        
-        try {
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                allowTaint: true,
-                backgroundColor: "#ffffff",
-                onclone: (clonedDoc) => {
-                    // Forcefully remove any elements or styles that might use oklch
-                    // html2canvas crashes when it encounters oklch color functions in stylesheets
-                    const styleSheets = clonedDoc.styleSheets;
-                    for (let i = 0; i < styleSheets.length; i++) {
-                        try {
-                            const rules = styleSheets[i].cssRules || styleSheets[i].rules;
-                            for (let j = rules.length - 1; j >= 0; j--) {
-                                if (rules[j].cssText && rules[j].cssText.includes('oklch')) {
-                                    styleSheets[i].deleteRule(j);
-                                }
-                            }
-                        } catch {
-                            // Skip cross-origin stylesheets that we can't access
-                        }
-                    }
-                    
-                    // Also explicitly reset root variables just in case
-                    const style = clonedDoc.createElement('style');
-                    style.innerHTML = `
-                        :root {
-                            --primary: var(--primary) !important;
-                            --secondary: #64748b !important;
-                            --background: #ffffff !important;
-                            --foreground: #0f172a !important;
-                        }
-                    `;
-                    clonedDoc.head.appendChild(style);
-                }
-            });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            
-            // Generate blob and trigger browser download safely
-            const blob = pdf.output('blob');
-            const blobUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = `Invoice_${order.orderId || 'ORD'}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-
-            showToast("Invoice downloaded successfully", "success");
-        } catch (error) {
-            console.error("PDF generation failed:", error);
-            showToast("Failed to generate PDF", "error");
-        }
-    };
+    // Online order invoice = the New Sale (POS) bill layout: preview, print and PDF.
+    const handlePrintInvoice = () => setShowInvoice(true);
 
     if (isLoading) {
         return (
@@ -593,171 +557,40 @@ const OrderDetail = () => {
                 </div>
             </div>
 
-            {/* Hidden Printable Invoice Template */}
-            <div className="fixed -left-[9999px] top-0">
-                <div 
-                    ref={invoiceRef}
-                    className="w-[1000px] bg-slate-100 p-8"
-                    style={{ backgroundColor: "#f1f5f9" }}
-                >
-                    {/* Inner Paper with Border */}
-                    <div style={{ 
-                        backgroundColor: "#ffffff", 
-                        padding: "50px 60px",
-                        borderRadius: "16px",
-                        boxShadow: "0 10px 25px rgba(0,0,0,0.05)",
-                        fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
-                        color: "#0f172a",
-                        minHeight: "1100px"
-                    }}>
-                        {/* Header: Brand Banner */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #0f172a", paddingBottom: "24px", marginBottom: "35px" }}>
-                            <div>
-                                {settings?.logoUrl ? (
-                                    <img src={settings.logoUrl} alt="Logo" width="140" style={{ display: "block", marginBottom: "8px" }} crossOrigin="anonymous" />
-                                ) : (
-                                    <div style={{ fontSize: "32px", fontWeight: "900", color: "#0f172a", tracking: "-1px" }}>{settings?.appName || 'DISCOUNT BAZAR'}</div>
-                                )}
-                                <div style={{ fontSize: "12px", color: "#475569", fontWeight: "700" }}>Express Grocery & Essentials</div>
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                                <div style={{ fontSize: "32px", fontWeight: "900", color: "#0f172a", letterSpacing: "1px" }}>TAX INVOICE</div>
-                                <div style={{ fontSize: "14px", fontWeight: "800", color: "#2563eb", marginTop: "4px" }}>Order #{order.orderId}</div>
-                                <div style={{ fontSize: "12px", color: "#475569", fontWeight: "700", marginTop: "2px" }}>Date: {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
-                            </div>
-                        </div>
-
-                        {/* Address Grid */}
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "30px", marginBottom: "40px", backgroundColor: "#f8fafc", padding: "24px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                            <div style={{ width: "48%" }}>
-                                <div style={{ fontSize: "11px", fontWeight: "900", color: "#64748b", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "10px" }}>BILLED TO (CUSTOMER)</div>
-                                <div style={{ fontSize: "18px", fontWeight: "900", color: "#0f172a", marginBottom: "6px" }}>{order.customer?.name}</div>
-                                <div style={{ fontSize: "13px", color: "#334155", lineHeight: "1.6", fontWeight: "600" }}>
-                                    {order.address?.address}, {order.address?.landmark && `${order.address.landmark}, `}{order.address?.city}
-                                </div>
-                                <div style={{ fontSize: "13px", fontWeight: "800", color: "#0f172a", marginTop: "10px" }}>Phone: {order.customer?.phone || order.address?.phone || 'N/A'}</div>
-                            </div>
-                            <div style={{ width: "2px", backgroundColor: "#cbd5e1" }}></div>
-                            <div style={{ width: "48%" }}>
-                                <div style={{ fontSize: "11px", fontWeight: "900", color: "#64748b", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "10px" }}>SHIPPED FROM (SELLER)</div>
-                                <div style={{ fontSize: "18px", fontWeight: "900", color: "#0f172a", marginBottom: "6px" }}>{order.seller?.shopName || 'Partner Store'}</div>
-                                <div style={{ fontSize: "13px", color: "#334155", lineHeight: "1.6", fontWeight: "600" }}>
-                                    Owner: {order.seller?.name || 'Verified Partner'}<br />
-                                    {order.seller?.address || settings?.address || 'Fulfilled from local dark store'}
-                                </div>
-                                <div style={{ fontSize: "13px", fontWeight: "800", color: "#2563eb", marginTop: "10px" }}>{settings?.taxId ? `GSTIN: ${settings.taxId}` : 'GST Registered Merchant'}</div>
-                            </div>
-                        </div>
-
-                        {/* Manifest Items Table */}
-                        <div style={{ marginBottom: "40px" }}>
-                            <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse", width: "100%" }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>
-                                        <th align="left" style={{ padding: "14px 18px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", borderRadius: "8px 0 0 0" }}>Product Item</th>
-                                        <th align="center" style={{ padding: "14px 18px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px" }}>Price</th>
-                                        <th align="center" style={{ padding: "14px 18px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px" }}>Quantity</th>
-                                        <th align="right" style={{ padding: "14px 18px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", borderRadius: "0 8px 0 0" }}>Total Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {order.items.map((item, idx) => {
-                                        const isRawSku = (val) => {
-                                            if (!val || typeof val !== 'string') return true;
-                                            const s = val.trim();
-                                            return /^[a-zA-Z0-9_-]+-\d+$/i.test(s) || /^sku-/i.test(s);
-                                        };
-
-                                        const rawSku = String(item.variantSku || item.variantSlot || '').trim();
-                                        const matchedVariant = Array.isArray(item.product?.variants) && rawSku
-                                            ? item.product.variants.find(v => String(v.sku || '').trim() === rawSku || String(v._id || '').trim() === rawSku)
-                                            : null;
-
-                                        const candidateName =
-                                            (item.variantName && !isRawSku(item.variantName) ? item.variantName : null) ||
-                                            matchedVariant?.name ||
-                                            item.unit ||
-                                            item.product?.unit ||
-                                            item.weight ||
-                                            item.product?.weight ||
-                                            item.pack ||
-                                            item.product?.pack ||
-                                            (item.variantSlot && !isRawSku(item.variantSlot) ? item.variantSlot : null) ||
-                                            (item.variantText && !isRawSku(item.variantText) ? item.variantText : null) ||
-                                            (typeof item.variant === 'string' && !isRawSku(item.variant) ? item.variant : item.variant?.name || item.variant?.title) ||
-                                            (typeof item.selectedVariant === 'string' && !isRawSku(item.selectedVariant) ? item.selectedVariant : item.selectedVariant?.name || item.selectedVariant?.title);
-
-                                        const variantName = candidateName && !isRawSku(candidateName) ? candidateName : (matchedVariant?.name || item.product?.unit || null);
-
-                                        return (
-                                            <tr key={idx} style={{ borderBottom: "1px solid #e2e8f0", backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
-                                                <td style={{ padding: "16px 18px" }}>
-                                                    <div style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>{item.name}</div>
-                                                    {variantName && (
-                                                        <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: "700", marginTop: "3px" }}>
-                                                            Variant: {variantName}
-                                                        </div>
-                                                    )}
-                                                    <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", marginTop: "3px" }}>ID: {item.product?._id || item.product || 'N/A'}</div>
-                                                </td>
-                                                <td align="center" style={{ padding: "16px 18px", fontSize: "14px", color: "#0f172a", fontWeight: "700" }}>₹{item.price}</td>
-                                                <td align="center" style={{ padding: "16px 18px", fontSize: "14px", color: "#0f172a", fontWeight: "900" }}>{item.quantity}</td>
-                                                <td align="right" style={{ padding: "16px 18px", fontSize: "15px", fontWeight: "900", color: "#0f172a" }}>₹{formatAmount(item.price * item.quantity)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Totals & Payment Summary */}
-                        <div style={{ display: "flex", justifyBetween: "space-between", gap: "30px", marginBottom: "50px" }}>
-                            <div style={{ width: "50%", backgroundColor: "#f8fafc", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px", letterSpacing: "1.5px" }}>PAYMENT SUMMARY</div>
-                                <div style={{ fontSize: "14px", color: "#334155", marginBottom: "8px", fontWeight: "700" }}>Payment Method: <b style={{ color: "#0f172a", textTransform: "uppercase" }}>{order.payment?.method || 'CASH ON DELIVERY'}</b></div>
-                                <div style={{ fontSize: "14px", color: "#334155", marginBottom: "8px", fontWeight: "700" }}>Payment Status: <b style={{ color: "#16a34a", textTransform: "uppercase" }}>{order.payment?.status || 'COMPLETED'}</b></div>
-                                <div style={{ fontSize: "12px", color: "#64748b", fontWeight: "600" }}>Txn Reference: {order.payment?.transactionId || 'N/A'}</div>
-                            </div>
-
-                            <div style={{ width: "45%", marginLeft: "auto" }}>
-                                <table width="100%" cellPadding="6" cellSpacing="0">
-                                    <tr>
-                                        <td align="left" style={{ fontSize: "13px", color: "#475569", fontWeight: "700" }}>Product Subtotal</td>
-                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>₹{formatAmount(order.pricing?.subtotal || order.items.reduce((s, i) => s + (i.price * i.quantity), 0))}</td>
-                                    </tr>
-                                    <tr>
-                                        <td align="left" style={{ fontSize: "13px", color: "#475569", fontWeight: "700" }}>Delivery Charges</td>
-                                        <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#2563eb" }}>+ ₹{formatAmount(order.pricing?.deliveryFee || 0)}</td>
-                                    </tr>
-                                    {(order.paymentBreakdown?.taxTotal > 0 || order.pricing?.gst > 0 || order.pricing?.tax > 0) && (
-                                        <tr>
-                                            <td align="left" style={{ fontSize: "13px", color: "#475569", fontWeight: "700" }}>Tax / GST</td>
-                                            <td align="right" style={{ fontSize: "15px", fontWeight: "800", color: "#d97706" }}>+ ₹{Math.ceil(order.paymentBreakdown?.taxTotal || order.pricing?.gst || order.pricing?.tax || 0)}</td>
-                                        </tr>
-                                    )}
-                                    <tr>
-                                        <td colSpan="2" style={{ padding: "8px 0" }}><div style={{ height: "2px", backgroundColor: "#0f172a" }}></div></td>
-                                    </tr>
-                                    <tr>
-                                        <td align="left" style={{ fontSize: "16px", fontWeight: "900", color: "#0f172a" }}>GRAND TOTAL</td>
-                                        <td align="right" style={{ fontSize: "24px", fontWeight: "900", color: "#2563eb" }}>{formatCurrencyInteger(order.pricing?.total || order.total || 0)}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Footer Notes */}
-                        <div style={{ marginTop: "auto", paddingTop: "30px", borderTop: "1px solid #cbd5e1", textAlign: "center" }}>
-                            <div style={{ fontSize: "14px", color: "#0f172a", fontWeight: "900", textTransform: "uppercase", letterSpacing: "2px" }}>
-                                THANK YOU FOR SHOPPING WITH US!
-                            </div>
-                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600" }}>
-                                Computer Generated Invoice • Valid without Physical Signature
-                            </div>
-                        </div>
+            {showInvoice && (
+                <ReceiptPrint
+                    order={order}
+                    shopName={order.seller?.shopName || order.seller?.name}
+                    seller={order.seller && typeof order.seller === 'object' ? order.seller : {}}
+                    heading="Tax Invoice"
+                    onClose={() => setShowInvoice(false)}
+                />
+            )}
+            <Modal
+                isOpen={cancelOpen}
+                onClose={() => !cancelling && setCancelOpen(false)}
+                title={`Cancel order #${order.orderId}`}
+                size="sm"
+                footer={
+                    <div className="flex justify-end gap-2 w-full">
+                        <button type="button" onClick={() => setCancelOpen(false)} disabled={cancelling} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-bold">Back</button>
+                        <button type="button" onClick={handleAdminCancel} disabled={cancelling || cancelReason.trim().length < 3} className="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-bold disabled:opacity-50">
+                            {cancelling ? 'Cancelling…' : 'Cancel order'}
+                        </button>
                     </div>
-                </div>
-            </div>
+                }
+            >
+                <p className="text-sm text-slate-600 mb-3">
+                    The customer gets a full refund of anything paid. If the parcel is already with the rider, they will be asked to return it to the store for inspection.
+                </p>
+                <label className="text-xs font-bold text-slate-500">Reason (required, recorded in the audit log)</label>
+                <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value.slice(0, 500))}
+                    rows={3}
+                    className="mt-1 w-full rounded-xl border border-slate-200 p-2 text-sm"
+                />
+            </Modal>
         </div>
     );
 };

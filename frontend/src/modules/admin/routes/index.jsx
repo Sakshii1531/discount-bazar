@@ -75,6 +75,7 @@ const FAQManagement = React.lazy(() => import("../pages/FAQManagement"));
 const OrdersList = React.lazy(() => import("../pages/OrdersList"));
 const OrderDetail = React.lazy(() => import("../pages/OrderDetail"));
 const Returns = React.lazy(() => import("../pages/Returns"));
+const Cancellations = React.lazy(() => import("../pages/Cancellations"));
 const SellerDetail = React.lazy(() => import("../pages/SellerDetail"));
 const SupportTickets = React.lazy(() => import("../pages/SupportTickets"));
 const OrderCommunications = React.lazy(() => import("../pages/OrderCommunications"));
@@ -195,6 +196,7 @@ const navItems = [
       { label: "Cancelled", path: "/admin/orders/cancelled" },
       { label: "Returned", path: "/admin/orders/returned" },
       { label: "Return Requests", path: "/admin/returns" },
+      { label: "Cancellations", path: "/admin/cancellations" },
     ],
   },
   {
@@ -335,6 +337,7 @@ const AdminRoutes = () => {
         <Route path="/orders/:status" element={<OrdersList />} />
         <Route path="/orders/view/:orderId" element={<OrderDetail />} />
         <Route path="/returns" element={<Returns />} />
+        <Route path="/cancellations" element={<Cancellations />} />
         <Route path="/billing" element={<BillingCharges />} />
         <Route path="/settings" element={<AdminSettings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

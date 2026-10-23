@@ -373,6 +373,23 @@ async function handleOrderSideEffectsFromPaymentStatus(payment, nextStatus, reas
           checkoutGroupId: payment.checkoutGroupId || null,
         },
       });
+      // Money arrived for an order that was already cancelled (late webhook,
+      // network drop on the client): refund it, never reactivate the order.
+      const isCancelled =
+        order.status === "cancelled" || order.workflowStatus === WORKFLOW_STATUS.CANCELLED;
+      if (isCancelled) {
+        try {
+          const { onLatePaymentCapture } = await import("./cancellation/orderCancellationService.js");
+          await onLatePaymentCapture(order._id);
+        } catch (error) {
+          logger.error("late payment capture refund scheduling failed", {
+            scope: "handleOrderSideEffectsFromPaymentStatus",
+            orderId: order.orderId,
+            error: error.message,
+          });
+        }
+        continue;
+      }
       await moveOrderToSellerPendingAfterPayment(order._id);
       emitNotificationEvent(NOTIFICATION_EVENTS.PAYMENT_SUCCESS, {
         orderId: order.orderId,
@@ -439,6 +456,14 @@ async function handleOrderSideEffectsFromPaymentStatus(payment, nextStatus, reas
       session.endSession();
     }
     await updateCheckoutGroupPaymentStatus(payment.checkoutGroupId, nextStatus);
+    try {
+      const { recordExternalCancellation } = await import("./cancellation/orderCancellationService.js");
+      for (const order of orders) {
+        await recordExternalCancellation(order._id, { type: "SYSTEM", reason: reason || "Payment failed" });
+      }
+    } catch (error) {
+      logger.warn("payment-failure cancellation record failed", { error: error.message });
+    }
     for (const order of orders) {
       emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
         orderId: order.orderId,
@@ -880,12 +905,15 @@ export async function processRazorpayWebhook({
   }
 
   const decoded = await provider.decodeWebhookPayload({ rawBody, eventIdHeader });
-  const eventId = decoded.eventId;
+  const eventType = decoded.eventType || decoded.state || "unknown";
+  const refundEntity = decoded.raw?.payload?.refund?.entity || null;
+  // Refund events carry the payment entity too; derive the dedupe id from the
+  // refund so a refund.processed is not mistaken for a replayed payment event.
+  const eventId = refundEntity?.id ? `${eventType}_${refundEntity.id}` : decoded.eventId;
   const payloadHash = crypto
     .createHash("sha256")
     .update(JSON.stringify(decoded.raw))
     .digest("hex");
-  const eventType = decoded.eventType || decoded.state || "unknown";
 
   try {
     await PaymentWebhookEvent.create({
@@ -899,6 +927,16 @@ export async function processRazorpayWebhook({
       return { duplicate: true, accepted: true };
     }
     throw error;
+  }
+
+  if (String(eventType).startsWith("refund.") && refundEntity?.id) {
+    const { handleGatewayRefundUpdate } = await import("./cancellation/cancellationRefundService.js");
+    const result = await handleGatewayRefundUpdate({
+      gatewayRefundId: refundEntity.id,
+      status: provider.mapRefundStatus ? provider.mapRefundStatus(refundEntity.status) : "PROCESSING",
+      raw: refundEntity,
+    });
+    return { accepted: true, duplicate: false, refund: result };
   }
 
   const lookupClauses = [];
@@ -947,6 +985,76 @@ export async function processRazorpayWebhook({
     paymentStatus: nextStatus,
     publicOrderId: payment.publicOrderId,
   };
+}
+
+/**
+ * Ask the gateway for the real outcome of every unsettled payment attempt on
+ * an order. Used before deciding a cancelled order's refund: a payment the
+ * client saw as "failed" or "pending" may have succeeded after a network
+ * drop. Applies the normal side effects (finance capture, etc.).
+ *
+ * Returns { status: "CAPTURED" | "FAILED" | "PENDING" | "NONE" | "UNKNOWN" }.
+ */
+export async function reconcileOrderPaymentStatus(orderObjectId) {
+  const attempts = await Payment.find({
+    $or: [{ order: orderObjectId }, { orderIds: orderObjectId }],
+  }).sort({ createdAt: -1 });
+
+  if (attempts.some((p) => p.status === PAYMENT_STATUS.CAPTURED)) {
+    return { status: "CAPTURED" };
+  }
+  const open = attempts.filter((p) =>
+    [PAYMENT_STATUS.CREATED, PAYMENT_STATUS.PENDING, PAYMENT_STATUS.AUTHORIZED].includes(p.status),
+  );
+  if (open.length === 0) {
+    return { status: attempts.length ? "FAILED" : "NONE" };
+  }
+
+  const provider = getActivePaymentProvider();
+  let unknown = false;
+  let pending = false;
+  for (const payment of open) {
+    try {
+      const statusResp = provider.providerName === "RAZORPAY"
+        ? await provider.getPaymentStatus({
+          gatewayOrderId: payment.rawGatewayResponse?.razorpayOrderId || payment.gatewayOrderId,
+          gatewayPaymentId: payment.gatewayPaymentId || undefined,
+        })
+        : await provider.getPaymentStatus({ merchantOrderId: payment.gatewayOrderId });
+      const nextStatus = provider.mapStatusToInternal(statusResp.state);
+      if (nextStatus === payment.status) {
+        pending = true;
+        continue;
+      }
+      await transitionPaymentState(payment, {
+        nextStatus,
+        source: PAYMENT_EVENT_SOURCE.SYSTEM,
+        reason: `${provider.providerName} reconciliation: ${statusResp.state}`,
+        gatewayPaymentId: statusResp.transactionId,
+        rawGatewayResponse: statusResp.gatewayResponse,
+      });
+      await handleOrderSideEffectsFromPaymentStatus(payment, nextStatus, statusResp.state);
+      if (nextStatus === PAYMENT_STATUS.CAPTURED) return { status: "CAPTURED" };
+      if (nextStatus === PAYMENT_STATUS.PENDING) pending = true;
+    } catch (error) {
+      unknown = true;
+      logger.warn("payment reconciliation failed", {
+        scope: "reconcileOrderPaymentStatus",
+        paymentId: payment._id?.toString?.(),
+        error: error.message,
+      });
+    }
+  }
+  if (unknown) return { status: "UNKNOWN" };
+  return { status: pending ? "PENDING" : "FAILED" };
+}
+
+/** Captured gateway payment that funded `orderObjectId`, if any. */
+export async function findCapturedPaymentForOrder(orderObjectId) {
+  return Payment.findOne({
+    $or: [{ order: orderObjectId }, { orderIds: orderObjectId }],
+    status: { $in: [PAYMENT_STATUS.CAPTURED, PAYMENT_STATUS.REFUNDED] },
+  }).sort({ capturedAt: -1, createdAt: -1 });
 }
 
 // Client payment callback compatibility

@@ -25,10 +25,18 @@ import logger from "./logger.js";
  * directly (orderController.cancelOrder) never double-refund.
  */
 export async function compensateOrderCancellation(order, orderIdString, opts = {}) {
-  const { actorId = null, reason = "Cancelled before settlement" } = opts;
+  const {
+    actorId = null,
+    reason = "Cancelled before settlement",
+    // The cancellation flow (services/cancellation) restores stock inside its
+    // own transaction (or, after pickup, only after store inspection) and
+    // runs refunds through its policy-aware refund engine.
+    skipStockRelease = false,
+    skipFinanceReversal = false,
+  } = opts;
 
   const existing = await Order.findById(order._id);
-  if (existing) {
+  if (existing && !skipStockRelease) {
     await releaseReservedStockForOrder(existing, {
       reason: "Cancelled",
     });
@@ -124,7 +132,7 @@ export async function compensateOrderCancellation(order, orderIdString, opts = {
   // L350-358). The cancellation path itself must not roll back stock release
   // or tracking cleanup because the finance reversal failed — surface the
   // error to ops and retry via the standard finance recovery tooling.
-  if (existing?.paymentBreakdown?.grandTotal != null) {
+  if (!skipFinanceReversal && existing?.paymentBreakdown?.grandTotal != null) {
     try {
       await reverseOrderFinanceOnCancellation(existing._id, {
         actorId,

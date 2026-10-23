@@ -28,6 +28,7 @@ import authOtpRoute from "../modules/otp/otp.routes.js";
 import deliveryRatingRoute from "./deliveryRatingRoutes.js";
 import productRatingRoute from "./productRatingRoutes.js";
 import communicationRoute from "./communicationRoutes.js";
+import cancellationRoute from "./cancellationRoutes.js";
 
 import express from "express";
 
@@ -57,6 +58,7 @@ const setupRoutes = (app) => {
     router.use("/cart", cartRoute);
     router.use("/wishlist", wishlistRoute);
     router.use("/orders", orderRoute);
+    router.use("/cancellations", cancellationRoute);
     router.use("/payments", paymentRoute);
     router.use("/maps", mapsRoute);
     router.use("/media", mediaRoute);

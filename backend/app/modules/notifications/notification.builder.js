@@ -544,6 +544,124 @@ function eventDefinition(eventType) {
         body: (payload) =>
           `A pickup issue has been open for over ${payload.minutes} minutes and needs attention.`,
       };
+    case NOTIFICATION_EVENTS.CANCELLATION_REQUESTED:
+      return {
+        multi: true,
+        definitions: [
+          {
+            role: NOTIFICATION_ROLES.ADMIN,
+            recipientIds: (payload) => normalizeIdList(payload.adminIds),
+            title: (payload) => `Cancellation request · #${payload.orderId}`,
+            body: (payload) =>
+              `Customer asked to cancel order #${payload.orderId} after pickup${payload.reasonLabel ? ` (${payload.reasonLabel})` : ""}. Review needed.`,
+          },
+          {
+            role: NOTIFICATION_ROLES.SELLER,
+            recipientIds: (payload) => normalizeIdList(payload.sellerId),
+            title: () => "Cancellation Requested",
+            body: (payload) =>
+              `The customer requested cancellation of order #${payload.orderId}. Support is reviewing it.`,
+          },
+        ],
+      };
+    case NOTIFICATION_EVENTS.CANCELLATION_APPROVED:
+      return {
+        role: NOTIFICATION_ROLES.CUSTOMER,
+        recipientIds: (payload) => normalizeIdList(payload.userId || payload.customerId),
+        title: () => "Cancellation Approved",
+        body: (payload) =>
+          `Your cancellation request for order #${payload.orderId} was approved. Your refund will be processed once the store receives the parcel back.`,
+      };
+    case NOTIFICATION_EVENTS.CANCELLATION_REJECTED:
+      return {
+        role: NOTIFICATION_ROLES.CUSTOMER,
+        recipientIds: (payload) => normalizeIdList(payload.userId || payload.customerId),
+        title: () => "Cancellation Request Declined",
+        body: (payload) =>
+          `We could not cancel order #${payload.orderId}${payload.reason ? `: ${truncateText(payload.reason, 100)}` : "."} It will be delivered as planned. Contact support if you need help.`,
+      };
+    case NOTIFICATION_EVENTS.CANCELLATION_WITHDRAWN:
+      return {
+        multi: true,
+        definitions: [
+          {
+            role: NOTIFICATION_ROLES.ADMIN,
+            recipientIds: (payload) => normalizeIdList(payload.adminIds),
+            title: (payload) => `Request withdrawn · #${payload.orderId}`,
+            body: (payload) => `The customer withdrew the cancellation request for order #${payload.orderId}.`,
+          },
+          {
+            role: NOTIFICATION_ROLES.SELLER,
+            recipientIds: (payload) => normalizeIdList(payload.sellerId),
+            title: () => "Cancellation Request Withdrawn",
+            body: (payload) => `Order #${payload.orderId} continues as normal.`,
+          },
+        ],
+      };
+    case NOTIFICATION_EVENTS.CANCELLATION_TRANSFERRED:
+      return {
+        multi: true,
+        definitions: [
+          {
+            role: NOTIFICATION_ROLES.CUSTOMER,
+            recipientIds: (payload) => normalizeIdList(payload.userId || payload.customerId),
+            title: () => "Order Delivered",
+            body: (payload) =>
+              `Order #${payload.orderId} was delivered before your cancellation request was reviewed. Our support team will follow up on a return or refund.`,
+          },
+          {
+            role: NOTIFICATION_ROLES.ADMIN,
+            recipientIds: (payload) => normalizeIdList(payload.adminIds),
+            title: (payload) => `Request moved to disputes · #${payload.orderId}`,
+            body: (payload) =>
+              `Order #${payload.orderId} was delivered with a cancellation request pending. A support ticket was opened.`,
+          },
+        ],
+      };
+    case NOTIFICATION_EVENTS.RIDER_STOP_PICKUP:
+      return {
+        role: NOTIFICATION_ROLES.DELIVERY,
+        recipientIds: (payload) => normalizeIdList(payload.deliveryId),
+        title: () => "Order Cancelled — Stop Pickup",
+        body: (payload) =>
+          `Order #${payload.orderId} was cancelled. Do not collect the parcel from the store.`,
+      };
+    case NOTIFICATION_EVENTS.RIDER_RETURN_PARCEL:
+      return {
+        role: NOTIFICATION_ROLES.DELIVERY,
+        recipientIds: (payload) => normalizeIdList(payload.deliveryId),
+        title: () => "Stop Delivery — Return Parcel",
+        body: (payload) =>
+          `Order #${payload.orderId} was cancelled. Please stop the delivery and return the parcel to ${payload.storeName || "the store"}, then confirm the return in the app.`,
+      };
+    case NOTIFICATION_EVENTS.CANCELLED_PARCEL_RETURNED:
+      return {
+        role: NOTIFICATION_ROLES.SELLER,
+        recipientIds: (payload) => normalizeIdList(payload.sellerId),
+        title: () => "Returned Parcel — Verify Items",
+        body: (payload) =>
+          `The parcel for cancelled order #${payload.orderId} is back. Please check quantities and condition before it goes back on sale.`,
+      };
+    case NOTIFICATION_EVENTS.REFUND_FAILED:
+      return {
+        multi: true,
+        definitions: [
+          {
+            role: NOTIFICATION_ROLES.CUSTOMER,
+            recipientIds: (payload) => normalizeIdList(payload.userId || payload.customerId),
+            title: () => "Refund Delayed",
+            body: (payload) =>
+              `We hit a problem refunding order #${payload.orderId}. Our team is on it — your order stays cancelled and no action is needed from you.`,
+          },
+          {
+            role: NOTIFICATION_ROLES.ADMIN,
+            recipientIds: (payload) => normalizeIdList(payload.adminIds),
+            title: (payload) => `Refund needs attention · #${payload.orderId}`,
+            body: (payload) =>
+              `The cancellation refund for order #${payload.orderId} failed or needs manual review.`,
+          },
+        ],
+      };
     default:
       return null;
   }

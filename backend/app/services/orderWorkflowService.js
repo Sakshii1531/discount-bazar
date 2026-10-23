@@ -104,6 +104,19 @@ const OTP_RADIUS_M = () =>
 const OTP_EXPIRY_MS = () =>
   parseInt(process.env.DELIVERY_OTP_EXPIRY_MS || "300000", 10);
 
+/**
+ * Give seller / system cancellations a cancellation record so admins see
+ * every cancellation in one place. Never fails the caller.
+ */
+async function recordCancellation(order, type, actorRole, reason) {
+  try {
+    const { recordExternalCancellation } = await import("./cancellation/orderCancellationService.js");
+    await recordExternalCancellation(order._id, { type, actorRole, reason });
+  } catch (e) {
+    logger.warn("recordCancellation failed", { orderId: order?.orderId, error: e.message });
+  }
+}
+
 export function resolveWorkflowStatus(order) {
   if (order.workflowVersion >= 2 && order.workflowStatus) {
     return order.workflowStatus;
@@ -288,6 +301,7 @@ export async function sellerRejectAtomic(sellerId, orderId) {
 
   await removeSellerTimeoutJob(orderId);
   await compensateOrderCancellation(order, orderId);
+  await recordCancellation(order, "SELLER", "seller", "Rejected by seller");
 
   emitOrderStatusUpdate(order.orderId, {
     workflowStatus: WORKFLOW_STATUS.CANCELLED,
@@ -351,6 +365,9 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
       orderId,
       deliveryBoy: null,
       skippedBy: { $nin: [deliveryOid] },
+      // A cancellation that commits first must make this accept miss.
+      status: { $nin: ["cancelled", "delivered"] },
+      workflowStatus: { $nin: [WORKFLOW_STATUS.CANCELLED, WORKFLOW_STATUS.DELIVERED] },
     },
     {
       $set: {
@@ -377,6 +394,11 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
         return { order: o, duplicate: true };
       }
       const err = new Error("Another rider already accepted this order.");
+      err.statusCode = 409;
+      throw err;
+    }
+    if (o.status === "cancelled" || o.workflowStatus === WORKFLOW_STATUS.CANCELLED) {
+      const err = new Error("This order was cancelled.");
       err.statusCode = 409;
       throw err;
     }
@@ -483,6 +505,7 @@ export async function processSellerTimeoutJob({ orderId }) {
   if (!updated) return;
 
   await compensateOrderCancellation(updated, orderId);
+  await recordCancellation(updated, "SYSTEM", "system", "Seller did not accept in time");
 
   emitOrderStatusUpdate(orderId, { workflowStatus: WORKFLOW_STATUS.CANCELLED }, updated.customer);
   emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
@@ -570,6 +593,7 @@ export async function processDeliveryTimeoutJob({ orderId, attempt }) {
   if (!updated) return;
 
   await compensateOrderCancellation(updated, orderId);
+  await recordCancellation(updated, "SYSTEM", "system", "No delivery partner available");
   emitOrderStatusUpdate(orderId, { workflowStatus: WORKFLOW_STATUS.CANCELLED }, updated.customer);
   emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
     orderId: updated.orderId,
@@ -763,57 +787,21 @@ export async function processReturnPickupTimeoutJob({ orderId, attempt }) {
   });
 }
 
+/**
+ * Kept for older callers. All customer cancellations go through the
+ * policy-driven cancellation service (eligibility, atomic commit, stock,
+ * refund, settlement, notifications).
+ */
 export async function customerCancelV2(customerId, orderId, reason) {
-  orderId = await requireCanonicalOrderId(orderId);
-  const order = await Order.findOne({ orderId, customer: customerId });
-  if (!order) {
-    const err = new Error("Order not found");
-    err.statusCode = 404;
-    throw err;
-  }
-
-  const ws = resolveWorkflowStatus(order);
-  if (ws !== WORKFLOW_STATUS.SELLER_PENDING) {
-    const err = new Error("Order cannot be cancelled after confirmation");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const updated = await Order.findOneAndUpdate(
-    {
-      orderId,
-      customer: customerId,
-      workflowStatus: WORKFLOW_STATUS.SELLER_PENDING,
-    },
-    {
-      $set: {
-        workflowStatus: WORKFLOW_STATUS.CANCELLED,
-        status: "cancelled",
-        cancelledBy: "customer",
-        cancelReason: reason || "Cancelled by customer",
-      },
-    },
-    { new: true },
-  );
-
-  if (!updated) {
-    const err = new Error("Unable to cancel");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  await removeSellerTimeoutJob(orderId);
-  await compensateOrderCancellation(updated, orderId);
-  emitOrderStatusUpdate(orderId, { workflowStatus: WORKFLOW_STATUS.CANCELLED }, updated.customer);
-  emitNotificationEvent(NOTIFICATION_EVENTS.ORDER_CANCELLED, {
-    orderId: updated.orderId,
-    customerId: updated.customer,
-    userId: updated.customer,
-    sellerId: updated.seller,
-    customerMessage: "Your order has been cancelled successfully.",
-    sellerMessage: `Order #${updated.orderId} was cancelled by customer.`,
+  const { submitCustomerCancellation } = await import("./cancellation/orderCancellationService.js");
+  await submitCustomerCancellation({
+    customerId,
+    orderParam: orderId,
+    mode: "CANCEL",
+    reasonCode: "OTHER",
+    reasonText: reason || null,
   });
-  return updated;
+  return Order.findOne({ orderId, customer: customerId });
 }
 
 /**
@@ -1519,6 +1507,15 @@ export async function verifyHandoffOtpAndDeliver(deliveryId, orderId, code) {
     deliveryId: updated.deliveryBoy,
     sellerId: updated.seller,
   });
+
+  // A cancellation request still pending at delivery moves to the
+  // dispute / return workflow instead of being approved later.
+  try {
+    const { onOrderDelivered } = await import("./cancellation/orderCancellationService.js");
+    await onOrderDelivered(updated._id);
+  } catch (e) {
+    logger.warn("onOrderDelivered cancellation hook failed", { orderId, error: e.message });
+  }
 
   return {
     order: updated,

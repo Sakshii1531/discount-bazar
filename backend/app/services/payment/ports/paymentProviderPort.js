@@ -56,6 +56,33 @@ export class PaymentProviderPort {
   mapStatusToInternal(_gatewayState) {
     throw new Error("mapStatusToInternal must be implemented");
   }
+
+  /**
+   * Optional: refund a captured payment back to its original source.
+   *  refundPayment({ gatewayPaymentId, amountPaise, notes, receipt })
+   *    → { refundId, status: "PROCESSING" | "SUCCESSFUL" | "FAILED", raw }
+   *  getRefundStatus({ gatewayPaymentId, gatewayRefundId }) → same shape
+   *  findRefunds({ gatewayPaymentId }) → [{ refundId, status, notes, amountPaise }]
+   * Providers without refund APIs leave these throwing REFUND_NOT_SUPPORTED;
+   * the cancellation flow then routes the refund to manual review.
+   */
+  async refundPayment(_args) {
+    throw Object.assign(new Error(`${this.providerName} refunds are not supported`), {
+      code: "REFUND_NOT_SUPPORTED",
+    });
+  }
+
+  async getRefundStatus(_args) {
+    throw Object.assign(new Error(`${this.providerName} refunds are not supported`), {
+      code: "REFUND_NOT_SUPPORTED",
+    });
+  }
+
+  async findRefunds(_args) {
+    throw Object.assign(new Error(`${this.providerName} refunds are not supported`), {
+      code: "REFUND_NOT_SUPPORTED",
+    });
+  }
 }
 
 export default PaymentProviderPort;

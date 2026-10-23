@@ -376,6 +376,10 @@ const orderSchema = new mongoose.Schema(
       // (already enforced) and an operational backfill.
       cancellationReversalApplied: { type: Boolean, default: false },
       couponReversalApplied: { type: Boolean, default: false },
+      // Set once the captured online payment has been refunded (to wallet or
+      // gateway). Lets a payment captured after cancellation be refunded
+      // without repeating the wallet-redemption refund.
+      onlineRefundApplied: { type: Boolean, default: false },
     },
     // Audit Phase 5 (C-2 + C-4 + H-2 + H-6 + H-7): canonical coupon
     // reference + frozen rule snapshot persisted at place-order so the
@@ -485,6 +489,17 @@ const orderSchema = new mongoose.Schema(
       enum: ["customer", "seller", "admin", "system"],
     },
     cancelReason: String,
+    cancelledAt: Date,
+    // Summary of the linked OrderCancellation record, kept on the order so
+    // lists can show request / refund state without a join.
+    cancellation: {
+      recordId: { type: mongoose.Schema.Types.ObjectId, ref: "OrderCancellation", default: null },
+      type: { type: String, default: null },
+      status: { type: String, default: null },
+      reasonCode: { type: String, default: null },
+      refundStatus: { type: String, default: null },
+      requestedAt: { type: Date, default: null },
+    },
     deviceType: {
       type: String,
       enum: ["Mobile", "Desktop", "Tablet"],

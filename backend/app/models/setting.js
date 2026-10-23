@@ -239,6 +239,13 @@ const settingSchema = new mongoose.Schema(
             pickupDelayEscalationMinutes: Number,
             messageRetentionDays: Number,
         },
+
+        // Order cancellation & refund policy. Unset keys fall back to
+        // DEFAULT_CANCELLATION_POLICY (constants/cancellation.js).
+        cancellationPolicy: {
+            type: mongoose.Schema.Types.Mixed,
+            default: undefined,
+        },
     },
     {
         timestamps: true,
