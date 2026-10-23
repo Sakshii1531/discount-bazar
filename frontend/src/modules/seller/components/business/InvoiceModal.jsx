@@ -25,6 +25,47 @@ const PartyBox = ({ party }) => (
     </div>
 );
 
+// Ledger invoice lines as posted on the bill: qty, rate, GST and amount per item.
+const SimpleItemsTable = ({ items }) => (
+    <table className="w-full text-xs">
+        <thead className="bg-slate-200 text-slate-700 font-bold uppercase text-[10px]">
+            <tr>
+                <th className="text-center py-2 px-2">#</th>
+                <th className="text-left py-2 px-2">Item</th>
+                <th className="text-left py-2 px-2">Variant</th>
+                <th className="text-right py-2 px-2">Qty</th>
+                <th className="text-right py-2 px-2">Rate</th>
+                <th className="text-right py-2 px-2">GST</th>
+                <th className="text-right py-2 px-2">Amount</th>
+            </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+            {items.map((it, idx) => (
+                <tr key={idx}>
+                    <td className="py-2 px-2 text-center text-slate-400">{idx + 1}</td>
+                    <td className="py-2 px-2 font-bold text-slate-900">{it.name}</td>
+                    <td className="py-2 px-2 text-slate-500">{it.variant || "—"}</td>
+                    <td className="py-2 px-2 text-right">{it.quantity}</td>
+                    <td className="py-2 px-2 text-right">{money(it.rate)}</td>
+                    <td className="py-2 px-2 text-right">{it.gstPercent}%</td>
+                    <td className="py-2 px-2 text-right font-bold text-slate-900">{money(it.amount)}</td>
+                </tr>
+            ))}
+        </tbody>
+        <tfoot className="bg-slate-50 font-black text-slate-900 border-t border-slate-300">
+            <tr>
+                <td className="py-2 px-2" colSpan={3}>
+                    Bill total ({items.length} {items.length === 1 ? "item" : "items"})
+                </td>
+                <td className="py-2 px-2 text-right">{items.reduce((s, i) => s + i.quantity, 0)}</td>
+                <td />
+                <td />
+                <td className="py-2 px-2 text-right">{money(items.reduce((s, i) => s + i.amount, 0))}</td>
+            </tr>
+        </tfoot>
+    </table>
+);
+
 /**
  * One bill as a GST tax invoice, opened over the ledger / purchases list. Print
  * goes through an isolated iframe (ledgerInvoice.printInvoice), so only this
@@ -120,6 +161,9 @@ const InvoiceModal = ({ invoice, onClose }) => {
                         </div>
 
                         <div className="overflow-x-auto">
+                            {invoice.simple ? (
+                                <SimpleItemsTable items={invoice.items} />
+                            ) : (
                             <table className="w-full text-xs">
                                 <thead className="bg-slate-200 text-slate-700 font-bold uppercase text-[10px]">
                                     <tr>
@@ -167,11 +211,12 @@ const InvoiceModal = ({ invoice, onClose }) => {
                                     </tr>
                                 </tfoot>
                             </table>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-[1.3fr_1fr] border-t border-slate-800 md:divide-x divide-slate-800">
                             <div className="p-3 space-y-2">
-                                {invoice.gstRows.length > 0 && (
+                                {!invoice.simple && invoice.gstRows.length > 0 && (
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">GST summary</p>
                                         <table className="w-full text-[11px] border border-slate-300">
@@ -214,7 +259,7 @@ const InvoiceModal = ({ invoice, onClose }) => {
                                 )}
                             </div>
                             <div className="p-3 space-y-1">
-                                {invoice.totals.map((t) => (
+                                {(invoice.simple ? invoice.simpleTotals : invoice.totals).map((t) => (
                                     <div key={t.label} className="flex justify-between">
                                         <span>{t.label}</span>
                                         <span>{money(t.value)}</span>
@@ -224,7 +269,7 @@ const InvoiceModal = ({ invoice, onClose }) => {
                                     <span>Grand Total</span>
                                     <span>₹{money(invoice.grandTotal)}</span>
                                 </div>
-                                {invoice.payment.map((t) => (
+                                {!invoice.simple && invoice.payment.map((t) => (
                                     <div key={t.label} className="flex justify-between">
                                         <span>{t.label}</span>
                                         <span>{money(t.value)}</span>

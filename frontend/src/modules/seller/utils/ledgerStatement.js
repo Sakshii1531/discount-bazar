@@ -50,7 +50,7 @@ export function buildStatement({ kind, party, entries = [], balance = 0, busines
     balance: round2(e.balance),
     items: e.kind === "PAYMENT" ? [] : e.items || [],
   }));
-  // Print/PDF list each item under its bill, so the Details cell just counts them.
+  // Short form of Details (item count) for compact views.
   rows.forEach((r) => {
     r.shortDetails = r.items.length
       ? `${r.items.length} ${r.items.length === 1 ? "item" : "items"}`
@@ -131,28 +131,13 @@ export function downloadStatementXlsx(st) {
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-// Item lines of one bill as their own bordered table under the ledger row.
-const itemsTableHtml = (items) => {
-  const total = items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const qty = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-  return `<table class="items"><thead><tr><th class="c">#</th><th>Item</th><th>Variant</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">GST</th><th class="n">Amount</th></tr></thead>
-<tbody>${items
-    .map(
-      (i, idx) => `<tr><td class="c">${idx + 1}</td><td>${esc(i.name)}</td><td>${esc(i.variant) || "—"}</td><td class="n">${esc(i.quantity)}</td>
-<td class="n">${money(i.rate)}</td><td class="n">${Number(i.gstPercent) || 0}%</td><td class="n">${money(i.amount)}</td></tr>`,
-    )
-    .join("")}</tbody>
-<tfoot><tr><td colspan="3">Bill total (${items.length} ${items.length === 1 ? "item" : "items"})</td><td class="n">${qty}</td><td></td><td></td><td class="n">${money(total)}</td></tr></tfoot></table>`;
-};
-
 export function statementHtml(st) {
   const cell = (v) => (v === null || v === undefined ? "—" : money(v));
   const body = st.rows
     .map(
-      (r) => `<tr class="row"><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.billNo) || "—"}</td><td>${esc(r.shortDetails) || "—"}</td>
-<td>${esc(r.method) || "—"}</td><td class="n">${cell(r.debit)}</td><td class="n">${cell(r.credit)}</td><td class="n b">${cell(r.balance)}</td></tr>${
-        r.items.length ? `<tr class="sub"><td></td><td colspan="7">${itemsTableHtml(r.items)}</td></tr>` : ""
-      }`,
+      // Ledger lines only; a bill's items are on its own invoice.
+      (r) => `<tr class="row"><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.billNo) || "—"}</td>
+<td>${esc(r.method) || "—"}</td><td class="n">${cell(r.debit)}</td><td class="n">${cell(r.credit)}</td><td class="n b">${cell(r.balance)}</td></tr>`,
     )
     .join("");
   const party = st.party;
@@ -168,8 +153,7 @@ export function statementHtml(st) {
   .main>thead th{background:#0f172a;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-color:#0f172a}
   .main{border-left:none;border-right:none} .main>tbody>tr>td:first-child,.main>thead>tr>th:first-child,.main>tfoot>tr>td:first-child{border-left:none}
   .main>tbody>tr>td:last-child,.main>thead>tr>th:last-child,.main>tfoot>tr>td:last-child{border-right:none}
-  .row td{background:#fff} .sub>td{background:#f8fafc;padding:4px 8px 8px}
-  .items th{background:#e2e8f0;font-size:9px;text-transform:uppercase;padding:3px 5px} .items td{font-size:10px;padding:3px 5px;background:#fff} .items tfoot td{font-weight:700;background:#f1f5f9}
+  .row td{background:#fff}
   .n{text-align:right;white-space:nowrap} .c{text-align:center} .b{font-weight:700}
   .main>tfoot td{font-weight:800;background:#e2e8f0}
   .closing{padding:8px 12px;text-align:right;font-size:13px;font-weight:800;border-top:1px solid #0f172a}
@@ -194,9 +178,9 @@ export function statementHtml(st) {
   <div><span class="label">Total credit</span><b>₹${money(st.totalCredit)}</b></div>
   <div><span class="label">Closing balance</span><b>₹${money(st.closingBalance)}</b></div>
 </div>
-<table class="main"><thead><tr><th>Date</th><th>Type</th><th>Bill No</th><th>Particulars</th><th>Mode</th><th class="n">Debit (₹)</th><th class="n">Credit (₹)</th><th class="n">Balance (₹)</th></tr></thead>
-<tbody>${body || `<tr><td colspan="8" class="muted c">No transactions</td></tr>`}</tbody>
-<tfoot><tr><td colspan="5">Total</td><td class="n">${money(st.totalDebit)}</td><td class="n">${money(st.totalCredit)}</td><td class="n">${money(st.closingBalance)}</td></tr></tfoot></table>
+<table class="main"><thead><tr><th>Date</th><th>Type</th><th>Bill No</th><th>Mode</th><th class="n">Debit (₹)</th><th class="n">Credit (₹)</th><th class="n">Balance (₹)</th></tr></thead>
+<tbody>${body || `<tr><td colspan="7" class="muted c">No transactions</td></tr>`}</tbody>
+<tfoot><tr><td colspan="4">Total</td><td class="n">${money(st.totalDebit)}</td><td class="n">${money(st.totalCredit)}</td><td class="n">${money(st.closingBalance)}</td></tr></tfoot></table>
 <div class="closing">Closing balance: ₹${money(st.closingBalance)} <span class="muted">(${esc(st.closingLabel)})</span></div>
 <div class="foot"><span>Generated: ${esc(st.generatedAt)}</span><span>This is a computer-generated statement.</span></div>
 </div></body></html>`;
@@ -315,43 +299,20 @@ export async function downloadStatementPdf(st) {
     [
       { key: "date", label: "Date", w: 58 },
       { key: "type", label: "Type", w: 62 },
-      { key: "billNo", label: "Bill No", w: 60 },
-      { key: "shortDetails", label: "Particulars" },
-      { key: "method", label: "Mode", w: 44 },
-      { key: "debit", label: "Debit (Rs.)", w: 64, align: "right", money: true },
-      { key: "credit", label: "Credit (Rs.)", w: 64, align: "right", money: true },
-      { key: "balance", label: "Balance (Rs.)", w: 68, align: "right", money: true },
+      { key: "billNo", label: "Bill No" },
+      { key: "method", label: "Mode", w: 60 },
+      { key: "debit", label: "Debit (Rs.)", w: 80, align: "right", money: true },
+      { key: "credit", label: "Credit (Rs.)", w: 80, align: "right", money: true },
+      { key: "balance", label: "Balance (Rs.)", w: 84, align: "right", money: true },
     ],
     M,
     CW,
   );
-  const SUB_X = M + 14;
-  const SUB_W = CW - 28;
-  const sub = layout(
-    [
-      { key: "idx", label: "#", w: 20, align: "center" },
-      { key: "name", label: "Item" },
-      { key: "variant", label: "Variant", w: 80 },
-      { key: "quantity", label: "Qty", w: 34, align: "right" },
-      { key: "rate", label: "Rate", w: 58, align: "right" },
-      { key: "gst", label: "GST", w: 34, align: "right" },
-      { key: "amount", label: "Amount", w: 66, align: "right" },
-    ],
-    SUB_X,
-    SUB_W,
-  );
-
   const mainHeader = () => {
     doc.setFillColor(...DARK).rect(M, y, CW, 18, "F");
     font("bold", 7.5, [255, 255, 255]);
     main.forEach((c) => put(c.label.toUpperCase(), c.x, c.w, y + 12, c.align));
     y += 18;
-  };
-  const subHeader = () => {
-    sub.forEach((c) => box(c.x, y, c.w, 14, [226, 232, 240]));
-    font("bold", 7);
-    sub.forEach((c) => put(c.label.toUpperCase(), c.x, c.w, y + 10, c.align));
-    y += 14;
   };
   const newPage = () => {
     doc.addPage();
@@ -362,11 +323,7 @@ export async function downloadStatementPdf(st) {
     mainHeader();
   };
   const ensure = (h) => {
-    if (y + h > BOTTOM) {
-      newPage();
-      return true;
-    }
-    return false;
+    if (y + h > BOTTOM) newPage();
   };
 
   mainHeader();
@@ -377,63 +334,16 @@ export async function downloadStatementPdf(st) {
     y += 20;
   }
 
+  // Ledger lines only; a bill's items are on its own invoice.
   st.rows.forEach((r) => {
-    font("normal", 8.5);
-    const partLines = doc.splitTextToSize(String(r.shortDetails || "-"), main[3].w - 8);
-    const rowH = Math.max(1, partLines.length) * 10 + 8;
-    ensure(rowH + (r.items.length ? 32 : 0));
+    const rowH = 18;
+    ensure(rowH);
     main.forEach((c) => box(c.x, y, c.w, rowH));
     main.forEach((c) => {
-      const v = c.money ? amt(r[c.key]) : c.key === "shortDetails" ? partLines : String(r[c.key] || "-");
       font(c.key === "balance" ? "bold" : "normal", 8.5);
-      put(v, c.x, c.w, y + 12, c.align);
+      put(c.money ? amt(r[c.key]) : String(r[c.key] || "-"), c.x, c.w, y + 12, c.align);
     });
     y += rowH;
-
-    if (r.items.length) {
-      // Bill items: a bordered sub-table under the row.
-      const areaTop = y;
-      doc.setFillColor(248, 250, 252).rect(M, y, CW, 6, "F");
-      y += 6;
-      subHeader();
-      r.items.forEach((it, idx) => {
-        font("normal", 7.8);
-        const nameLines = doc.splitTextToSize(String(it.name || "Item"), sub[1].w - 8);
-        const h = nameLines.length * 9 + 6;
-        if (ensure(h + 14)) {
-          y += 4;
-          subHeader();
-        }
-        const vals = {
-          idx: String(idx + 1),
-          name: nameLines,
-          variant: doc.splitTextToSize(String(it.variant || "-"), sub[2].w - 8)[0],
-          quantity: String(it.quantity ?? ""),
-          rate: money(it.rate),
-          gst: `${Number(it.gstPercent) || 0}%`,
-          amount: money(it.amount),
-        };
-        sub.forEach((c) => box(c.x, y, c.w, h, [255, 255, 255]));
-        font("normal", 7.8);
-        sub.forEach((c) => put(vals[c.key], c.x, c.w, y + 9.5, c.align));
-        y += h;
-      });
-      // Bill total line
-      ensure(14);
-      const qty = r.items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-      const total = r.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-      box(SUB_X, y, SUB_W, 14, [241, 245, 249]);
-      font("bold", 7.8);
-      put(`Bill total (${r.items.length} ${r.items.length === 1 ? "item" : "items"})`, sub[1].x, sub[1].w + sub[2].w, y + 10);
-      put(String(qty), sub[3].x, sub[3].w, y + 10, "right");
-      put(money(total), sub[6].x, sub[6].w, y + 10, "right");
-      y += 14;
-      if (y > areaTop) {
-        doc.setFillColor(248, 250, 252).rect(M, y, CW, 6, "F");
-        y += 6;
-      }
-      doc.setDrawColor(...GRID).setLineWidth(0.5).line(M, y, R, y);
-    }
   });
 
   /* --- totals --- */
@@ -442,9 +352,9 @@ export async function downloadStatementPdf(st) {
   main.forEach((c) => box(c.x, y, c.w, totalH, [226, 232, 240]));
   font("bold", 8.5);
   put("TOTAL", main[0].x, main[0].w + main[1].w, y + 12);
-  put(money(st.totalDebit), main[5].x, main[5].w, y + 12, "right");
-  put(money(st.totalCredit), main[6].x, main[6].w, y + 12, "right");
-  put(money(st.closingBalance), main[7].x, main[7].w, y + 12, "right");
+  put(money(st.totalDebit), main[4].x, main[4].w, y + 12, "right");
+  put(money(st.totalCredit), main[5].x, main[5].w, y + 12, "right");
+  put(money(st.closingBalance), main[6].x, main[6].w, y + 12, "right");
   y += totalH + 8;
 
   box(M + CW / 2, y, CW / 2, 30, [241, 245, 249]);

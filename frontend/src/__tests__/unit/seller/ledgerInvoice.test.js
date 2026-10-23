@@ -59,6 +59,16 @@ describe('buildLedgerInvoice (customer sale)', () => {
     expect(html).toContain('Authorised Signatory');
     expect(invoiceFilename(inv, 'pdf')).toBe('Tax_Invoice_ORD-ABC123_Sakshi.pdf');
   });
+
+  it('lists every item with its posted amount and reconciles via discount', () => {
+    expect(inv.simple).toBe(true);
+    expect(inv.items.map((i) => [i.name, i.quantity, i.rate, i.amount])).toEqual([['Exo Ginger Bar', 2, 10, 20], ['Basmati Rice', 1, 200, 200]]);
+    expect(inv.simpleTotals).toEqual([{ label: 'Less: Discount', value: -10 }]);
+    const html = invoiceHtml(inv);
+    expect(html).toContain('Bill total (2 items)');
+    expect(html).not.toContain('GST summary');
+    expect(html).not.toContain('Balance due');
+  });
 });
 
 describe('supplier invoices', () => {

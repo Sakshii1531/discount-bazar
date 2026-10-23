@@ -6,6 +6,7 @@ import { useAuth } from "@core/context/AuthContext";
 import Modal from "@shared/components/ui/Modal";
 import { useSellerOrders } from "../context/SellerOrdersContext";
 import { posApi } from "../services/posApi";
+import { resolveApiBaseUrl } from "@core/api/resolveApiBaseUrl";
 import {
     ProductGrid,
     SearchBar,
@@ -125,7 +126,8 @@ const PosTerminal = () => {
     );
 
     // Last completed bill stays on the counter (and survives a reload) for quick reprint / edit.
-    const lastSaleKey = `pos:last:${user?._id || user?.id || "seller"}`;
+    // Keyed by backend too: a bill saved against another server/database must not show here.
+    const lastSaleKey = `pos:last:${resolveApiBaseUrl()}:${user?._id || user?.id || "seller"}`;
     const [lastSale, setLastSale] = useState(() => readLastSale(lastSaleKey));
     const [reprintOrder, setReprintOrder] = useState(null);
     // "Edit bill": the posted bill is loaded into the register; checkout then updates it instead of
@@ -133,7 +135,23 @@ const PosTerminal = () => {
     const [editSession, setEditSession] = useState(null);
     const [isEditLoading, setIsEditLoading] = useState(false);
     useEffect(() => {
-        setLastSale(readLastSale(lastSaleKey));
+        const stored = readLastSale(lastSaleKey);
+        setLastSale(stored);
+        if (!stored) return undefined;
+        // The card comes from localStorage, so confirm its bill still exists before offering Edit.
+        let cancelled = false;
+        posApi.getOrderForReturn(stored.orderId).catch((error) => {
+            if (cancelled || error?.response?.status !== 404) return;
+            setLastSale(null);
+            try {
+                localStorage.removeItem(lastSaleKey);
+            } catch {
+                /* storage unavailable — nothing persisted to clear */
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
     }, [lastSaleKey]);
     const saveLastSale = useCallback(
         (order) => {
@@ -674,6 +692,13 @@ const PosTerminal = () => {
             setTaxValue(nextTaxValue);
             toast.success(`Bill #${order.orderId} loaded — change items, then Update bill`);
         } catch (error) {
+            // The last-sale card lives in localStorage, so it can outlive its bill
+            // (deleted, or saved against another database). Drop it once the server says so.
+            if (error?.response?.status === 404 && billOrderId === lastSale?.orderId) {
+                saveLastSale(null);
+                toast.error(`Bill #${billOrderId} no longer exists, so it can't be edited.`);
+                return;
+            }
             toast.error(error?.response?.data?.message || "Could not open the bill for editing");
         } finally {
             setIsEditLoading(false);

@@ -53,12 +53,23 @@ async function resolveProductSection(section, sellerIds) {
       ? MAX_SCROLLABLE_PRODUCTS
       : Math.max(1, Number(cfg.rows) || 1) * Math.max(1, Number(cfg.columns) || 2);
     const categoryFilter = await buildCategoryFilter(toIds(cfg.categoryIds), toIds(cfg.subcategoryIds));
-    products = await Product.find({ $and: [base, categoryFilter] })
-      .select(PRODUCT_FIELDS)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const findNewest = (stockFilter, max) =>
+      Product.find({ $and: [base, categoryFilter, stockFilter] })
+        .select(PRODUCT_FIELDS)
+        .sort({ createdAt: -1 })
+        .limit(max)
+        .lean();
+    // In-stock products fill the section first; out-of-stock ones only top it up.
+    const inStock = await findNewest({ stock: { $gt: 0 } }, limit);
+    const outOfStock =
+      inStock.length < limit
+        ? await findNewest({ $or: [{ stock: { $lte: 0 } }, { stock: null }] }, limit - inStock.length)
+        : [];
+    products = [...inStock, ...outOfStock];
   }
+  // Curated lists keep the admin's order within each group; out-of-stock still go last.
+  const isInStock = (p) => Number(p.stock) > 0;
+  products = [...products.filter(isInStock), ...products.filter((p) => !isInStock(p))];
   const enriched = await enrichCatalogProducts(products);
   return enriched.map((p) => normalizeProductModerationFields(p));
 }

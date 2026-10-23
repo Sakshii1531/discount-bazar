@@ -642,17 +642,32 @@ export const getProducts = async (req, res) => {
     };
     const sortQuery = sortMap[String(sort || "newest").toLowerCase()] || sortMap.newest;
 
+    // In-stock products always come first and out-of-stock ones last, whatever the
+    // chosen sort: page through the in-stock slice, then continue into the rest.
+    const inStockQuery = { $and: [finalQuery, { stock: { $gt: 0 } }] };
+    const outOfStockQuery = { $and: [finalQuery, { $or: [{ stock: { $lte: 0 } }, { stock: null }] }] };
+    const findPage = (q, pageSkip, pageLimit) =>
+      Product.find(q)
+        .select(
+          "name slug description sku price salePrice stock brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
+        )
+        // No .populate() — names resolved via cache-backed entityNameCache
+        .sort(sortQuery)
+        .skip(pageSkip)
+        .limit(pageLimit)
+        .lean();
+    const fetchStockOrderedPage = async () => {
+      const inStockCount = await Product.countDocuments(inStockQuery);
+      const inStockItems = skip < inStockCount ? await findPage(inStockQuery, skip, limit) : [];
+      const remaining = limit - inStockItems.length;
+      const outOfStockItems =
+        remaining > 0 ? await findPage(outOfStockQuery, Math.max(0, skip - inStockCount), remaining) : [];
+      return [...inStockItems, ...outOfStockItems];
+    };
+
     const fetchFn = async () => {
       const [rawProducts, total] = await Promise.all([
-        Product.find(finalQuery)
-          .select(
-            "name slug description sku price salePrice stock brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
-          )
-          // No .populate() — names resolved via cache-backed entityNameCache
-          .sort(sortQuery)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
+        fetchStockOrderedPage(),
         Product.countDocuments(finalQuery),
       ]);
 

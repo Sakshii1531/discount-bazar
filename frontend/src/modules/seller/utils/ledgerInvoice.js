@@ -96,6 +96,8 @@ function taxLine(raw, inclusive) {
     cgst: round2(tax / 2),
     sgst: round2(tax - round2(tax / 2)),
     total: round2(taxable + tax),
+    // Line amount as posted on the bill (what the ledger shows).
+    amount: round2(raw.amount),
   };
 }
 
@@ -153,6 +155,13 @@ export function buildLedgerInvoice({ kind, entry, entries = [], party, business 
       )
     : 0;
   const totals = buildTotals(items, { grandTotal, discount: bill.discount || 0, billTax: bill.tax ?? null });
+  // Simple view: from the items' posted amounts to the bill amount.
+  const discount = round2(bill.discount || 0);
+  const roundOff = round2(grandTotal - (items.reduce((s, i) => s + i.amount, 0) - discount));
+  const simpleTotals = [
+    ...(discount > 0 ? [{ label: "Less: Discount", value: -discount }] : []),
+    ...(Math.abs(roundOff) >= 0.01 ? [{ label: "Round off", value: roundOff }] : []),
+  ];
 
   const biz = businessOf(business);
   const other = partyOf(party);
@@ -180,6 +189,10 @@ export function buildLedgerInvoice({ kind, entry, entries = [], party, business 
     method: entry.method || "",
     note: entry.note || "",
     showBank: entry.kind === "SALE",
+    // Ledger invoices list the bill's items as posted (qty, rate, GST, amount),
+    // without the tax split and payment lines.
+    simple: true,
+    simpleTotals,
   };
 }
 
@@ -246,6 +259,22 @@ const partyBlock = (p) => `<div class="box"><div class="label">${esc(p.heading)}
   ${p.phone ? `<div>Phone: ${esc(p.phone)}</div>` : ""}
   ${p.gstin ? `<div>GSTIN: <b>${esc(p.gstin)}</b></div>` : ""}</div>`;
 
+// Simple bill table: every item with qty, rate, GST and its posted amount.
+const simpleItemsHtml = (items) => {
+  const qty = items.reduce((s, i) => s + i.quantity, 0);
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  return `<table class="items"><thead><tr><th class="c">#</th><th>Item</th><th>Variant</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">GST</th><th class="n">Amount</th></tr></thead>
+<tbody>${
+    items
+      .map(
+        (i, idx) => `<tr><td class="c">${idx + 1}</td><td>${esc(i.name)}</td><td>${esc(i.variant) || "—"}</td><td class="n">${esc(i.quantity)}</td>
+<td class="n">${money(i.rate)}</td><td class="n">${i.gstPercent}%</td><td class="n b">${money(i.amount)}</td></tr>`,
+      )
+      .join("") || `<tr><td colspan="7" class="c muted">No items</td></tr>`
+  }</tbody>
+<tfoot><tr><td colspan="3">Bill total (${items.length} ${items.length === 1 ? "item" : "items"})</td><td class="n">${qty}</td><td></td><td></td><td class="n">${money(total)}</td></tr></tfoot></table>`;
+};
+
 export function invoiceHtml(inv) {
   const rows = inv.items
     .map(
@@ -260,8 +289,8 @@ export function invoiceHtml(inv) {
 <td class="c">${r.rate / 2}%</td><td class="n">${money(r.sgst)}</td><td class="n b">${money(r.tax)}</td></tr>`,
     )
     .join("");
-  const totals = inv.totals.map((t) => `<tr><td>${esc(t.label)}</td><td class="n">${money(t.value)}</td></tr>`).join("");
-  const payment = inv.payment.map((t) => `<tr><td>${esc(t.label)}</td><td class="n">${money(t.value)}</td></tr>`).join("");
+  const totals = (inv.simple ? inv.simpleTotals : inv.totals).map((t) => `<tr><td>${esc(t.label)}</td><td class="n">${money(t.value)}</td></tr>`).join("");
+  const payment = (inv.simple ? [] : inv.payment).map((t) => `<tr><td>${esc(t.label)}</td><td class="n">${money(t.value)}</td></tr>`).join("");
   const bank = inv.showBank ? bankLines(inv.business.bank) : [];
   const biz = inv.business;
   return `<!doctype html><html><head><meta charset="utf-8"/><title>${esc(inv.title)} ${esc(inv.number)}</title>
@@ -296,15 +325,15 @@ export function invoiceHtml(inv) {
   <div><b>Invoice Date:</b> ${esc(inv.date) || "—"}${inv.status ? ` &nbsp; <b>Status:</b> ${esc(inv.status)}` : ""}</div>
 </div>
 <div class="parties">${partyBlock(inv.billedBy)}${partyBlock(inv.billedTo)}</div>
-<table class="items"><thead><tr><th class="c">#</th><th>Item / Description</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">GST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Amount</th></tr></thead>
+${inv.simple ? simpleItemsHtml(inv.items) : `<table class="items"><thead><tr><th class="c">#</th><th>Item / Description</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Taxable</th><th class="n">GST</th><th class="n">CGST</th><th class="n">SGST</th><th class="n">Amount</th></tr></thead>
 <tbody>${rows || `<tr><td colspan="9" class="c muted">No items</td></tr>`}</tbody>
 <tfoot><tr><td colspan="2">Total</td><td class="n">${inv.items.reduce((s, i) => s + i.quantity, 0)}</td><td></td>
 <td class="n">${money(inv.items.reduce((s, i) => s + i.taxable, 0))}</td><td></td>
 <td class="n">${money(inv.items.reduce((s, i) => s + i.cgst, 0))}</td><td class="n">${money(inv.items.reduce((s, i) => s + i.sgst, 0))}</td>
-<td class="n">${money(inv.items.reduce((s, i) => s + i.total, 0))}</td></tr></tfoot></table>
+<td class="n">${money(inv.items.reduce((s, i) => s + i.total, 0))}</td></tr></tfoot></table>`}
 <div class="bottom">
   <div>
-    ${gst ? `<div class="label">GST summary</div><table class="gst"><thead><tr><th class="c">Rate</th><th class="n">Taxable</th><th class="c">CGST %</th><th class="n">CGST</th><th class="c">SGST %</th><th class="n">SGST</th><th class="n">Total tax</th></tr></thead><tbody>${gst}</tbody></table>` : ""}
+    ${gst && !inv.simple ? `<div class="label">GST summary</div><table class="gst"><thead><tr><th class="c">Rate</th><th class="n">Taxable</th><th class="c">CGST %</th><th class="n">CGST</th><th class="c">SGST %</th><th class="n">SGST</th><th class="n">Total tax</th></tr></thead><tbody>${gst}</tbody></table>` : ""}
     <div style="margin-top:8px">${inv.method ? `<div><b>Payment mode:</b> ${esc(inv.method)}</div>` : ""}${inv.note ? `<div><b>Note:</b> ${esc(inv.note)}</div>` : ""}
     ${bank.length ? `<div style="margin-top:6px"><div class="label">Bank details</div>${bank.map((l) => `<div>${esc(l)}</div>`).join("")}</div>` : ""}</div>
   </div>
@@ -404,17 +433,27 @@ export async function downloadInvoicePdf(inv) {
   hline(y);
 
   // --- Items table ---
-  const cols = [
-    { label: "#", w: 22, align: "center" },
-    { label: "Item / Description", w: 0 },
-    { label: "Qty", w: 34, num: true },
-    { label: "Rate", w: 54, num: true },
-    { label: "Taxable", w: 60, num: true },
-    { label: "GST", w: 32, num: true },
-    { label: "CGST", w: 48, num: true },
-    { label: "SGST", w: 48, num: true },
-    { label: "Amount", w: 62, num: true },
-  ];
+  const cols = inv.simple
+    ? [
+        { label: "#", w: 22, align: "center" },
+        { label: "Item", w: 0 },
+        { label: "Variant", w: 90 },
+        { label: "Qty", w: 40, num: true },
+        { label: "Rate", w: 64, num: true },
+        { label: "GST", w: 40, num: true },
+        { label: "Amount", w: 74, num: true },
+      ]
+    : [
+        { label: "#", w: 22, align: "center" },
+        { label: "Item / Description", w: 0 },
+        { label: "Qty", w: 34, num: true },
+        { label: "Rate", w: 54, num: true },
+        { label: "Taxable", w: 60, num: true },
+        { label: "GST", w: 32, num: true },
+        { label: "CGST", w: 48, num: true },
+        { label: "SGST", w: 48, num: true },
+        { label: "Amount", w: 62, num: true },
+      ];
   cols[1].w = CW - cols.reduce((s, c) => s + c.w, 0);
   const colX = [];
   cols.reduce((x, c) => {
@@ -448,13 +487,24 @@ export async function downloadInvoicePdf(inv) {
   tableHeader();
   inv.items.forEach((it, idx) => {
     font("normal", 8.5);
-    const nameLines = doc.splitTextToSize(`${it.name}${it.variant ? ` (${it.variant})` : ""}`, cols[1].w - 8);
+    const nameLines = doc.splitTextToSize(inv.simple ? String(it.name) : `${it.name}${it.variant ? ` (${it.variant})` : ""}`, cols[1].w - 8);
     const h = nameLines.length * 10 + 8;
     if (pageBreak(h)) tableHeader();
     font("normal", 8.5);
     const yy = y + 12;
     cellText(0, String(idx + 1), yy);
     doc.text(nameLines, colX[1] + 4, yy);
+    if (inv.simple) {
+      cellText(2, doc.splitTextToSize(String(it.variant || "-"), cols[2].w - 8)[0], yy);
+      cellText(3, String(it.quantity), yy);
+      cellText(4, money(it.rate), yy);
+      cellText(5, `${it.gstPercent}%`, yy);
+      font("bold", 8.5);
+      cellText(6, money(it.amount), yy);
+      y += h;
+      hline(y, M, R, 0.4, LINE);
+      return;
+    }
     cellText(2, String(it.quantity), yy);
     cellText(3, money(it.rate), yy);
     cellText(4, money(it.taxable), yy);
@@ -471,12 +521,18 @@ export async function downloadInvoicePdf(inv) {
   doc.setFillColor(248, 250, 252).rect(M, y, CW, 17, "F");
   font("bold", 8.5);
   const sum = (k) => inv.items.reduce((s, i) => s + i[k], 0);
-  cellText(1, "Total", y + 12);
-  cellText(2, String(sum("quantity")), y + 12);
-  cellText(4, money(sum("taxable")), y + 12);
-  cellText(6, money(sum("cgst")), y + 12);
-  cellText(7, money(sum("sgst")), y + 12);
-  cellText(8, money(sum("total")), y + 12);
+  if (inv.simple) {
+    cellText(1, `Bill total (${inv.items.length} ${inv.items.length === 1 ? "item" : "items"})`, y + 12);
+    cellText(3, String(sum("quantity")), y + 12);
+    cellText(6, money(sum("amount")), y + 12);
+  } else {
+    cellText(1, "Total", y + 12);
+    cellText(2, String(sum("quantity")), y + 12);
+    cellText(4, money(sum("taxable")), y + 12);
+    cellText(6, money(sum("cgst")), y + 12);
+    cellText(7, money(sum("sgst")), y + 12);
+    cellText(8, money(sum("total")), y + 12);
+  }
   y += 17;
   hline(y);
 
@@ -484,14 +540,18 @@ export async function downloadInvoicePdf(inv) {
   const leftW = CW * 0.58;
   const splitX = M + leftW;
   const bankRows = inv.showBank ? bankLines(inv.business.bank) : [];
-  const gstH = inv.gstRows.length ? 30 + inv.gstRows.length * 13 : 0;
-  const rightH = 14 + inv.totals.length * 13 + 22 + inv.payment.length * 13;
+  // The simple ledger invoice shows only the grand total under its items.
+  const gstRows = inv.simple ? [] : inv.gstRows;
+  const totalRows = inv.simple ? inv.simpleTotals : inv.totals;
+  const paymentRows = inv.simple ? [] : inv.payment;
+  const gstH = gstRows.length ? 30 + gstRows.length * 13 : 0;
+  const rightH = 14 + totalRows.length * 13 + 22 + paymentRows.length * 13;
   const leftH = gstH + 14 + (inv.method ? 12 : 0) + (inv.note ? 12 : 0) + (bankRows.length ? 14 + bankRows.length * 11 : 0);
   pageBreak(Math.max(leftH, rightH) + 120);
   const bottomTop = y;
 
   let ly = y + 14;
-  if (inv.gstRows.length) {
+  if (gstRows.length) {
     font("bold", 7.5, MUTED);
     doc.text("GST SUMMARY", M + 10, ly);
     ly += 6;
@@ -515,7 +575,7 @@ export async function downloadInvoicePdf(inv) {
     );
     ly += 14;
     font("normal", 8);
-    inv.gstRows.forEach((r) => {
+    gstRows.forEach((r) => {
       const vals = [`${r.rate}%`, money(r.taxable), `${money(r.cgst)} (${r.rate / 2}%)`, `${money(r.sgst)} (${r.rate / 2}%)`, money(r.tax)];
       vals.forEach((v, i) =>
         g[i].a ? doc.text(v, gxs[i] + g[i].w / 2, ly + 10, { align: "center" }) : doc.text(v, gxs[i] + g[i].w - 4, ly + 10, { align: "right" }),
@@ -554,7 +614,7 @@ export async function downloadInvoicePdf(inv) {
   const rx1 = splitX + 10;
   const rx2 = R - 10;
   font("normal", 9);
-  inv.totals.forEach((t) => {
+  totalRows.forEach((t) => {
     doc.text(t.label, rx1, ry);
     doc.text(money(t.value), rx2, ry, { align: "right" });
     ry += 13;
@@ -566,7 +626,7 @@ export async function downloadInvoicePdf(inv) {
   doc.text(rs(inv.grandTotal), rx2, ry, { align: "right" });
   ry += 16;
   font("normal", 9);
-  inv.payment.forEach((t) => {
+  paymentRows.forEach((t) => {
     doc.text(t.label, rx1, ry);
     doc.text(money(t.value), rx2, ry, { align: "right" });
     ry += 13;

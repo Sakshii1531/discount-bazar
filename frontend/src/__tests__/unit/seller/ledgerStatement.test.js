@@ -76,7 +76,7 @@ describe('xlsx zip container', () => {
 });
 
 describe('downloadStatementPdf', () => {
-  it('renders the bordered statement with per-bill item tables', async () => {
+  it('renders the bordered ledger statement', async () => {
     const { jsPDF } = await import('jspdf');
     const { downloadStatementPdf } = await import('@modules/seller/utils/ledgerStatement');
     const names = [

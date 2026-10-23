@@ -203,7 +203,8 @@ const SearchPage = () => {
     // Lowest Price Section
     const lowestPriceProducts = useMemo(() => {
         return [...allProducts]
-            .sort((a, b) => a.price - b.price)
+            // In-stock first, then cheapest
+            .sort((a, b) => (Number(b.stock) > 0) - (Number(a.stock) > 0) || a.price - b.price)
             .slice(0, 10);
     }, [allProducts]);
 
