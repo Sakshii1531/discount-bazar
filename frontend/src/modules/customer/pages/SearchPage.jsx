@@ -11,6 +11,29 @@ import { useLocation as useAppLocation } from '../context/LocationContext';
 import { getJSON, setJSON, STORAGE_KEYS } from '@core/utils/storage';
 import Lottie from 'lottie-react';
 
+const formatProducts = (data) => {
+    const rawResult = data?.result;
+    const dbProds = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(rawResult?.items)
+        ? rawResult.items
+        : Array.isArray(rawResult)
+        ? rawResult
+        : [];
+    return dbProds.map(p => ({
+        ...p,
+        id: p._id,
+        image:
+          p.mainImage ||
+          p.image ||
+          "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400",
+        price: p.salePrice || p.price,
+        originalPrice: p.price,
+        weight: p.weight || '1 unit',
+        deliveryTime: p.deliveryTime || null
+    }));
+};
+
 const SearchPage = () => {
     const navigate = useNavigate();
     const location = useRouterLocation();
@@ -26,6 +49,7 @@ const SearchPage = () => {
     const [results, setResults] = useState([]);
     const [allProducts, setAllProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
     const [noServiceData, setNoServiceData] = useState(null);
@@ -124,27 +148,7 @@ const SearchPage = () => {
                     lng: currentLocation.longitude,
                 });
                 if (response.data.success) {
-                    const rawResult = response.data.result;
-                    const dbProds = Array.isArray(response.data.results)
-                        ? response.data.results
-                        : Array.isArray(rawResult?.items)
-                        ? rawResult.items
-                        : Array.isArray(rawResult)
-                        ? rawResult
-                        : [];
-                    const formattedProds = dbProds.map(p => ({
-                        ...p,
-                        id: p._id,
-                        image:
-                          p.mainImage ||
-                          p.image ||
-                          "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&q=80&w=400&h=400",
-                        price: p.salePrice || p.price,
-                        originalPrice: p.price,
-                        weight: p.weight || '1 unit',
-                        deliveryTime: p.deliveryTime || null
-                    }));
-                    setAllProducts(formattedProds);
+                    setAllProducts(formatProducts(response.data));
                 }
             } catch (error) {
                 console.error('Error fetching products:', error);
@@ -178,18 +182,47 @@ const SearchPage = () => {
         }
     };
 
-    // Real-time filtering logic
-    const filteredResults = useMemo(() => {
-        if (!debouncedQuery.trim()) return [];
-        return allProducts.filter(p =>
-            p.name.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-            p.categoryId?.name?.toLowerCase().includes(debouncedQuery.toLowerCase())
-        );
-    }, [debouncedQuery, allProducts]);
-
+    // Server-side search so every matching product is found, not just the first page
     useEffect(() => {
-        setResults(filteredResults);
-    }, [filteredResults]);
+        const term = debouncedQuery.trim();
+        const hasValidLocation =
+            Number.isFinite(currentLocation?.latitude) &&
+            Number.isFinite(currentLocation?.longitude);
+        if (!term || !hasValidLocation) {
+            setResults([]);
+            return;
+        }
+        let cancelled = false;
+        setIsSearching(true);
+        customerApi
+            .getProducts({
+                search: term,
+                limit: 100,
+                lat: currentLocation.latitude,
+                lng: currentLocation.longitude,
+            })
+            .then((response) => {
+                if (!cancelled && response.data.success) {
+                    setResults(formatProducts(response.data));
+                }
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                console.error('Error searching products:', error);
+                // Fall back to filtering the products already loaded
+                const words = term.toLowerCase().split(/\s+/);
+                setResults(allProducts.filter((p) => {
+                    const haystack = `${p.name || ''} ${p.brand || ''} ${p.categoryId?.name || ''}`.toLowerCase();
+                    return words.every((w) => haystack.includes(w));
+                }));
+            })
+            .finally(() => {
+                if (!cancelled) setIsSearching(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [debouncedQuery, currentLocation?.latitude, currentLocation?.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Dynamically load no-service Lottie when results are empty
     useEffect(() => {
@@ -285,7 +318,9 @@ const SearchPage = () => {
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{results.length} found</span>
                         </div>
 
-                        {results.length > 0 ? (
+                        {results.length === 0 && (isSearching || query.trim() !== debouncedQuery.trim()) ? (
+                            <div className="py-16 text-center text-slate-400 font-bold">Searching...</div>
+                        ) : results.length > 0 ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-3 md:gap-x-4 gap-y-6 md:gap-y-10">
                                 {results.map((product) => (
                                     <div key={product.id} onClick={() => saveSearch(query)} className="flex justify-center">

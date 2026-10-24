@@ -505,7 +505,13 @@ export const getProducts = async (req, res) => {
           // P3-5: substring search is preserved (so customer-facing UX
           // doesn't shift) but the term is now regex-escaped to avoid
           // injection and runtime errors on `(`, `*`, etc.
-          query.name = buildSearchRegex(term, { anchored: false });
+          // Every word must appear (in any order) in the name, brand or tags,
+          // so "red chilli" matches "Aarafh Red Chilli Powder" and "Chilli Red".
+          const words = term.split(/\s+/).filter(Boolean).slice(0, 8);
+          query.$and = words.map((word) => {
+            const safe = buildSearchRegex(word, { anchored: false });
+            return { $or: [{ name: safe }, { brand: safe }, { tags: safe }] };
+          });
         }
       }
     }
