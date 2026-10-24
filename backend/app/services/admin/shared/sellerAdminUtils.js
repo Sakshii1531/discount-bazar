@@ -142,7 +142,7 @@ export function normalizeRadiusKm(value, fallback = 5) {
     return fallback;
   }
 
-  return Math.max(1, Math.min(100, parsed));
+  return Math.max(0.5, Math.min(100, parsed));
 }
 
 export function hasValidSellerLocation(seller) {

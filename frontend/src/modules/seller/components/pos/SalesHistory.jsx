@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -40,14 +40,18 @@ const SalesHistory = ({ shopName, seller }) => {
     // Edit = back to the register (New Sale) with the bill loaded in Update mode.
     const editBill = (orderId) => navigate(`/seller/pos?edit=${encodeURIComponent(orderId)}`);
 
+    const requestSeq = useRef(0);
+    // `overrides` lets Clear reload with the reset values before state settles.
     const load = useCallback(
-        (nextPage = 1) => {
+        (nextPage = 1, overrides = {}) => {
             setIsLoading(true);
+            const f = { search, from, to, ...overrides };
             const filters = {
-                search: search.trim() || undefined,
-                from: from || undefined,
-                to: to || undefined,
+                search: f.search.trim() || undefined,
+                from: f.from || undefined,
+                to: f.to || undefined,
             };
+            const seq = ++requestSeq.current;
             posApi
                 .getSales({
                     page: nextPage,
@@ -55,6 +59,8 @@ const SalesHistory = ({ shopName, seller }) => {
                     ...filters,
                 })
                 .then((res) => {
+                    // A newer filter change already superseded this response.
+                    if (seq !== requestSeq.current) return;
                     setApplied(filters);
                     const result = res?.data?.result || {};
                     setData({
@@ -64,8 +70,8 @@ const SalesHistory = ({ shopName, seller }) => {
                     });
                     setPage(nextPage);
                 })
-                .catch(() => toast.error("Failed to load sales"))
-                .finally(() => setIsLoading(false));
+                .catch(() => seq === requestSeq.current && toast.error("Failed to load sales"))
+                .finally(() => seq === requestSeq.current && setIsLoading(false));
         },
         [search, from, to],
     );
@@ -104,27 +110,55 @@ const SalesHistory = ({ shopName, seller }) => {
         }
     };
 
+    // Loads on mount and again whenever the date range changes (back to page 1);
+    // the text search still applies on Enter / Search.
     useEffect(() => {
         load(1);
-        // Initial load only; filters apply on Search.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [from, to]);
+
+    const clearFilters = () => {
+        setSearch("");
+        // Clearing the dates reloads through the effect; search alone needs an explicit reload.
+        if (from || to) {
+            setFrom("");
+            setTo("");
+        } else {
+            load(1, { search: "" });
+        }
+    };
+    const hasFilters = Boolean(search || from || to);
 
     return (
         <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4">
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto_auto] gap-2">
                     <Input
                         placeholder="Bill number, customer name or phone"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && load(1)}
                     />
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" />
-                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To date" />
+                    <Input
+                        type="date"
+                        value={from}
+                        max={to || undefined}
+                        onChange={(e) => setFrom(e.target.value)}
+                        title="From date"
+                    />
+                    <Input
+                        type="date"
+                        value={to}
+                        min={from || undefined}
+                        onChange={(e) => setTo(e.target.value)}
+                        title="To date"
+                    />
                     <Button onClick={() => load(1)} isLoading={isLoading}>
                         <HiOutlineMagnifyingGlass className="h-4 w-4 mr-1.5" />
                         Search
+                    </Button>
+                    <Button variant="secondary" onClick={clearFilters} disabled={!hasFilters || isLoading}>
+                        Clear
                     </Button>
                 </div>
             </div>

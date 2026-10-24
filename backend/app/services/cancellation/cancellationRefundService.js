@@ -190,13 +190,29 @@ async function planRefund(record) {
   return { planned: true };
 }
 
-/** Claim an allocation for processing; returns false if someone else holds it. */
-async function claimAllocation(recordId, allocationId, fromStatuses, session) {
+/** A gateway attempt with no reply for this long is treated as interrupted. */
+const STALE_GATEWAY_ATTEMPT_MS = 5 * 60 * 1000;
+
+/**
+ * Claim an allocation for processing; returns false if someone else holds it.
+ * `reclaimStale` also takes over a gateway attempt that was interrupted
+ * (PROCESSING with no gateway refund id, started long ago) — atomically, so
+ * only one worker can reclaim it.
+ */
+async function claimAllocation(recordId, allocationId, fromStatuses, session, { reclaimStale = false } = {}) {
+  const claimable = [{ _id: allocationId, status: { $in: fromStatuses } }];
+  if (reclaimStale) {
+    claimable.push({
+      _id: allocationId,
+      status: REFUND_STATUS.PROCESSING,
+      gatewayRefundId: null,
+      initiatedAt: { $lt: new Date(Date.now() - STALE_GATEWAY_ATTEMPT_MS) },
+    });
+  }
   const res = await OrderCancellation.updateOne(
     {
       _id: recordId,
-      refund: { $exists: true },
-      "refund.allocations": { $elemMatch: { _id: allocationId, status: { $in: fromStatuses } } },
+      $or: claimable.map((match) => ({ "refund.allocations": { $elemMatch: match } })),
     },
     {
       $set: {
@@ -466,7 +482,13 @@ async function processOriginalSource(record, order, allocation) {
     return;
   }
 
-  const claimed = await claimAllocation(record._id, allocation._id, [REFUND_STATUS.PENDING, REFUND_STATUS.FAILED]);
+  const claimed = await claimAllocation(
+    record._id,
+    allocation._id,
+    [REFUND_STATUS.PENDING, REFUND_STATUS.FAILED],
+    null,
+    { reclaimStale: true },
+  );
   if (!claimed) return;
 
   try {

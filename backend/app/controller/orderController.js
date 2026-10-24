@@ -63,6 +63,10 @@ import { validateBody as validateWithJoi } from "../middleware/validate.js";
 import OrderReturnService from "../services/order/orderReturnService.js";
 import { sellerMarkReady } from "../services/communication/communicationService.js";
 import { assertRiderCanTakeOrder } from "../services/delivery/riderActiveOrdersService.js";
+import { getSellerTz, DEFAULT_TZ } from "../services/businessTime.js";
+
+// Date filters follow the seller's business timezone; admins see the platform default.
+const listTz = (user) => (user?.role === "seller" ? getSellerTz(user.id) : DEFAULT_TZ);
 
 function normalizePaymentMode(value) {
   const raw = String(value || "").trim().toUpperCase();
@@ -247,6 +251,7 @@ export const getSellerReturns = async (req, res) => {
       userId: req.user.id,
       filters: req.query || {},
       pagination,
+      tz: await listTz(req.user),
     });
     return handleResponse(res, 200, "Seller returns fetched", result);
   } catch (error) {
@@ -376,6 +381,19 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     const canonicalOrderId = order.orderId;
+
+    // A cancelled order is final: no status change may reactivate it (a new
+    // order is needed). Cancellation itself is handled by the flows below.
+    const alreadyCancelled =
+      String(order.status || "").toLowerCase() === "cancelled" ||
+      (order.workflowStatus != null && order.workflowStatus === WORKFLOW_STATUS.CANCELLED);
+    if (status && alreadyCancelled) {
+      return handleResponse(res, 409, "This order is cancelled and can no longer be changed.");
+    }
+    // Riders cannot cancel orders; post-pickup cancellations go through review.
+    if (status === "cancelled" && role === "delivery") {
+      return handleResponse(res, 403, "Delivery partners cannot cancel orders.");
+    }
 
     // Cancellation by an administrator goes through the cancellation flow
     // (mandatory reason, atomic commit, exactly-once stock / refund, audit).
@@ -1374,6 +1392,7 @@ export const getSellerOrders = async (req, res) => {
       limit,
       orderSource,
       search,
+      tz: await listTz(req.user),
     });
 
 

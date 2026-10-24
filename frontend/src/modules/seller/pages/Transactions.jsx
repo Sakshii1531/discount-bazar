@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import Input from "@shared/components/ui/Input";
@@ -25,6 +25,7 @@ import { MagicCard } from "@/components/ui/magic-card";
 import { toast } from "sonner";
 import { exportToCSV } from "@/lib/exportUtils";
 import { useSellerEarnings } from "../context/SellerEarningsContext";
+import { sellerApi } from "../services/sellerApi";
 import Pagination from "@shared/components/ui/Pagination";
 import { formatAmount } from "@shared/utils/currency";
 import { printHtml } from "../utils/ledgerStatement";
@@ -50,15 +51,71 @@ td.v{text-align:right;font-weight:700}.muted{color:#64748b;font-size:10px;margin
 <p class="muted">Computer-generated receipt.</p></body></html>`);
 };
 
+const txnFilters = ({ from, to, activeTab, search }) => ({
+  from: from || undefined,
+  to: to || undefined,
+  type: activeTab === "All" ? undefined : activeTab,
+  search: search.trim() || undefined,
+});
+
 const Transactions = () => {
+  // Balances still come from the shared earnings summary; the ledger itself is
+  // fetched page by page from the server so every past entry is reachable.
   const { earningsData: data, earningsLoading: loading } = useSellerEarnings();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
+  const [list, setList] = useState({ items: [], total: 0, totalPages: 1, totals: null });
+  const [listLoading, setListLoading] = useState(true);
+  const requestSeq = useRef(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const filters = useMemo(
+    () => txnFilters({ from, to, activeTab, search: debouncedSearch }),
+    [from, to, activeTab, debouncedSearch],
+  );
+
+  useEffect(() => {
+    const seq = ++requestSeq.current;
+    setListLoading(true);
+    sellerApi
+      .getTransactions({ ...filters, page, limit: pageSize })
+      .then((res) => {
+        if (seq !== requestSeq.current) return;
+        const result = res?.data?.result || {};
+        setList({
+          items: Array.isArray(result.items) ? result.items : [],
+          total: result.total || 0,
+          totalPages: result.totalPages || 1,
+          totals: result.totals || null,
+        });
+      })
+      .catch(() => seq === requestSeq.current && toast.error("Failed to load transactions"))
+      .finally(() => seq === requestSeq.current && setListLoading(false));
+  }, [filters, page, pageSize]);
+
+  const hasFilters = Boolean(from || to || activeTab !== "All" || searchTerm);
+  const clearFilters = () => {
+    setFrom("");
+    setTo("");
+    setActiveTab("All");
+    setSearchTerm("");
+    setPage(1);
+  };
 
   const stats = [
     {
@@ -84,41 +141,22 @@ const Transactions = () => {
     },
   ];
 
-  const ledger = Array.isArray(data?.ledger) ? data.ledger : [];
-  const filteredTransactions = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    const result = ledger.filter((txn) => {
-      if (!term && activeTab === "All") return true;
-      const id = (txn.id ?? txn.ref ?? "").toString().toLowerCase();
-      const customer = `${txn.customer ?? ""} ${txn.customerName ?? ""}`.toLowerCase();
-      const ref = (txn.ref ?? "").toString().toLowerCase();
-      const status = (txn.status ?? "").toString().toLowerCase();
-      const type = (txn.type ?? "").toString().toLowerCase();
-      const amount = `${Math.abs(Number(txn.amount ?? 0))} ${formatAmount(Math.abs(Number(txn.amount ?? 0)))}`;
-      const matchesSearch =
-        !term ||
-        id.includes(term) ||
-        customer.includes(term) ||
-        ref.includes(term) ||
-        status.includes(term) ||
-        type.includes(term) ||
-        amount.includes(term);
-      const txnType = (txn.type ?? "").toString();
-      const matchesType = activeTab === "All" || txnType === activeTab;
-      return matchesSearch && matchesType;
-    });
-    const totalPages = Math.max(1, Math.ceil(result.length / pageSize));
-    if (page > totalPages) {
-      setPage(1);
-    }
-    return result;
-  }, [searchTerm, activeTab, ledger, page, pageSize]);
+  const paginatedTransactions = list.items;
 
-  const paginatedTransactions = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return filteredTransactions.slice(start, end);
-  }, [filteredTransactions, page, pageSize]);
+  // Statement covers every entry matching the filters, not just this page.
+  const fetchAllFiltered = async () => {
+    const all = [];
+    let nextPage = 1;
+    let totalPages = 1;
+    do {
+      const res = await sellerApi.getTransactions({ ...filters, page: nextPage, limit: 100 });
+      const result = res?.data?.result || {};
+      if (Array.isArray(result.items)) all.push(...result.items);
+      totalPages = result.totalPages || 1;
+      nextPage += 1;
+    } while (nextPage <= totalPages);
+    return all;
+  };
 
   const handleDownloadReceipt = (txn) => {
     try {
@@ -184,10 +222,11 @@ const Transactions = () => {
           </div>
           <div className="flex items-center gap-3">
             <Button
-              onClick={() => {
+              onClick={async () => {
                 setIsDownloading(true);
                 try {
-                  const exportData = filteredTransactions.map((txn) => ({
+                  const rows = await fetchAllFiltered();
+                  const exportData = rows.map((txn) => ({
                     id: txn.id ?? txn.ref ?? "",
                     type: txn.type ?? "",
                     amount: `₹${formatAmount(txn.amount ?? 0)}`,
@@ -198,7 +237,8 @@ const Transactions = () => {
                     ref: txn.ref ?? "",
                   }));
 
-                  exportToCSV(exportData, "Seller_Transactions", {
+                  const period = from || to ? `_${from || "start"}_to_${to || "today"}` : "";
+                  exportToCSV(exportData, `Seller_Transactions${period}`, {
                     id: "Transaction ID",
                     type: "Type",
                     amount: "Amount",
@@ -217,7 +257,7 @@ const Transactions = () => {
                 }
               }}
               className="rounded-lg px-4 py-2 shadow-lg shadow-primary/20 disabled:opacity-50"
-              disabled={isDownloading || filteredTransactions.length === 0}>
+              disabled={isDownloading || list.total === 0}>
               <HiOutlineDocumentText className="h-4 w-4 mr-2" />
               {isDownloading ? "DOWNLOADING..." : "DOWNLOAD STATEMENTS"}
             </Button>
@@ -263,7 +303,10 @@ const Transactions = () => {
               {["All", "Order Payment", "Withdrawal", "Refund"].map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    setPage(1);
+                  }}
                   className={cn(
                     "px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
                     activeTab === tab
@@ -274,16 +317,62 @@ const Transactions = () => {
                 </button>
               ))}
             </div>
-            <div className="relative w-full md:w-80">
-              <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
-              <Input
-                placeholder="Search by customer..."
-                className="pl-10 pr-4 py-2.5 rounded-lg border-none ring-1 ring-slate-100 bg-slate-50/50 focus:ring-2 focus:ring-primary/20 transition-all text-xs font-semibold"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:items-center">
+              <div className="flex items-center gap-2">
+                <HiOutlineCalendarDays className="h-4 w-4 text-slate-600 shrink-0" />
+                <Input
+                  type="date"
+                  title="From date"
+                  value={from}
+                  max={to || undefined}
+                  onChange={(e) => {
+                    setFrom(e.target.value);
+                    setPage(1);
+                  }}
+                  className="py-2 rounded-lg text-xs font-semibold min-w-[140px]"
+                />
+                <span className="text-xs font-bold text-slate-500">to</span>
+                <Input
+                  type="date"
+                  title="To date"
+                  value={to}
+                  min={from || undefined}
+                  onChange={(e) => {
+                    setTo(e.target.value);
+                    setPage(1);
+                  }}
+                  className="py-2 rounded-lg text-xs font-semibold min-w-[140px]"
+                />
+              </div>
+              <div className="relative w-full md:w-64">
+                <HiOutlineMagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+                <Input
+                  placeholder="Search order, customer, amount..."
+                  className="pl-10 pr-4 py-2.5 rounded-lg border-none ring-1 ring-slate-100 bg-slate-50/50 focus:ring-2 focus:ring-primary/20 transition-all text-xs font-semibold"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 whitespace-nowrap px-2">
+                  Clear filters
+                </button>
+              )}
             </div>
           </div>
+          {list.totals && (
+            <div className="px-6 py-3 border-b border-slate-50 flex flex-wrap gap-x-6 gap-y-1 text-xs font-bold text-slate-600">
+              <span>{list.total} transaction(s){from || to ? ` · ${from || "start"} to ${to || "today"}` : ""}</span>
+              <span className="text-brand-600">Credits ₹{formatAmount(list.totals.credits)}</span>
+              <span className="text-rose-600">Debits ₹{formatAmount(list.totals.debits)}</span>
+              <span className="text-slate-900">
+                Net {list.totals.net < 0 ? "-" : ""}₹{formatAmount(Math.abs(list.totals.net))}
+              </span>
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto">
@@ -309,10 +398,16 @@ const Transactions = () => {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 <AnimatePresence>
-                  {filteredTransactions.length === 0 ? (
+                  {listLoading && paginatedTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center text-slate-600 text-sm font-medium">
-                        {ledger.length === 0 ? "No transactions yet." : "No matches for your search or filter."}
+                        Loading transactions…
+                      </td>
+                    </tr>
+                  ) : paginatedTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-600 text-sm font-medium">
+                        {hasFilters ? "No transactions match these dates or filters." : "No transactions yet."}
                       </td>
                     </tr>
                   ) : paginatedTransactions.map((txn, idx) => (
@@ -414,19 +509,19 @@ const Transactions = () => {
             </table>
           </div>
 
-          {filteredTransactions.length > 0 && (
+          {list.total > 0 && (
             <div className="p-4 border-t border-slate-50 bg-slate-50/40">
               <Pagination
                 page={page}
-                totalPages={Math.max(1, Math.ceil(filteredTransactions.length / pageSize))}
-                total={filteredTransactions.length}
+                totalPages={list.totalPages}
+                total={list.total}
                 pageSize={pageSize}
                 onPageChange={(newPage) => setPage(newPage)}
                 onPageSizeChange={(newSize) => {
                   setPageSize(newSize);
                   setPage(1);
                 }}
-                loading={loading}
+                loading={listLoading}
               />
             </div>
           )}

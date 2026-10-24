@@ -160,8 +160,8 @@ export const signupSeller = async (req, res) => {
         if (lng !== undefined && (!Number.isFinite(parsedLng) || parsedLng < -180 || parsedLng > 180)) {
             return handleResponse(res, 400, "Invalid longitude");
         }
-        if (radius !== undefined && (!Number.isFinite(parsedRadius) || parsedRadius < 1 || parsedRadius > 100)) {
-            return handleResponse(res, 400, "Radius must be between 1 and 100 km");
+        if (radius !== undefined && (!Number.isFinite(parsedRadius) || parsedRadius < 0.5 || parsedRadius > 100)) {
+            return handleResponse(res, 400, "Radius must be between 0.5 and 100 km");
         }
 
         let seller = await Seller.findOne({ $or: [{ email }, { phone }] });

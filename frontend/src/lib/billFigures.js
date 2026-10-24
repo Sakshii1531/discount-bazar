@@ -55,8 +55,13 @@ export function computeBillFigures(order) {
     const subtotal = num(breakdown.productSubtotal || breakdown.subtotal || lineItemsSubtotal);
     const taxTotal = num(breakdown.taxTotal || 0);
     const discountTotal = num(breakdown.discountTotal || breakdown.discount || 0);
-    const isTaxInclusive = order.isTaxInclusive !== undefined ? order.isTaxInclusive : (breakdown.isTaxInclusive !== false);
     const online = isOnlineOrder(order);
+    // Online checkout always adds tax on top of the item prices
+    // (subtotal × tax rate, see checkoutPricingService); the schema's
+    // isTaxInclusive default only describes POS bills.
+    const isTaxInclusive = online
+        ? false
+        : order.isTaxInclusive !== undefined ? order.isTaxInclusive : (breakdown.isTaxInclusive !== false);
 
     // Online-only charges, as frozen on the order at checkout.
     const charges = online
@@ -95,7 +100,9 @@ export function computeBillFigures(order) {
             ...(payable > 0 ? [{ method: payment.mode, label: payment.label, amount: payable }] : []),
         ];
         amountPaid = walletAmount + (payment.paid ? payable : 0);
-        balanceDue = Math.max(0, grandTotal - amountPaid);
+        // A cancelled order is never owed.
+        const cancelled = String(order.status || '').toLowerCase() === 'cancelled';
+        balanceDue = cancelled ? 0 : Math.max(0, grandTotal - amountPaid);
     } else {
         amountPaid = order.posAmountPaid != null ? num(order.posAmountPaid) : grandTotal;
         isCredit = String(order.posPaymentMethod || '').toUpperCase() === 'CREDIT';

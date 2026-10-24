@@ -18,20 +18,22 @@ const STORAGE_KEY = STORAGE_KEYS.LOCATION;
 const LOCATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 // Placeholder shown until the user's real location is detected or chosen.
 export const PLACEHOLDER_LOCATION_NAME = "Select delivery location";
+// Placeholder state: no city/state/coords are assumed for the user.
+const EMPTY_LOCATION = Object.freeze({
+  name: PLACEHOLDER_LOCATION_NAME,
+  time: "12-15 mins",
+  city: "",
+  state: "",
+  pincode: "",
+  latitude: null,
+  longitude: null,
+});
 const isRealLocationName = (name) =>
   !!name && name !== PLACEHOLDER_LOCATION_NAME && !name.includes("Rajshri Palace");
 
 export const LocationProvider = ({ children }) => {
-  // Default location (used until user selects or we resolve a saved one)
-  const [currentLocation, setCurrentLocation] = useState({
-    name: "Select delivery location",
-    time: "12-15 mins",
-    city: "Indore",
-    state: "Madhya Pradesh",
-    pincode: "452018",
-    latitude: 22.711140989838025,
-    longitude: 75.9001552518043,
-  });
+  // No location until the user's real one is detected, restored or chosen.
+  const [currentLocation, setCurrentLocation] = useState(EMPTY_LOCATION);
 
   // Address list for drawer UI – will be hydrated from profile API.
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -106,18 +108,42 @@ export const LocationProvider = ({ children }) => {
       setIsFetchingLocation(true);
       setLocationError(null);
 
+      // Used only when every reverse-geocoding source fails: keep the real
+      // coordinates (needed for delivery fee / nearby sellers) but never invent
+      // a city or state.
       const fallbackFromCoords = (latitude, longitude) => ({
         name: `Lat ${Number(latitude).toFixed(5)}, Lng ${Number(longitude).toFixed(5)}`,
         time: "12-15 mins",
-        city: currentLocation?.city || "Indore",
-        state: currentLocation?.state || "Madhya Pradesh",
-        pincode: currentLocation?.pincode || "452018",
+        city: "",
+        state: "",
+        pincode: "",
         latitude,
         longitude,
       });
 
-      // Keyless reverse geocoding (OpenStreetMap) used when Google is unavailable,
-      // so the user sees a real address instead of raw coordinates.
+      // Primary: backend proxy (server-side Google key, Nominatim fallback).
+      const reverseGeocodeViaServer = async (latitude, longitude) => {
+        try {
+          const { data } = await customerApi.reverseGeocode(latitude, longitude);
+          const r = data?.result;
+          const name = r?.displayName || r?.formattedAddress;
+          if (!name) return null;
+          return {
+            name,
+            time: "12-15 mins",
+            city: r.city || "",
+            state: r.state || "",
+            pincode: r.pincode || "",
+            latitude,
+            longitude,
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      // Secondary: keyless OpenStreetMap lookup straight from the browser, in
+      // case the backend is unreachable.
       const reverseGeocodeWithOSM = async (latitude, longitude) => {
         try {
           const params = new URLSearchParams({
@@ -139,8 +165,9 @@ export const LocationProvider = ({ children }) => {
             addr.neighbourhood || addr.suburb || addr.quarter || addr.residential;
           const road = addr.road;
           const city =
-            addr.city || addr.town || addr.village || addr.county || addr.state_district;
-          const state = addr.state;
+            addr.city || addr.town || addr.village || addr.municipality ||
+            addr.county || addr.state_district;
+          const state = addr.state || addr.territory;
           const pincode = addr.postcode;
 
           const displayParts = [];
@@ -160,9 +187,9 @@ export const LocationProvider = ({ children }) => {
           return {
             name,
             time: "12-15 mins",
-            city: city || currentLocation?.city || "Indore",
-            state: state || currentLocation?.state || "Madhya Pradesh",
-            pincode: pincode || currentLocation?.pincode || "452018",
+            city: city || "",
+            state: state || "",
+            pincode: pincode || "",
             latitude,
             longitude,
           };
@@ -174,107 +201,21 @@ export const LocationProvider = ({ children }) => {
       const handleLocationSuccess = async (latitude, longitude) => {
         try {
           // Always succeed with coordinates (needed for delivery fee calculation),
-          // even if reverse geocoding fails (key missing / quota / restrictions).
-          let liveLocation = fallbackFromCoords(latitude, longitude);
-
-          const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-          if (apiKey) {
-            const params = new URLSearchParams({
-              latlng: `${latitude},${longitude}`,
-              key: apiKey,
-            });
-
-            const response = await fetch(
-              `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
-            );
-
-            if (!response.ok) {
-              throw new Error("Failed to fetch address from Google Maps");
-            }
-
-            const data = await response.json();
-
-            // Handle Google Geocoding API error responses
-            if (data.status === "REQUEST_DENIED") {
-              const msg =
-                data.error_message ||
-                "Geocoding API rejected (check API key restrictions)";
-              throw new Error(msg);
-            }
-            if (data.status === "OVER_QUERY_LIMIT") {
-              throw new Error("Geocoding API quota exceeded");
-            }
-            if (!data.results || data.results.length === 0) {
-              throw new Error(
-                data.error_message || "No address found for current location",
-              );
-            }
-
-            const components = data.results[0].address_components || [];
-
-            const getComponent = (types) =>
-              components.find((c) => types.every((t) => c.types.includes(t)))
-                ?.long_name;
-
-            // Build address from components to match: "214, Rajshri Palace Colony, Pipliyahana, Indore, Madhya Pradesh 452018, India"
-            const premise = getComponent(["premise"]);
-            const neighborhood = getComponent(["neighborhood"]);
-            const sublocality = getComponent([
-              "sublocality_level_1",
-              "sublocality",
-            ]);
-            const locality = getComponent(["locality"]);
-            const state = getComponent(["administrative_area_level_1"]);
-            const pincode = getComponent(["postal_code"]);
-            const country = getComponent(["country"]);
-
-            const displayParts = [];
-            if (premise) displayParts.push(premise);
-            if (neighborhood) displayParts.push(neighborhood);
-            if (sublocality && sublocality !== neighborhood)
-              displayParts.push(sublocality);
-            if (locality) displayParts.push(locality);
-
-            let statePincode = "";
-            if (state) statePincode += state;
-            if (pincode) statePincode += (statePincode ? " " : "") + pincode;
-            if (statePincode) displayParts.push(statePincode);
-
-            if (country) displayParts.push(country);
-
-            const friendlyName =
-              displayParts.join(", ") || data.results[0].formatted_address;
-
-            liveLocation = {
-              name: friendlyName,
-              time: "12-15 mins",
-              city: locality || liveLocation.city,
-              state: state || liveLocation.state,
-              pincode: pincode || liveLocation.pincode,
-              latitude: latitude,
-              longitude: longitude,
-            };
-          } else {
-            liveLocation =
-              (await reverseGeocodeWithOSM(latitude, longitude)) || liveLocation;
-          }
+          // even if reverse geocoding fails.
+          const resolved =
+            (await reverseGeocodeViaServer(latitude, longitude)) ||
+            (await reverseGeocodeWithOSM(latitude, longitude));
+          const liveLocation = resolved || fallbackFromCoords(latitude, longitude);
 
           updateLocation(liveLocation, {
             persist: true,
             updateSavedHome: false,
           });
-          resolve({ ok: true, location: liveLocation });
-        } catch (err) {
-          const loc =
-            (await reverseGeocodeWithOSM(latitude, longitude)) ||
-            fallbackFromCoords(latitude, longitude);
-          updateLocation(loc, { persist: true, updateSavedHome: false });
-          resolve({
-            ok: true,
-            location: loc,
-            warning: err?.message || "Unable to fetch address",
-          });
+          resolve(
+            resolved
+              ? { ok: true, location: liveLocation }
+              : { ok: true, location: liveLocation, warning: "Unable to fetch address" },
+          );
         } finally {
           setIsFetchingLocation(false);
         }
@@ -358,11 +299,11 @@ export const LocationProvider = ({ children }) => {
             const newLoc = {
               name: primary.address,
               time: "12-15 mins",
-              city: primary.city || "Indore",
-              state: primary.state || "Madhya Pradesh",
-              pincode: primary.pincode || "452018",
-              latitude: primary.location?.lat || 22.711140989838025,
-              longitude: primary.location?.lng || 75.9001552518043,
+              city: primary.city || "",
+              state: primary.state || "",
+              pincode: primary.pincode || "",
+              latitude: primary.location?.lat ?? null,
+              longitude: primary.location?.lng ?? null,
             };
             setCurrentLocation(newLoc);
             setJSON(STORAGE_KEY, { address: newLoc.name, ...newLoc }, { ttlMs: LOCATION_TTL_MS });
@@ -398,6 +339,11 @@ export const LocationProvider = ({ children }) => {
         },
         { persist: false, updateSavedHome: false },
       );
+      // A coordinate-only name means reverse geocoding failed last time (and
+      // older builds stored a hardcoded city/state with it) — resolve it again.
+      if (/^Lat -?\d/.test(addressName) || !parsed.state) {
+        fetchAndCacheLocation();
+      }
     } else {
       fetchAndCacheLocation();
     }
@@ -425,15 +371,7 @@ export const LocationProvider = ({ children }) => {
 };
 
 const defaultLocationContext = {
-  currentLocation: {
-    name: "Select delivery location",
-    time: "12-15 mins",
-    city: "Indore",
-    state: "Madhya Pradesh",
-    pincode: "452018",
-    latitude: 22.711140989838025,
-    longitude: 75.9001552518043,
-  },
+  currentLocation: EMPTY_LOCATION,
   savedAddresses: [],
   isFetchingLocation: false,
   locationError: null,

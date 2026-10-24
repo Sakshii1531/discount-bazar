@@ -36,6 +36,7 @@ const StockManagement = () => {
     const [filterStatus, setFilterStatus] = useState('All');
     const [inventory, setInventory] = useState([]);
     const [history, setHistory] = useState([]);
+    const [historyRange, setHistoryRange] = useState({ from: '', to: '' });
     const [isLoading, setIsLoading] = useState(true);
     const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -102,7 +103,8 @@ const StockManagement = () => {
     const fetchHistory = async (silent = false) => {
         if (!silent) setIsLoading(true);
         try {
-            const res = await sellerApi.getStockHistory();
+            const { from, to } = historyRange;
+            const res = await sellerApi.getStockHistory({ ...(from && { from }), ...(to && { to }) });
             if (res.data.success) {
                 setHistory(res.data.result || []);
             }
@@ -123,7 +125,8 @@ const StockManagement = () => {
         } else {
             fetchHistory();
         }
-    }, [activeView, filterStatus]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeView, filterStatus, historyRange]);
 
     const stats = useMemo(() => [
         { label: 'Total Inventory', value: inventory.reduce((acc, item) => acc + item.stock, 0), icon: HiOutlineCube, color: 'text-brand-600', bg: 'bg-brand-50', status: 'All' },
@@ -430,17 +433,47 @@ const StockManagement = () => {
                 /* History View */
                 <BlurFade delay={0.2}>
                     <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl p-0 overflow-hidden">
-                        <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
+                        <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/20">
                             <div>
                                 <h3 className="text-base font-black text-slate-900">Inventory Movement Log</h3>
                                 <p className="text-sm text-slate-600 font-medium">Audit trail for all stock adjustments and sales.</p>
                             </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Input
+                                    type="date"
+                                    title="From date"
+                                    value={historyRange.from}
+                                    max={historyRange.to || undefined}
+                                    onChange={(e) => setHistoryRange((r) => ({ ...r, from: e.target.value }))}
+                                    className="py-2 rounded-lg text-xs font-semibold min-w-[140px]"
+                                />
+                                <span className="text-xs font-bold text-slate-500">to</span>
+                                <Input
+                                    type="date"
+                                    title="To date"
+                                    value={historyRange.to}
+                                    min={historyRange.from || undefined}
+                                    onChange={(e) => setHistoryRange((r) => ({ ...r, to: e.target.value }))}
+                                    className="py-2 rounded-lg text-xs font-semibold min-w-[140px]"
+                                />
+                                {(historyRange.from || historyRange.to) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setHistoryRange({ from: '', to: '' })}
+                                        className="text-xs font-bold text-slate-600 hover:text-slate-900 px-1"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {history.length === 0 ? (
-                                <div className="p-10 text-center text-slate-600 font-black uppercase tracking-widest">No history found</div>
+                                <div className="p-10 text-center text-slate-600 font-black uppercase tracking-widest">
+                                    {historyRange.from || historyRange.to ? 'No history in this date range' : 'No history found'}
+                                </div>
                             ) : history.map((log) => (
-                                <div key={log._id} className="p-6 hover:bg-slate-50/50 transition-colors flex items-center justify-between group">
+                                <div key={log.id || log._id}className="p-6 hover:bg-slate-50/50 transition-colors flex items-center justify-between group">
                                     <div className="flex items-center gap-5">
                                         <div className={cn(
                                             "h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm",

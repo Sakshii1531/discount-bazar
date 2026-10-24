@@ -32,6 +32,8 @@ export const sellerApi = {
     inspectCancelledReturn: (id, data) => axiosInstance.post(`/cancellations/seller/${id}/inspection`, data),
     getOrderDetails: (orderId) => axiosInstance.get(`/orders/details/${encodeURIComponent(orderId)}`),
     getEarnings: () => axiosInstance.get('/seller/earnings'),
+    // Paginated ledger: { from, to, type, search, page, limit }
+    getTransactions: (params) => axiosInstance.get('/seller/transactions', { params }),
     getWalletSummary: () => axiosInstance.get('/seller/wallet/summary'),
     getProfile: () => axiosInstance.get('/seller/profile'),
     updateProfile: (data) => axiosInstance.put('/seller/profile', data),
@@ -39,7 +41,7 @@ export const sellerApi = {
     // Stock
     adjustStock: (data) => axiosInstance.post('/products/adjust-stock', data),
     bulkUploadProducts: (rows) => axiosInstance.post('/products/bulk-upload', { rows }, { timeout: 300000 }),
-    getStockHistory: () => axiosInstance.get('/products/stock-history'),
+    getStockHistory: (params) => axiosInstance.get('/products/stock-history', { params }),
 
     // Notifications
     getNotifications: () => axiosInstance.get('/notifications'),

@@ -25,8 +25,9 @@ export function mapsRateLimit(req, res, next) {
   if (process.env.DISABLE_RATE_LIMIT === "true" || (process.env.NODE_ENV !== "production" && process.env.ENABLE_RATE_LIMIT_DEV !== "true")) {
     return next();
   }
-  const userId = req.user?.id ? String(req.user.id) : "anon";
   const ip = String(req.ip || req.headers["x-forwarded-for"] || "unknown");
+  // Guests are bucketed by IP so they don't all share one "anon" quota.
+  const userId = req.user?.id ? String(req.user.id) : `anon:${ip}`;
 
   const userLimit = parseInt(process.env.MAPS_RL_USER_PER_MIN || "30", 10);
   const ipLimit = parseInt(process.env.MAPS_RL_IP_PER_MIN || "60", 10);

@@ -129,11 +129,12 @@ export async function getPosOrderForReturn({ sellerId, orderId }) {
   return { order: { ...order, posCustomer, items: undefined }, items };
 }
 
-export async function listPosReturns({ sellerId, page = 1, limit = 25 }) {
+export async function listPosReturns({ sellerId, page = 1, limit = 25, createdAt = null }) {
   const skip = (page - 1) * limit;
+  const query = { seller: sellerId, ...(createdAt && { createdAt }) };
   const [items, total] = await Promise.all([
-    PosReturn.find({ seller: sellerId }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-    PosReturn.countDocuments({ seller: sellerId }),
+    PosReturn.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    PosReturn.countDocuments(query),
   ]);
   return { items, page, limit, total, totalPages: Math.ceil(total / limit) || 1 };
 }

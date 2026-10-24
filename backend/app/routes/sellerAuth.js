@@ -11,7 +11,7 @@ import {
     checkSellerApplicationStatus,
 } from "../controller/sellerAuthController.js";
 import { getSellerProfile, updateSellerProfile, requestWithdrawal, getNearbySellers } from "../controller/sellerController.js";
-import { getSellerStats, getSellerEarnings } from "../controller/sellerStatsController.js";
+import { getSellerStats, getSellerEarnings, getSellerTransactions } from "../controller/sellerStatsController.js";
 import { getSellerWalletSummaryController } from "../controller/adminFinanceController.js";
 import { verifyToken, optionalVerifyToken, allowRoles } from "../middleware/authMiddleware.js";
 import {
@@ -93,6 +93,7 @@ router.put(
 // Analytics & Financials
 router.get("/stats", verifyToken, allowRoles("seller"), getSellerStats);
 router.get("/earnings", verifyToken, allowRoles("seller"), getSellerEarnings);
+router.get("/transactions", verifyToken, allowRoles("seller"), getSellerTransactions);
 router.get("/wallet/summary", verifyToken, allowRoles("seller"), getSellerWalletSummaryController);
 router.post("/request-withdrawal", verifyToken, allowRoles("seller"), requestWithdrawal);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import Button from "@shared/components/ui/Button";
@@ -76,6 +76,11 @@ const Returns = () => {
     const [submittingReject, setSubmittingReject] = useState(false);
     const [assigningPickup, setAssigningPickup] = useState(false);
     const [activeOtps, setActiveOtps] = useState({}); // { orderId: { otp, expiresAt } }
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+    // Socket callbacks hold the first fetchReturns closure, so the range lives in a ref.
+    const rangeRef = useRef({ from: "", to: "" });
+    const requestSeq = useRef(0);
     const canManageReturns = true;
 
     const tabs = [
@@ -139,22 +144,49 @@ const Returns = () => {
         }
     };
 
+    // Pages through every return in the selected date range (not just the first
+    // page), so the status counts and tabs cover the seller's full history.
     const fetchReturns = async () => {
+        const seq = ++requestSeq.current;
+        const { from, to } = rangeRef.current;
         try {
             setLoading(true);
-            const res = await sellerApi.getReturns();
-            const payload = res.data.result || {};
-            const items = Array.isArray(payload.items)
-                ? payload.items
-                : res.data.results || [];
-            setReturns(items || []);
+            const all = [];
+            let page = 1;
+            let totalPages = 1;
+            do {
+                const res = await sellerApi.getReturns({
+                    page,
+                    limit: 100,
+                    ...(from && { startDate: from }),
+                    ...(to && { endDate: to }),
+                });
+                const payload = res.data.result || {};
+                const items = Array.isArray(payload.items) ? payload.items : res.data.results || [];
+                all.push(...items);
+                totalPages = payload.totalPages || 1;
+                page += 1;
+            } while (page <= totalPages && seq === requestSeq.current);
+            if (seq === requestSeq.current) setReturns(all);
         } catch (error) {
             console.error("Failed to fetch returns", error);
-            showToast("Failed to fetch return requests", "error");
+            if (seq === requestSeq.current) showToast("Failed to fetch return requests", "error");
         } finally {
-            setLoading(false);
+            if (seq === requestSeq.current) setLoading(false);
         }
     };
+
+    // Reload when the date range changes (the initial load happens in the mount effect).
+    const rangeMountedRef = useRef(false);
+    useEffect(() => {
+        rangeRef.current = { from: fromDate, to: toDate };
+        if (!rangeMountedRef.current) {
+            rangeMountedRef.current = true;
+            return;
+        }
+        fetchReturns();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fromDate, toDate]);
 
     useEffect(() => {
         fetchReturns();
@@ -290,7 +322,36 @@ const Returns = () => {
                             Review and manage customer return requests.
                         </p>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                        <input
+                            type="date"
+                            title="From date (return requested)"
+                            value={fromDate}
+                            max={toDate || undefined}
+                            onChange={(e) => setFromDate(e.target.value)}
+                            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                        />
+                        <span className="text-xs font-bold text-slate-500">to</span>
+                        <input
+                            type="date"
+                            title="To date (return requested)"
+                            value={toDate}
+                            min={fromDate || undefined}
+                            onChange={(e) => setToDate(e.target.value)}
+                            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                        />
+                        {(fromDate || toDate) && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFromDate("");
+                                    setToDate("");
+                                }}
+                                className="text-xs font-bold text-slate-600 hover:text-slate-900 px-1"
+                            >
+                                Clear
+                            </button>
+                        )}
                         <Button
                             onClick={fetchReturns}
                             variant="outline"

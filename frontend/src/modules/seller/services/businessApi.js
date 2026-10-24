@@ -11,7 +11,7 @@ export const businessApi = {
     saveSupplier: (data, id) => (id ? axiosInstance.put(`${B}/suppliers/${id}`, data) : axiosInstance.post(`${B}/suppliers`, data)),
     listCustomers: () => axiosInstance.get(`${B}/customers`),
     saveCustomer: (data, id) => (id ? axiosInstance.put(`${B}/customers/${id}`, data) : axiosInstance.post(`${B}/customers`, data)),
-    partyLedger: (kind, id) => axiosInstance.get(`${B}/${kind}/${id}/ledger`),
+    partyLedger: (kind, id, params) => axiosInstance.get(`${B}/${kind}/${id}/ledger`, { params }),
     recordPayment: (data) => axiosInstance.post(`${B}/payments`, data),
 
     listPurchases: (params) => axiosInstance.get(`${B}/purchases`, { params }),

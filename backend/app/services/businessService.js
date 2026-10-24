@@ -99,12 +99,31 @@ export async function listParties(sellerId, partyType) {
   return docs.map((d) => ({ ...d, balance: bal.get(String(d._id)) || 0 }));
 }
 
+// Net of a party's entries matching `dateMatch` (all of them when it is omitted).
+async function partyNet(sellerId, partyType, partyId, dateMatch) {
+  const [row] = await PartyLedgerEntry.aggregate([
+    { $match: { seller: oid(sellerId), partyType, party: oid(partyId), ...(dateMatch && { date: dateMatch }) } },
+    { $group: { _id: null, v: { $sum: { $multiply: ["$amount", "$effect"] } } } },
+  ]);
+  return roundCurrency(row?.v || 0);
+}
+
+/**
+ * A party's statement. With a date range the running balance starts from the
+ * opening balance (everything before `from`), and `balance` stays the party's
+ * current outstanding so the header figure never depends on the filter.
+ */
 export async function partyLedger(sellerId, partyType, partyId, { from, to } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(String(partyId))) throw err(404, "Party not found");
   const q = { seller: sellerId, partyType, party: partyId };
   if (from || to) q.date = { ...(from && { $gte: from }), ...(to && { $lte: to }) };
-  const entries = await PartyLedgerEntry.find(q).sort({ date: 1, createdAt: 1 }).lean();
+  const [entries, openingBalance, currentBalance] = await Promise.all([
+    PartyLedgerEntry.find(q).sort({ date: 1, createdAt: 1 }).lean(),
+    from ? partyNet(sellerId, partyType, partyId, { $lt: from }) : 0,
+    to ? partyNet(sellerId, partyType, partyId) : null,
+  ]);
   const { itemsByRef, billByRef } = await ledgerBillItems(sellerId, entries);
-  let running = 0;
+  let running = openingBalance;
   const rows = entries.map((e) => {
     running = roundCurrency(running + e.amount * e.effect);
     // Payments share the bill's ref but carry no goods of their own.
@@ -114,7 +133,12 @@ export async function partyLedger(sellerId, partyType, partyId, { from, to } = {
     const bill = e.kind !== "PAYMENT" && e.refId ? billByRef.get(ref) : undefined;
     return { ...e, items, ...(bill ? { bill } : {}), balance: running };
   });
-  return { entries: rows, balance: running };
+  return {
+    entries: rows,
+    openingBalance,
+    closingBalance: running,
+    balance: currentBalance ?? running,
+  };
 }
 
 // Item lines of the bills/returns behind ledger entries, normalised to

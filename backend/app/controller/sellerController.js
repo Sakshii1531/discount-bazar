@@ -220,8 +220,8 @@ export const updateSellerProfile = async (req, res) => {
     }
 
     if (radius !== undefined) {
-      if (radius < 1 || radius > 100)
-        return handleResponse(res, 400, "Radius must be between 1 and 100 km");
+      if (radius < 0.5 || radius > 100)
+        return handleResponse(res, 400, "Radius must be between 0.5 and 100 km");
       seller.serviceRadius = Number(radius);
     }
 

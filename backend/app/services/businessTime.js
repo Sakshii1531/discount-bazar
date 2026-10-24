@@ -45,6 +45,36 @@ export function dateKeyOf(date, tz = DEFAULT_TZ) {
 
 export const todayKey = (tz = DEFAULT_TZ) => dateKeyOf(new Date(), tz);
 
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Bound for one side of a list filter: a YYYY-MM-DD key is a whole business day
+// in `tz`; any other parseable value is taken as an exact instant.
+function rangeBound(value, tz, end) {
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+  if (DATE_KEY_RE.test(v)) return end ? dayEnd(v, tz) : dayStart(v, tz);
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Optional date filter for list endpoints. Accepts `from`/`to` or
+ * `startDate`/`endDate`; returns a Mongo range ({ $gte, $lte }) or null when
+ * neither side is set. A reversed range is swapped rather than matching nothing.
+ */
+export function dateRangeFilter(query = {}, tz = DEFAULT_TZ) {
+  let start = rangeBound(query.from ?? query.startDate, tz, false);
+  let end = rangeBound(query.to ?? query.endDate, tz, true);
+  if (!start && !end) return null;
+  if (start && end && start > end) {
+    const fromKey = String(query.from ?? query.startDate).trim();
+    const toKey = String(query.to ?? query.endDate).trim();
+    start = rangeBound(toKey, tz, false);
+    end = rangeBound(fromKey, tz, true);
+  }
+  return { ...(start && { $gte: start }), ...(end && { $lte: end }) };
+}
+
 /** Throws 423 if the business day containing `date` has been closed. */
 export async function assertDayOpen(sellerId, date = new Date(), tz = null) {
   const zone = tz || (await getSellerTz(sellerId));

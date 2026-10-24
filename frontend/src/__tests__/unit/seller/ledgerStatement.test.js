@@ -36,6 +36,25 @@ describe('buildStatement', () => {
     expect(st.closingLabel).toBe('Receivable from customer');
   });
 
+  it('opens a date-filtered statement on the brought-forward balance', () => {
+    const ranged = buildStatement({
+      kind: 'customers',
+      party: { name: 'Ravi' },
+      entries: [{ ...entries[1], balance: 1350 }],
+      openingBalance: 1500,
+      balance: 1350,
+      range: { from: '2026-10-05', to: '2026-10-31' },
+    });
+    expect(ranged.rows.map((r) => [r.type, r.debit, r.credit, r.balance])).toEqual([
+      ['Opening Balance', null, null, 1500],
+      ['Payment', null, 150, 1350],
+    ]);
+    expect(ranged.totalDebit).toBe(0);
+    expect(ranged.totalCredit).toBe(150);
+    expect(ranged.closingBalance).toBe(1350);
+    expect(ranged.period).toMatch(/05 Oct 2026 – 31 Oct 2026/);
+  });
+
   it('escapes party data in the printable statement', () => {
     const html = statementHtml(st);
     expect(html).toContain('Ravi &lt;Kirana&gt;');

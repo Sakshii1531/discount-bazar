@@ -136,6 +136,29 @@ describe('computeBillFigures — online orders', () => {
     expect(f.balanceDue).toBe(90);
   });
 
+  it('treats online tax as added on top even with the stored default (inclusive) flags', () => {
+    // As saved by checkout: tax = subtotal × rate, no isTaxInclusive set, so the
+    // schema default `true` is present on the order.
+    const order = onlineOrder({
+      isTaxInclusive: true,
+      paymentBreakdown: { productSubtotal: 100, deliveryFeeCharged: 30, taxTotal: 5, grandTotal: 135, isTaxInclusive: true },
+    });
+    const f = computeBillFigures(order);
+    expect(f.isTaxInclusive).toBe(false);
+    expect(f.gstRows).toEqual([[5, { taxable: 100, tax: 5 }]]);
+    // Gross + tax + fees reconciles to the stored total.
+    expect(f.subtotal + f.taxTotal + f.charges.reduce((s, c) => s + c.value, 0) - f.discountTotal).toBe(f.grandTotal);
+  });
+
+  it('never shows a cancelled order as owed', () => {
+    const f = computeBillFigures(onlineOrder({
+      status: 'cancelled',
+      paymentMode: 'COD',
+      paymentStatus: 'PENDING_CASH_COLLECTION',
+    }));
+    expect(f.balanceDue).toBe(0);
+  });
+
   it('keeps the GST split on goods only (fees excluded) when tax applies', () => {
     const f = computeBillFigures(onlineOrder({
       paymentBreakdown: { productSubtotal: 100, deliveryFeeCharged: 30, taxTotal: 18, grandTotal: 148, isTaxInclusive: false },
@@ -162,9 +185,9 @@ describe('ReceiptPrint for an online order', () => {
   });
 
   it('shows the GST row when the order carries tax', () => {
+    // Stored flags as checkout leaves them (schema default inclusive).
     const order = onlineOrder({
-      isTaxInclusive: false,
-      paymentBreakdown: { productSubtotal: 100, deliveryFeeCharged: 30, taxTotal: 18, grandTotal: 148, isTaxInclusive: false },
+      paymentBreakdown: { productSubtotal: 100, deliveryFeeCharged: 30, taxTotal: 18, grandTotal: 148, isTaxInclusive: true },
     });
     render(<ReceiptPrint order={order} shopName="Main Mart" seller={{}} heading="Tax Invoice" onClose={() => {}} />);
     expect(screen.getByText('GST (CGST + SGST)')).toBeInTheDocument();

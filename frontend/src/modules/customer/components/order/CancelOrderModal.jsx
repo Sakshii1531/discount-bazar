@@ -21,6 +21,17 @@ const PAYMENT_LABELS = {
   WALLET: "Wallet",
 };
 
+const DEFAULT_REASONS = [
+  { code: "PLACED_BY_MISTAKE", label: "Order Placed by Mistake" },
+  { code: "INCORRECT_ADDRESS", label: "Incorrect Address" },
+  { code: "INCORRECT_PRODUCTS", label: "Incorrect Products Ordered" },
+  { code: "MODIFY_ORDER", label: "Want to Modify Order" },
+  { code: "DELIVERY_TOO_LONG", label: "Delivery Taking Long" },
+  { code: "PAYMENT_ISSUE", label: "Payment Issue" },
+  { code: "BETTER_PRICE", label: "Found a Better Price" },
+  { code: "OTHER", label: "Other" },
+];
+
 const newIdempotencyKey = () =>
   globalThis.crypto?.randomUUID?.() || `cxl-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -40,7 +51,7 @@ const CancelOrderModal = ({ isOpen, onClose, orderId, details, onDone }) => {
 
   const eligibility = details?.eligibility;
   const order = details?.order;
-  const reasons = details?.reasons || [];
+  const reasons = (details?.reasons && details.reasons.length > 0) ? details.reasons : DEFAULT_REASONS;
   const isRequest = eligibility?.action === "REQUEST";
   const preview = eligibility?.refundPreview;
 
@@ -139,9 +150,9 @@ const CancelOrderModal = ({ isOpen, onClose, orderId, details, onDone }) => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-order-title"
-            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col"
+            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative"
           >
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+            <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 bg-white z-10">
               <h2 id="cancel-order-title" className="text-lg font-black text-slate-900">
                 {isRequest ? "Request cancellation" : "Cancel order"}
               </h2>
@@ -156,7 +167,7 @@ const CancelOrderModal = ({ isOpen, onClose, orderId, details, onDone }) => {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 overscroll-contain">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50 rounded-2xl p-4 text-sm">
                 <dt className="text-slate-500">Order</dt>
                 <dd className="font-bold text-slate-900 text-right break-all">#{order?.orderId}</dd>
@@ -221,6 +232,24 @@ const CancelOrderModal = ({ isOpen, onClose, orderId, details, onDone }) => {
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                   />
                 )}
+                {/* Instant proceed button visible right when a cancellation reason is selected */}
+                {reasonCode && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="pt-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={handleConfirm}
+                      disabled={submitting}
+                      className="w-full py-3.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center justify-center gap-2 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      {submitting && <Loader2 size={16} className="animate-spin" />}
+                      <span>{isRequest ? "Proceed with Request" : "Proceed to Cancel"}</span>
+                    </button>
+                  </motion.div>
+                )}
               </fieldset>
 
               <div className="flex gap-2 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-sm text-rose-900">
@@ -234,23 +263,32 @@ const CancelOrderModal = ({ isOpen, onClose, orderId, details, onDone }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-5 border-t border-slate-100">
+            <div className="shrink-0 grid grid-cols-2 gap-3 p-4 sm:p-5 border-t border-slate-100 bg-white z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="py-3 rounded-2xl border-2 border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className="py-3 rounded-2xl border-2 border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
               >
                 Back
               </button>
               <button
                 type="button"
+                id="cancel-order-proceed-btn"
                 onClick={handleConfirm}
                 disabled={!reasonCode || submitting}
-                className="py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                  !reasonCode
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                    : "bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-200 active:scale-[0.98] cursor-pointer"
+                }`}
               >
                 {submitting && <Loader2 size={16} className="animate-spin" />}
-                {isRequest ? "Send request" : "Confirm cancel"}
+                {!reasonCode
+                  ? "Select a reason"
+                  : isRequest
+                    ? "Proceed to Request"
+                    : "Proceed to Cancel"}
               </button>
             </div>
           </motion.div>

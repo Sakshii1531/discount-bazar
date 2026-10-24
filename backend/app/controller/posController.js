@@ -3,7 +3,7 @@ import Order from "../models/order.js";
 import PosCustomer from "../models/posCustomer.js";
 import handleResponse from "../utils/helper.js";
 import { getPagination } from "../utils/pagination.js";
-import { getSellerTz, dayStart, dayEnd } from "../services/businessTime.js";
+import { getSellerTz, dateRangeFilter } from "../services/businessTime.js";
 import { editPosSale as editPosSaleService } from "../services/posEditService.js";
 import {
   createPosSale as createPosSaleService,
@@ -110,15 +110,9 @@ export const getPosSales = async (req, res) => {
     const { page, limit, skip } = getPagination(req, { defaultLimit: 25, maxLimit: 100 });
 
     const query = { seller: sellerId, orderSource: "POS" };
-    // Optional business-day range (YYYY-MM-DD, seller timezone).
-    const { from, to } = req.query;
-    const isKey = (k) => /^\d{4}-\d{2}-\d{2}$/.test(String(k || ""));
-    if (isKey(from) || isKey(to)) {
-      const tz = await getSellerTz(sellerId);
-      query.createdAt = {};
-      if (isKey(from)) query.createdAt.$gte = dayStart(from, tz);
-      if (isKey(to)) query.createdAt.$lte = dayEnd(to, tz);
-    }
+    // Optional business-day range (from/to or startDate/endDate, seller timezone).
+    const range = dateRangeFilter(req.query, await getSellerTz(sellerId));
+    if (range) query.createdAt = range;
     const trimmedSearch = String(req.query.search || "").trim();
     if (trimmedSearch) {
       const regex = new RegExp(trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -217,7 +211,8 @@ export const getPosReturns = async (req, res) => {
     const sellerId = req.user.id;
     const { page, limit } = getPagination(req, { defaultLimit: 25, maxLimit: 100 });
 
-    const result = await listPosReturnsService({ sellerId, page, limit });
+    const createdAt = dateRangeFilter(req.query, await getSellerTz(sellerId));
+    const result = await listPosReturnsService({ sellerId, page, limit, createdAt });
     return handleResponse(res, 200, "POS returns fetched", result);
   } catch (error) {
     return handleResponse(res, 500, error.message);

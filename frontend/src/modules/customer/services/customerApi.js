@@ -194,6 +194,8 @@ export const customerApi = {
     axiosInstance.get("/maps/geocode", { params: { address, ...params } }),
   geocodePlaceId: (placeId, params = {}) =>
     axiosInstance.get("/maps/geocode", { params: { placeId, ...params } }),
+  reverseGeocode: (lat, lng) =>
+    axiosInstance.get("/maps/reverse-geocode", { params: { lat, lng } }),
 
   // Push (FCM) test
   testPushNotification: () => axiosInstance.post("/push/test"),

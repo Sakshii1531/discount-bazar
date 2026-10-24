@@ -8,6 +8,7 @@ import {
     isLowStockAlertsEnabled,
 } from "../services/lowStockAlertService.js";
 import { invalidate } from "../services/cacheService.js";
+import { getSellerTz, dateKeyOf, dateRangeFilter } from "../services/businessTime.js";
 
 /* ===============================
    ADJUST STOCK MANUALLY
@@ -129,8 +130,14 @@ export const adjustStock = async (req, res) => {
 export const getStockHistory = async (req, res) => {
     try {
         const sellerId = req.user.id;
+        const tz = await getSellerTz(sellerId);
 
-        const history = await StockHistory.find({ seller: sellerId })
+        // Optional ?from&to (or startDate&endDate) business-day range.
+        const query = { seller: sellerId };
+        const range = dateRangeFilter(req.query, tz);
+        if (range) query.createdAt = range;
+
+        const history = await StockHistory.find(query)
             .sort({ createdAt: -1 })
             .populate("product", "name sku mainImage");
 
@@ -140,8 +147,8 @@ export const getStockHistory = async (req, res) => {
             sku: item.product?.sku || "N/A",
             type: item.type,
             quantity: item.quantity > 0 ? `+${item.quantity}` : `${item.quantity}`,
-            date: item.createdAt.toISOString().split('T')[0],
-            time: item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            date: dateKeyOf(item.createdAt, tz),
+            time: item.createdAt.toLocaleTimeString("en-IN", { timeZone: tz, hour: '2-digit', minute: '2-digit' }),
             note: item.note
         })));
 

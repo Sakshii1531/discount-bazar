@@ -565,15 +565,15 @@ const MapPicker = ({
           </div>
           <input
             type="range"
-            min="1"
+            min="0.5"
             max={maxRadius}
-            step="1"
+            step="0.5"
             value={radius}
             onChange={(e) => setRadius(Number(e.target.value))}
             className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
           />
           <div className="flex justify-between text-[10px] font-bold text-slate-400">
-            <span>1 km</span>
+            <span>0.5 km</span>
             <span>{maxRadius} km</span>
           </div>
           <p className="text-[11px] text-slate-500 font-medium flex items-start gap-1">

@@ -500,6 +500,30 @@ describe("terminal states, admin cancellation, late payments", () => {
     expect(saved.workflowStatus).toBe("CANCELLED");
   });
 
+  it("a cancelled order cannot be reactivated through the status route, and riders cannot cancel", async () => {
+    const order = await makeOrder();
+    await submit(order.orderId, { mode: "CANCEL", reasonCode: "OTHER" });
+    for (const status of ["confirmed", "delivered", "pending"]) {
+      const res = await request(app)
+        .put(`/api/orders/status/${order.orderId}`)
+        .set("Authorization", auth.admin)
+        .send({ status });
+      expect(res.status).toBe(409);
+    }
+    const saved = await Order.findById(order._id).lean();
+    expect(saved.status).toBe("cancelled");
+    expect(saved.workflowStatus).toBe("CANCELLED");
+
+    const assigned = await makeOrder({ workflowStatus: "DELIVERY_ASSIGNED", status: "confirmed", deliveryBoy: rider._id });
+    const riderCancel = await request(app)
+      .put(`/api/orders/status/${assigned.orderId}`)
+      .set("Authorization", auth.rider)
+      .send({ status: "cancelled" });
+    expect(riderCancel.status).toBe(403);
+    expect((await Order.findById(assigned._id).lean()).status).toBe("confirmed");
+    expect(await stockNow()).toBe(STOCK - 3);
+  });
+
   it("the customer list carries backend eligibility", async () => {
     const order = await makeOrder();
     const res = await request(app).get("/api/orders/my-orders").set("Authorization", auth.customer);

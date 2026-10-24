@@ -262,3 +262,210 @@ export async function geocodePlaceId(placeId) {
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Reverse geocoding: lat/lng -> structured address (city, state, pincode).
+// Done server-side because the Geocoding web service rejects browser
+// (referrer-restricted) keys, and Nominatim requires a real User-Agent which
+// browsers cannot set.
+// ---------------------------------------------------------------------------
+
+const REVERSE_CACHE_MAX = 500;
+const reverseMemCache = new Map();
+
+// ~11m precision: nearby taps share a cache entry without changing the address.
+function cacheKeyReverse(lat, lng) {
+  return `geocode:v2:rev:${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+function buildDisplayName(parts) {
+  const out = [];
+  for (const p of parts) {
+    if (p && !out.includes(p)) out.push(p);
+  }
+  return out.join(", ");
+}
+
+async function reverseGeocodeWithGoogle(lat, lng, apiKey) {
+  const resp = await client.reverseGeocode({
+    params: { latlng: { lat, lng }, key: apiKey },
+    timeout: 10000,
+  });
+  const status = resp.data?.status;
+  if (status && status !== "OK") {
+    const err = new Error(`Reverse geocoding failed: ${resp.data?.error_message || status}`);
+    err.statusCode = status === "ZERO_RESULTS" ? 404 : 502;
+    err.code = status;
+    throw err;
+  }
+
+  const results = Array.isArray(resp.data?.results) ? resp.data.results : [];
+  if (results.length === 0) {
+    const err = new Error("No address found for these coordinates");
+    err.statusCode = 404;
+    err.code = "ZERO_RESULTS";
+    throw err;
+  }
+
+  // The first result can be a plus-code or a bare route, so look each
+  // component up across all results, most specific first.
+  const find = (types) => {
+    for (const r of results) {
+      const c = (r.address_components || []).find((comp) =>
+        types.every((t) => comp.types.includes(t)),
+      );
+      if (c) return c.long_name;
+    }
+    return "";
+  };
+
+  const premise = find(["premise"]);
+  const area = find(["neighborhood"]) || find(["sublocality_level_1"]) || find(["sublocality"]);
+  const city =
+    find(["locality"]) ||
+    find(["administrative_area_level_3"]) ||
+    find(["administrative_area_level_2"]);
+  const state = find(["administrative_area_level_1"]);
+  const pincode = find(["postal_code"]);
+  const country = find(["country"]);
+  const first = results.find((r) => !r.types?.includes("plus_code")) || results[0];
+
+  return {
+    displayName:
+      buildDisplayName([premise, area, city, [state, pincode].filter(Boolean).join(" "), country]) ||
+      first.formatted_address ||
+      "",
+    formattedAddress: first.formatted_address || "",
+    area,
+    city,
+    state,
+    pincode,
+    country,
+    placeId: first.place_id || null,
+    source: "google",
+  };
+}
+
+async function reverseGeocodeWithNominatim(lat, lng) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(lat),
+    lon: String(lng),
+    addressdetails: "1",
+  });
+  const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+    headers: {
+      "Accept-Language": "en",
+      // Nominatim usage policy requires an identifying User-Agent.
+      "User-Agent": process.env.MAPS_USER_AGENT?.trim() || "DiscountBazar/1.0 (reverse-geocode)",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!resp.ok) {
+    const err = new Error(`Reverse geocoding failed: HTTP ${resp.status}`);
+    err.statusCode = 502;
+    err.code = "REVERSE_GEOCODE_FAILED";
+    throw err;
+  }
+  const data = await resp.json();
+  const addr = data?.address;
+  if (!addr) {
+    const err = new Error("No address found for these coordinates");
+    err.statusCode = 404;
+    err.code = "ZERO_RESULTS";
+    throw err;
+  }
+
+  const area = addr.neighbourhood || addr.suburb || addr.quarter || addr.residential || "";
+  const city =
+    addr.city || addr.town || addr.village || addr.municipality || addr.county || addr.state_district || "";
+  const state = addr.state || addr.territory || "";
+  const pincode = addr.postcode || "";
+  const country = addr.country || "";
+
+  return {
+    displayName:
+      buildDisplayName([
+        [addr.house_number, addr.road].filter(Boolean).join(" "),
+        area,
+        city,
+        [state, pincode].filter(Boolean).join(" "),
+        country,
+      ]) ||
+      data.display_name ||
+      "",
+    formattedAddress: data.display_name || "",
+    area,
+    city,
+    state,
+    pincode,
+    country,
+    placeId: null,
+    source: "osm",
+  };
+}
+
+/**
+ * Reverse geocode coordinates -> { displayName, formattedAddress, area, city,
+ * state, pincode, country, placeId, source }.
+ * Tries Google (server key) first, then OpenStreetMap Nominatim.
+ */
+export async function reverseGeocode(lat, lng) {
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
+    const err = new Error("valid lat and lng are required");
+    err.statusCode = 400;
+    err.code = "INVALID_COORDINATES";
+    throw err;
+  }
+
+  const key = cacheKeyReverse(la, ln);
+  const redis = getRedisClient();
+
+  if (redis) {
+    try {
+      const cached = await redis.get(key);
+      if (cached) return JSON.parse(cached);
+    } catch {
+      // ignore cache errors
+    }
+  }
+  if (reverseMemCache.has(key)) return reverseMemCache.get(key);
+
+  let result = null;
+  let lastError = null;
+
+  const apiKey = getApiKey();
+  if (apiKey) {
+    try {
+      result = await reverseGeocodeWithGoogle(la, ln, apiKey);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!result) {
+    try {
+      result = await reverseGeocodeWithNominatim(la, ln);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!result) {
+    throw lastError || Object.assign(new Error("Reverse geocoding failed"), { statusCode: 502 });
+  }
+
+  if (redis) {
+    try {
+      await redis.set(key, JSON.stringify(result), "EX", GEOCODE_CACHE_TTL_SEC());
+    } catch {
+      // ignore cache errors
+    }
+  }
+  if (reverseMemCache.size >= REVERSE_CACHE_MAX) {
+    reverseMemCache.delete(reverseMemCache.keys().next().value);
+  }
+  reverseMemCache.set(key, result);
+
+  return result;
+}

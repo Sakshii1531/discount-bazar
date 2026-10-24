@@ -15,6 +15,7 @@ import { decorateOrderWithReturnEligibility } from "../utils/returnEligibilityHe
 import logger from "./logger.js";
 import User from "../models/customer.js";
 import { escapeRegex } from "../utils/regex.js";
+import { DEFAULT_TZ, dateRangeFilter } from "./businessTime.js";
 
 function svcErr(message, statusCode) {
   const error = new Error(message);
@@ -55,25 +56,10 @@ function normalizeSellerStatusFilter(statusParam) {
   return {};
 }
 
-function appendDateRange(query, { startDate, endDate }) {
-  if (!startDate && !endDate) {
-    return query;
-  }
-
-  const range = {};
-  if (startDate) {
-    range.$gte = new Date(startDate);
-  }
-  if (endDate) {
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    range.$lte = end;
-  }
-
-  return {
-    ...query,
-    createdAt: range,
-  };
+// YYYY-MM-DD bounds are whole days in the seller's timezone (not the server's).
+function appendDateRange(query, { startDate, endDate, tz }) {
+  const range = dateRangeFilter({ startDate, endDate }, tz);
+  return range ? { ...query, createdAt: range } : query;
 }
 
 export function buildSellerOrdersQuery({
@@ -83,6 +69,7 @@ export function buildSellerOrdersQuery({
   startDate,
   endDate,
   orderSource,
+  tz = DEFAULT_TZ,
 }) {
   let sellerFilter = userId;
   if (role !== "admin" && userId) {
@@ -97,7 +84,7 @@ export function buildSellerOrdersQuery({
     ...normalizeSellerStatusFilter(statusParam),
     ...(orderSource && orderSource !== "all" ? { orderSource } : {}),
   };
-  return appendDateRange(withStatus, { startDate, endDate });
+  return appendDateRange(withStatus, { startDate, endDate, tz });
 }
 
 export async function fetchSellerOrdersPage({
@@ -110,6 +97,7 @@ export async function fetchSellerOrdersPage({
   limit,
   orderSource,
   search,
+  tz,
 }) {
   const query = buildSellerOrdersQuery({
     role,
@@ -118,6 +106,7 @@ export async function fetchSellerOrdersPage({
     startDate,
     endDate,
     orderSource,
+    tz,
   });
 
   const term = String(search || "").trim();
@@ -739,6 +728,7 @@ export async function getSellerReturns({
   userId,
   filters = {},
   pagination,
+  tz = DEFAULT_TZ,
 }) {
   const { status, startDate, endDate } = filters;
   const { page, limit, skip } = pagination;
@@ -753,17 +743,8 @@ export async function getSellerReturns({
     query.returnStatus = status;
   }
 
-  if (startDate || endDate) {
-    query.returnRequestedAt = {};
-    if (startDate) {
-      query.returnRequestedAt.$gte = new Date(startDate);
-    }
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      query.returnRequestedAt.$lte = end;
-    }
-  }
+  const requestedAt = dateRangeFilter({ startDate, endDate }, tz);
+  if (requestedAt) query.returnRequestedAt = requestedAt;
 
   const [orders, total] = await Promise.all([
     Order.find(query)

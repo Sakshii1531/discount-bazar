@@ -8,7 +8,7 @@ import { verifyToken, allowRoles, requireApprovedSeller } from "../middleware/au
 import { validate } from "../middleware/validate.js";
 import * as svc from "../services/businessService.js";
 import { runReport, dashboard, dayBook, REPORT_TYPES, accountTransactions, ACCOUNT_VIEWS } from "../services/businessReportService.js";
-import { getSellerTz, todayKey, dayStart, dayEnd } from "../services/businessTime.js";
+import { getSellerTz, todayKey, dateRangeFilter } from "../services/businessTime.js";
 
 const router = express.Router();
 router.use(verifyToken, allowRoles("seller"), requireApprovedSeller);
@@ -92,16 +92,18 @@ for (const [path, Model, type] of [["suppliers", Supplier, "SUPPLIER"], ["custom
   router.get(`/${path}`, wrap(async (req) => ({ data: await svc.listParties(sid(req), type) })));
   router.post(`/${path}`, validate(partySchema), wrap(async (req) => ({ status: 201, data: await svc.saveParty(Model, sid(req), null, req.body) })));
   router.put(`/${path}/:id`, validate(partySchema), wrap(async (req) => ({ data: await svc.saveParty(Model, sid(req), req.params.id, req.body) })));
-  router.get(`/${path}/:id/ledger`, wrap(async (req) => ({ data: await svc.partyLedger(sid(req), type, req.params.id) })));
+  router.get(`/${path}/:id/ledger`, wrap(async (req) => {
+    const range = dateRangeFilter(req.query, await getSellerTz(sid(req)));
+    return { data: await svc.partyLedger(sid(req), type, req.params.id, { from: range?.$gte, to: range?.$lte }) };
+  }));
 }
 router.post("/payments", validate(paymentSchema), wrap(async (req) => ({ status: 201, message: "Payment recorded", data: await svc.recordPayment(sid(req), req.body) })));
 
 /* purchases */
-const parseRange = (q, tz) => ({
-  from: q.from ? dayStart(q.from, tz) : undefined,
-  to: q.to ? dayEnd(q.to, tz) : undefined,
-  supplierId: q.supplierId,
-});
+const parseRange = (q, tz) => {
+  const range = dateRangeFilter(q, tz);
+  return { from: range?.$gte, to: range?.$lte, supplierId: q.supplierId };
+};
 router.get("/purchases", wrap(async (req) => ({ data: await svc.listPurchaseBills(sid(req), parseRange(req.query, await getSellerTz(sid(req)))) })));
 router.post("/purchases", validate(billSchema), wrap(async (req) => ({ status: 201, message: "Purchase bill saved", data: await svc.createPurchaseBill(sid(req), req.body) })));
 router.get("/purchases/:id", wrap(async (req) => ({ data: await svc.getPurchaseBill(sid(req), req.params.id) })));

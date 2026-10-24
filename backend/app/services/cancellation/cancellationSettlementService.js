@@ -34,14 +34,37 @@ import { roundCurrency } from "../../utils/money.js";
 
 const { APPLIED, NOT_REQUIRED, MANUAL_REVIEW, PENDING } = SETTLEMENT_ADJUSTMENT_STATUS;
 
+const IN_PROGRESS = "in progress";
+// A claim this old was interrupted (crash / restart). Every adjustment below
+// is idempotent (payout + ledger idempotency), so re-running it is safe.
+const STALE_CLAIM_MS = 5 * 60 * 1000;
+
+const isStaleClaim = (adj) =>
+  adj?.status === APPLIED &&
+  adj?.detail === IN_PROGRESS &&
+  (!adj.appliedAt || Date.now() - new Date(adj.appliedAt).getTime() > STALE_CLAIM_MS);
+
 /** Claim one part (seller / rider / cod) so concurrent runs apply it once. */
 async function claimPart(recordId, part) {
   const res = await OrderCancellation.updateOne(
     {
       _id: recordId,
-      [`settlement.${part}.status`]: { $in: [PENDING, null, SETTLEMENT_ADJUSTMENT_STATUS.FAILED] },
+      $or: [
+        { [`settlement.${part}.status`]: { $in: [PENDING, null, SETTLEMENT_ADJUSTMENT_STATUS.FAILED] } },
+        {
+          [`settlement.${part}.status`]: APPLIED,
+          [`settlement.${part}.detail`]: IN_PROGRESS,
+          [`settlement.${part}.appliedAt`]: { $lt: new Date(Date.now() - STALE_CLAIM_MS) },
+        },
+      ],
     },
-    { $set: { [`settlement.${part}.status`]: "APPLIED", [`settlement.${part}.detail`]: "in progress" } },
+    {
+      $set: {
+        [`settlement.${part}.status`]: APPLIED,
+        [`settlement.${part}.detail`]: IN_PROGRESS,
+        [`settlement.${part}.appliedAt`]: new Date(),
+      },
+    },
   );
   return res.modifiedCount === 1;
 }
@@ -245,7 +268,8 @@ export async function applyCancellationSettlement(recordId) {
   let allDone = true;
   for (const part of ["seller", "rider", "cod"]) {
     const current = record.settlement?.[part]?.status;
-    if (current && ![PENDING, SETTLEMENT_ADJUSTMENT_STATUS.FAILED].includes(current)) continue;
+    const stale = isStaleClaim(record.settlement?.[part]);
+    if (current && ![PENDING, SETTLEMENT_ADJUSTMENT_STATUS.FAILED].includes(current) && !stale) continue;
     if (!ready[part]) {
       allDone = false;
       continue;

@@ -871,10 +871,30 @@ const PurchasesTab = () => {
 
     const processedCreatedProductIdRef = useRef(null);
 
-    const load = useCallback(() => {
-        businessApi.listPurchases().then((r) => setBills(unwrap(r) || []));
-        businessApi.listSuppliers().then((r) => setSuppliers(unwrap(r) || []));
+    // Purchase History date filter. Kept in a ref so `load` stays stable (the
+    // draft-restore effect below depends on it and must not re-run on a filter change).
+    const [billRange, setBillRange] = useState({ from: "", to: "" });
+    const billRangeRef = useRef(billRange);
+    billRangeRef.current = billRange;
+    const loadBills = useCallback(() => {
+        const { from, to } = billRangeRef.current;
+        businessApi
+            .listPurchases({ ...(from && { from }), ...(to && { to }) })
+            .then((r) => setBills(unwrap(r) || []))
+            .catch((e) => toast.error(errMsg(e)));
     }, []);
+    const load = useCallback(() => {
+        loadBills();
+        businessApi.listSuppliers().then((r) => setSuppliers(unwrap(r) || []));
+    }, [loadBills]);
+    const billRangeMounted = useRef(false);
+    useEffect(() => {
+        if (!billRangeMounted.current) {
+            billRangeMounted.current = true;
+            return;
+        }
+        loadBills();
+    }, [billRange, loadBills]);
 
     // Restore draft and process incoming created product
     useEffect(() => {
@@ -1677,7 +1697,33 @@ const PurchasesTab = () => {
             )}
 
             <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-900">Purchase History ({bills.length})</h4>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-slate-900">Purchase History ({bills.length})</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input
+                            type="date"
+                            title="From bill date"
+                            className={`${inputCls} max-w-[150px] py-1.5`}
+                            value={billRange.from}
+                            max={billRange.to || undefined}
+                            onChange={(e) => setBillRange((r) => ({ ...r, from: e.target.value }))}
+                        />
+                        <span className="text-xs font-bold text-slate-500">to</span>
+                        <input
+                            type="date"
+                            title="To bill date"
+                            className={`${inputCls} max-w-[150px] py-1.5`}
+                            value={billRange.to}
+                            min={billRange.from || undefined}
+                            onChange={(e) => setBillRange((r) => ({ ...r, to: e.target.value }))}
+                        />
+                        {(billRange.from || billRange.to) && (
+                            <button type="button" className={ghostBtn} onClick={() => setBillRange({ from: "", to: "" })}>
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                </div>
                 {bills.map((b) => (
                     <div key={b._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -1753,7 +1799,7 @@ const PurchasesTab = () => {
                 ))}
                 {!bills.length && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400 text-sm">
-                        No purchase bills recorded yet
+                        {billRange.from || billRange.to ? "No purchase bills in this date range" : "No purchase bills recorded yet"}
                     </div>
                 )}
             </div>
@@ -2324,17 +2370,29 @@ const PartiesTab = () => {
         }
     };
 
-    const open = async (p) => {
+    // `range` = { from, to } (YYYY-MM-DD) for the statement period; empty = full history.
+    const open = async (p, range = { from: "", to: "" }) => {
         try {
-            const r = await businessApi.partyLedger(kind, p._id);
-            setLedger({ party: p, ...unwrap(r) });
+            const params = { ...(range.from && { from: range.from }), ...(range.to && { to: range.to }) };
+            const r = await businessApi.partyLedger(kind, p._id, params);
+            setLedger({ party: p, range, ...unwrap(r) });
         } catch (e) {
             toast.error(errMsg(e));
         }
     };
+    const setLedgerRange = (patch) => ledger && open(ledger.party, { ...ledger.range, ...patch });
+    const ledgerFiltered = Boolean(ledger?.range?.from || ledger?.range?.to);
 
     const statement = () =>
-        buildStatement({ kind, party: ledger.party, entries: ledger.entries, balance: ledger.balance, business: sellerProfile || {} });
+        buildStatement({
+            kind,
+            party: ledger.party,
+            entries: ledger.entries,
+            balance: ledgerFiltered ? ledger.closingBalance ?? ledger.balance : ledger.balance,
+            openingBalance: ledger.openingBalance || 0,
+            range: ledgerFiltered ? ledger.range : null,
+            business: sellerProfile || {},
+        });
 
     const exportStatement = async (format) => {
         if (!ledger || exporting) return;
@@ -2367,7 +2425,7 @@ const PartiesTab = () => {
             await businessApi.recordPayment({ partyType, partyId: ledger.party._id, amount: Number(pay.amount), method: pay.method });
             toast.success("Payment recorded");
             setPay({ amount: "", method: "CASH" });
-            open(ledger.party);
+            open(ledger.party, ledger.range);
             load();
         } catch (e) {
             toast.error(errMsg(e));
@@ -2701,7 +2759,39 @@ const PartiesTab = () => {
 
                             {/* Statement Table */}
                             <div className="space-y-2">
-                                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Transaction Statement</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <input
+                                            type="date"
+                                            title="Statement from"
+                                            className={`${inputCls} max-w-[150px] py-1.5`}
+                                            value={ledger.range?.from || ""}
+                                            max={ledger.range?.to || undefined}
+                                            onChange={(e) => setLedgerRange({ from: e.target.value })}
+                                        />
+                                        <span className="text-xs font-bold text-slate-500">to</span>
+                                        <input
+                                            type="date"
+                                            title="Statement to"
+                                            className={`${inputCls} max-w-[150px] py-1.5`}
+                                            value={ledger.range?.to || ""}
+                                            min={ledger.range?.from || undefined}
+                                            onChange={(e) => setLedgerRange({ to: e.target.value })}
+                                        />
+                                        {ledgerFiltered && (
+                                            <button type="button" className={ghostBtn} onClick={() => setLedgerRange({ from: "", to: "" })}>
+                                                Full history
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                {ledgerFiltered && (
+                                    <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
+                                        {ledger.range?.from && <span>Opening balance: {inr(ledger.openingBalance || 0)}</span>}
+                                        <span>Closing balance for period: {inr(ledger.closingBalance ?? ledger.balance)}</span>
+                                    </div>
+                                )}
                                 <LedgerStatementTable
                                     key={ledger.party._id}
                                     entries={ledger.entries}

@@ -153,6 +153,13 @@ export default [
   },
   { route: "GET /api/seller/stats", as: "seller", query: { range: "daily" }, check: (res) => expect(res.body.result.overview).toBeDefined() },
   { route: "GET /api/seller/earnings", as: "seller", check: (res) => expect(res.body.result.balances.availableBalance).toBe(0) },
+  {
+    route: "GET /api/seller/transactions",
+    as: "seller",
+    query: { from: "2020-01-01", to: "2020-01-31", type: "Withdrawal", search: "ORD", page: 1, limit: 10 },
+    check: (res) => expect(res.body.result).toMatchObject({ items: [], total: 0, page: 1, limit: 10, totals: { credits: 0, debits: 0 } }),
+  },
+  { route: "GET /api/seller/transactions", name: "customers are denied", as: "customer", status: 403 },
   { route: "GET /api/seller/wallet/summary", as: "seller", check: (res) => expect(res.body.result).toEqual(expect.objectContaining({ availableBalance: 0 })) },
   {
     route: "POST /api/seller/request-withdrawal",
@@ -501,7 +508,7 @@ export default [
     name: "unknown supplier has an empty ledger",
     as: "seller",
     params: { id: OID },
-    check: (res) => expect(res.body.result).toEqual({ entries: [], balance: 0 }),
+    check: (res) => expect(res.body.result).toEqual({ entries: [], openingBalance: 0, closingBalance: 0, balance: 0 }),
   },
   {
     route: "POST /api/seller/reset-password",

@@ -38,7 +38,9 @@ export function balanceLabel(kind, balance) {
   return b > 0 ? "Receivable from customer" : "Advance from customer";
 }
 
-export function buildStatement({ kind, party, entries = [], balance = 0, business = {} }) {
+// `range` ({ from, to } YYYY-MM-DD) is the seller's date filter; with it the
+// statement opens on the brought-forward balance and closes at the range end.
+export function buildStatement({ kind, party, entries = [], balance = 0, business = {}, openingBalance = 0, range = null }) {
   const rows = entries.map((e) => ({
     date: fmtDate(e.date),
     type: LEDGER_KIND_LABEL[e.kind] || e.kind || "",
@@ -58,6 +60,26 @@ export function buildStatement({ kind, party, entries = [], balance = 0, busines
   });
   const totalDebit = round2(rows.reduce((s, r) => s + (r.debit || 0), 0));
   const totalCredit = round2(rows.reduce((s, r) => s + (r.credit || 0), 0));
+  if (range?.from) {
+    rows.unshift({
+      date: fmtDate(`${range.from}T00:00:00`),
+      type: "Opening Balance",
+      billNo: "",
+      details: "Balance brought forward",
+      shortDetails: "Balance brought forward",
+      method: "",
+      debit: null,
+      credit: null,
+      balance: round2(openingBalance),
+      items: [],
+    });
+  }
+  const filtered = Boolean(range?.from || range?.to);
+  const period = filtered
+    ? `${range.from ? fmtDate(`${range.from}T00:00:00`) : "Start"} – ${range.to ? fmtDate(`${range.to}T00:00:00`) : "Today"}`
+    : rows.length
+      ? `${rows[0].date} – ${rows[rows.length - 1].date}`
+      : "";
   return {
     title: kind === "suppliers" ? "Supplier Ledger Statement" : "Customer Ledger Statement",
     business: {
@@ -69,7 +91,7 @@ export function buildStatement({ kind, party, entries = [], balance = 0, busines
     },
     party: { name: party?.name || "", phone: party?.phone || "", address: party?.address || "", gstin: party?.gstin || "" },
     generatedAt: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
-    period: rows.length ? `${rows[0].date} – ${rows[rows.length - 1].date}` : "",
+    period,
     rows,
     totalDebit,
     totalCredit,
