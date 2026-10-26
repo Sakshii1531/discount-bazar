@@ -16,7 +16,9 @@ const TurboCartBridge = {
 
   /**
    * Send a message to Flutter
-   * @param {string} action - Action name (open_camera, get_location, pick_file, get_fcm_token)
+   * @param {string} action - Action name (open_camera, get_location, pick_file, get_fcm_token,
+   *   dismiss_order_alert:<orderId> — stop the native ringtone and cancel the tray
+   *   notification tagged <orderId>)
    */
   send: (action) => {
     if (window.Flutter) {

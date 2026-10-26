@@ -16,9 +16,9 @@ import {
     HiOutlineMinus,
     HiOutlineArrowPath,
     HiOutlineClipboardDocumentList,
-    HiOutlineXMark,
     HiOutlineCheck,
-    HiOutlineCalendarDays
+    HiOutlineCalendarDays,
+    HiOutlinePencilSquare
 } from 'react-icons/hi2';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ import { sellerApi } from '../services/sellerApi';
 import { toast } from 'sonner';
 import { invalidateCache } from '@core/api/dedupe';
 import { formatAmount } from "@shared/utils/currency";
+import InventoryEditModal from '../components/stock/InventoryEditModal';
 
 const StockManagement = () => {
     const navigate = useNavigate();
@@ -38,12 +39,7 @@ const StockManagement = () => {
     const [history, setHistory] = useState([]);
     const [historyRange, setHistoryRange] = useState({ from: '', to: '' });
     const [isLoading, setIsLoading] = useState(true);
-    const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState(null);
-    const [adjustType, setAdjustType] = useState('Restock');
-    const [adjustValue, setAdjustValue] = useState('');
-    const [adjustNote, setAdjustNote] = useState('');
-    const [selectedVariantSku, setSelectedVariantSku] = useState('');
+    const [editItem, setEditItem] = useState(null);
 
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
@@ -164,44 +160,6 @@ const StockManagement = () => {
             return matchesSearch && matchesStatus;
         });
     }, [inventory, searchTerm, filterStatus]);
-
-    const handleFullAdjustment = async () => {
-        const value = parseInt(adjustValue);
-        if (isNaN(value) || value <= 0) {
-            toast.error("Please enter a valid quantity");
-            return;
-        }
-
-        try {
-            const res = await sellerApi.adjustStock({
-                productId: selectedItem.id,
-                variantSku: selectedVariantSku || undefined,
-                type: adjustType === 'Restock' ? 'Restock' : 'Correction',
-                quantity: adjustType === 'Restock' ? value : -value,
-                note: adjustNote
-            });
-
-            if (res.data.success) {
-                toast.success("Stock adjusted successfully");
-                setIsAdjustModalOpen(false);
-                // Bust the customer-facing products cache so the updated
-                // stock is reflected immediately in the customer app.
-                invalidateCache('/products');
-                fetchInventory(true);
-            }
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to adjust stock");
-        }
-    };
-
-    const openAdjustModal = (item) => {
-        setSelectedItem(item);
-        setAdjustValue('');
-        setAdjustNote('');
-        const firstVariantSku = item?.variants?.[0]?.sku || '';
-        setSelectedVariantSku(firstVariantSku);
-        setIsAdjustModalOpen(true);
-    };
 
     if (isLoading && inventory.length === 0 && history.length === 0) {
         return <div className="flex items-center justify-center h-screen font-black text-slate-600">LOADING STOCK DATA...</div>;
@@ -398,10 +356,11 @@ const StockManagement = () => {
                                                             </td>
                                                             <td className="px-6 py-5 text-right">
                                                                 <button
-                                                                    onClick={() => openAdjustModal(item)}
-                                                                    className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                                                                    onClick={() => setEditItem(item)}
+                                                                    className="ml-auto px-4 py-2 rounded-lg bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors flex items-center gap-1.5 whitespace-nowrap"
                                                                 >
-                                                                    Adjust Stock
+                                                                    <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                                                                    Edit
                                                                 </button>
                                                             </td>
                                                         </motion.tr>
@@ -516,138 +475,18 @@ const StockManagement = () => {
                 </BlurFade>
             )}
 
-            {/* Advanced Adjustment Modal */}
-            <AnimatePresence>
-                {isAdjustModalOpen && selectedItem && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
-                            onClick={() => setIsAdjustModalOpen(false)}
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                            className="w-full max-w-md relative z-10 bg-white rounded-3xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20">
-                                        <HiOutlineArrowsUpDown className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-base font-black text-slate-900">Adjust Inventory</h3>
-                                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest leading-none mt-1">Update product stock</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => setIsAdjustModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600">
-                                    <HiOutlineXMark className="h-5 w-5" />
-                                </button>
-                            </div>
-
-                            <div className="p-8 space-y-6">
-                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 overflow-hidden">
-                                        {selectedItem.mainImage ? (
-                                            <img src={selectedItem.mainImage} alt="" className="h-full w-full object-cover" />
-                                        ) : <HiOutlineCube className="h-6 w-6" />}
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-slate-900">{selectedItem.name}</h4>
-                                        {selectedItem.variants && selectedItem.variants.length > 1 ? (
-                                            <p className="text-[10px] font-bold text-slate-600">
-                                                SELECTED: <span className="text-slate-900 font-black">
-                                                    {(selectedItem.variants.find(v => v.sku === selectedVariantSku)?.stock ?? 0)} UNITS
-                                                </span> (TOTAL: {selectedItem.stock} UNITS)
-                                            </p>
-                                        ) : (
-                                            <p className="text-[10px] font-bold text-slate-600">CURRENT STOCK: <span className="text-slate-900 font-black">{selectedItem.stock} UNITS</span></p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {selectedItem.variants && selectedItem.variants.length > 1 && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-black text-slate-600 uppercase tracking-widest ml-1">Select Variant to Adjust</label>
-                                            <select
-                                                value={selectedVariantSku}
-                                                onChange={(e) => setSelectedVariantSku(e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                                            >
-                                                {selectedItem.variants.map((v, idx) => (
-                                                    <option key={v.sku || idx} value={v.sku}>
-                                                        {v.name || v.sku || `Variant ${idx + 1}`} (Current Stock: {v.stock ?? 0} units)
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                    <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                                        {['Restock', 'Remove'].map((type) => (
-                                            <button
-                                                key={type}
-                                                onClick={() => setAdjustType(type)}
-                                                className={cn(
-                                                    "flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                                                    adjustType === type
-                                                        ? "bg-white text-slate-900 shadow-md"
-                                                        : "text-slate-600 hover:text-slate-600"
-                                                )}
-                                            >
-                                                {type}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-black text-slate-600 uppercase tracking-widest ml-1">Quantity Change</label>
-                                        <div className="relative group">
-                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-600">#</div>
-                                            <input
-                                                type="number"
-                                                value={adjustValue}
-                                                onChange={(e) => setAdjustValue(e.target.value)}
-                                                className="w-full pl-10 pr-4 py-4 bg-slate-50 border-none rounded-2xl text-2xl font-black text-slate-900 focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                                                placeholder="0"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-black text-slate-600 uppercase tracking-widest ml-1">Internal Note (Optional)</label>
-                                        <textarea
-                                            value={adjustNote}
-                                            onChange={(e) => setAdjustNote(e.target.value)}
-                                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-primary/20 transition-all outline-none resize-none h-20"
-                                            placeholder="Reason for adjustment..."
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                                <Button
-                                    onClick={() => setIsAdjustModalOpen(false)}
-                                    variant="outline"
-                                    className="flex-1 py-4 text-xs font-bold rounded-2xl bg-white"
-                                >
-                                    CANCEL
-                                </Button>
-                                <Button
-                                    onClick={handleFullAdjustment}
-                                    className="flex-1 py-4 text-xs font-bold rounded-2xl shadow-xl shadow-primary/20"
-                                >
-                                    SAVE CHANGES
-                                </Button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {editItem && (
+                <InventoryEditModal
+                    key={editItem.id}
+                    product={editItem}
+                    onClose={() => setEditItem(null)}
+                    onSaved={async () => {
+                        setEditItem(null);
+                        invalidateCache('/products');
+                        await fetchInventory(true);
+                    }}
+                />
+            )}
         </div>
     );
 };

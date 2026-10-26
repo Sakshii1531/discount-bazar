@@ -208,16 +208,26 @@ const Dashboard = () => {
     ]
       .filter(Boolean)
       .join(", ");
-    const items = (order.items || []).map((item) => ({
-      name: item.name || item.productName || "Item",
-      price:
-        item.price ??
-        (item.quantity
-          ? Number(item.totalPrice ?? 0) / Number(item.quantity)
-          : 0),
-      qty: item.quantity ?? 1,
-      image: item.image || "",
-    }));
+    const items = (order.items || []).map((item) => {
+      const rawSku = String(item.variantSku || item.variantSlot || "").trim();
+      const product = item.product && typeof item.product === "object" ? item.product : null;
+      const matchedVariant = Array.isArray(product?.variants) && rawSku
+        ? product.variants.find((v) => String(v?.sku || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?.name || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?._id || "").trim() === rawSku)
+        : null;
+      const variantLabel = matchedVariant?.name || [matchedVariant?.size, matchedVariant?.colour].filter(Boolean).join(" · ") || item.variant || (rawSku && !/^[A-Z0-9]{5,}-[A-Z0-9]{3,}$/i.test(rawSku) ? rawSku : "") || item.variantSlot || "";
+
+      return {
+        name: item.name || item.productName || "Item",
+        price:
+          item.price ??
+          (item.quantity
+            ? Number(item.totalPrice ?? 0) / Number(item.quantity)
+            : 0),
+        qty: item.quantity ?? 1,
+        image: item.image || "",
+        variant: variantLabel,
+      };
+    });
     return {
       id: order.orderId,
       customer: {
@@ -663,9 +673,16 @@ const Dashboard = () => {
                           )}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-900">
-                            {item.name}
-                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs font-bold text-slate-900">
+                              {item.name}
+                            </p>
+                            {item.variant && (
+                              <span className="bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                {item.variant}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] font-semibold text-slate-600 mt-0.5">
                             {formatCurrencyInteger(item.price)} × {item.qty}
                           </p>

@@ -395,11 +395,15 @@ const AddressesPage = () => {
             // Best-effort: store coordinates + placeId so checkout can calculate distance-based delivery fees
             // without repeated Maps calls.
             try {
-                const query = [address, landmark, city, state, pincode].filter(Boolean).join(', ');
+                // Typed/detected state is left out of the query: a stale one would pull the
+                // match off course. The state comes back from the geocoder instead.
+                const query = [address, landmark, city, pincode].filter(Boolean).join(', ');
                 const geo = await customerApi.geocodeAddress(query);
                 const loc = geo.data?.result?.location;
                 if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
                     newAddr.location = { lat: loc.lat, lng: loc.lng };
+                    if (geo.data?.result?.state) newAddr.state = geo.data.result.state;
+                    if (!pincode && geo.data?.result?.pincode) newAddr.pincode = geo.data.result.pincode;
                     if (geo.data?.result?.placeId) newAddr.placeId = geo.data.result.placeId;
                     if (geo.data?.result?.formattedAddress) newAddr.formattedAddress = geo.data.result.formattedAddress;
                 }
@@ -496,13 +500,14 @@ const AddressesPage = () => {
                 editForm.address?.trim(),
                 editForm.landmark?.trim(),
                 editForm.city?.trim(),
-                editForm.state?.trim(),
                 editForm.pincode?.trim(),
             ].filter(Boolean).join(', ');
             const geo = await customerApi.geocodeAddress(query);
             const loc = geo.data?.result?.location;
             if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
                 updatedRaw.location = { lat: loc.lat, lng: loc.lng };
+                if (geo.data?.result?.state) updatedRaw.state = geo.data.result.state;
+                if (!editForm.pincode?.trim() && geo.data?.result?.pincode) updatedRaw.pincode = geo.data.result.pincode;
                 if (geo.data?.result?.placeId) updatedRaw.placeId = geo.data.result.placeId;
                 if (geo.data?.result?.formattedAddress) updatedRaw.formattedAddress = geo.data.result.formattedAddress;
             }

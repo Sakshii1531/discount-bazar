@@ -28,8 +28,27 @@ const EMPTY_LOCATION = Object.freeze({
   latitude: null,
   longitude: null,
 });
+export const isLegacyHardcodedLocation = (loc) => {
+  if (!loc) return false;
+  const name = String(loc.address || loc.name || "");
+  const lat = Number(loc.latitude ?? loc.lat);
+  const lng = Number(loc.longitude ?? loc.lng);
+  const isLegacyCoords =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat - 22.71114) < 0.005 &&
+    Math.abs(lng - 75.90015) < 0.005;
+  const hasLegacyText =
+    name.includes("Rajshri Palace") ||
+    name.includes("Pipliyahana");
+  return isLegacyCoords || hasLegacyText;
+};
+
 const isRealLocationName = (name) =>
-  !!name && name !== PLACEHOLDER_LOCATION_NAME && !name.includes("Rajshri Palace");
+  !!name &&
+  name !== PLACEHOLDER_LOCATION_NAME &&
+  !name.includes("Rajshri Palace") &&
+  !name.includes("Pipliyahana");
 
 export const LocationProvider = ({ children }) => {
   // No location until the user's real one is detected, restored or chosen.
@@ -40,7 +59,7 @@ export const LocationProvider = ({ children }) => {
 
   const [isFetchingLocation, setIsFetchingLocation] = useState(() => {
     const stored = getJSON(STORAGE_KEY, null);
-    return !isRealLocationName(stored?.address || stored?.name);
+    return !isRealLocationName(stored?.address || stored?.name) || isLegacyHardcodedLocation(stored);
   });
   const [locationError, setLocationError] = useState(null);
 
@@ -295,7 +314,12 @@ export const LocationProvider = ({ children }) => {
         if (primary.address) {
           const stored = getJSON(STORAGE_KEY, null);
           const storedName = stored?.address || stored?.name || "";
-          if (!stored || !storedName || storedName.includes("Rajshri Palace") || storedName === "Select delivery location") {
+          if (
+            !stored ||
+            !storedName ||
+            !isRealLocationName(storedName) ||
+            isLegacyHardcodedLocation(stored)
+          ) {
             const newLoc = {
               name: primary.address,
               time: "12-15 mins",
@@ -326,14 +350,14 @@ export const LocationProvider = ({ children }) => {
   useEffect(() => {
     const parsed = getJSON(STORAGE_KEY, null);
     const addressName = parsed?.address || parsed?.name;
-    if (parsed && isRealLocationName(addressName)) {
+    if (parsed && isRealLocationName(addressName) && !isLegacyHardcodedLocation(parsed)) {
       updateLocation(
         {
           name: addressName,
           time: parsed.time || "12-15 mins",
-          city: parsed.city,
-          state: parsed.state,
-          pincode: parsed.pincode,
+          city: parsed.city || "",
+          state: parsed.state || "",
+          pincode: parsed.pincode || "",
           latitude: parsed.latitude,
           longitude: parsed.longitude,
         },
@@ -345,6 +369,13 @@ export const LocationProvider = ({ children }) => {
         fetchAndCacheLocation();
       }
     } else {
+      if (parsed && isLegacyHardcodedLocation(parsed)) {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+      }
       fetchAndCacheLocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -52,6 +52,7 @@ import {
   retractDeliveryBroadcastForOrder,
   emitToSeller,
   emitToDelivery,
+  emitDeliveryOfferClosedForRider,
 } from "../services/orderSocketEmitter.js";
 import * as walletService from "../services/finance/walletService.js";
 import { OWNER_TYPE } from "../constants/finance.js";
@@ -1057,6 +1058,9 @@ export const rejectReturnPickup = async (req, res) => {
           order.skippedBy.push(userId);
           await order.save();
         }
+        if (role === "delivery") {
+          emitDeliveryOfferClosedForRider(userId, order.orderId, "skipped");
+        }
         return handleResponse(res, 200, "Return pickup skipped");
       }
       return handleResponse(
@@ -1541,6 +1545,9 @@ export const skipOrder = async (req, res) => {
     if (!order.skippedBy.includes(userId)) {
       order.skippedBy.push(userId);
       await order.save();
+    }
+    if (role === "delivery") {
+      emitDeliveryOfferClosedForRider(userId, order.orderId, "skipped");
     }
 
     return handleResponse(res, 200, "Order skipped successfully");

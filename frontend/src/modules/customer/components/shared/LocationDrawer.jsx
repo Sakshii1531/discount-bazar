@@ -135,6 +135,9 @@ const LocationDrawer = ({ isOpen, onClose }) => {
       const newLoc = {
         name: address.address,
         time: "12-15 mins",
+        city: address.city || "",
+        state: address.state || "",
+        pincode: address.pincode || "",
         ...(coords ? { latitude: coords.lat, longitude: coords.lng } : {}),
       };
 
@@ -204,9 +207,9 @@ const LocationDrawer = ({ isOpen, onClose }) => {
           {
             name: result.formatted_address || prediction.description,
             time: "12-15 mins",
-            city: city || currentLocation.city,
-            state: state || currentLocation.state,
-            pincode: pincode || currentLocation.pincode,
+            city: city || "",
+            state: state || "",
+            pincode: pincode || "",
             latitude: geometry.lat(),
             longitude: geometry.lng(),
           },
@@ -222,9 +225,6 @@ const LocationDrawer = ({ isOpen, onClose }) => {
       });
     },
     [
-      currentLocation.city,
-      currentLocation.pincode,
-      currentLocation.state,
       getComponent,
       onClose,
       resetAutocompleteSession,

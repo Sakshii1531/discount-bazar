@@ -207,6 +207,26 @@ export function onSellerOrderNew(getToken, handler) {
   return () => s.off("order:new", handler);
 }
 
+/**
+ * The seller's pending order was accepted / rejected / expired / cancelled —
+ * possibly from another device on the same account. Close the popup and stop
+ * ringing if it is showing that order.
+ */
+export function onSellerOrderAlertResolved(getToken, handler) {
+  const s = getOrderSocket(getToken);
+  if (!s || typeof handler !== "function") return () => {};
+  s.on("order:alert:resolved", handler);
+  return () => s.off("order:alert:resolved", handler);
+}
+
+/** An order of this seller was cancelled (by the customer, admin or system). */
+export function onSellerOrderCancelled(getToken, handler) {
+  const s = getOrderSocket(getToken);
+  if (!s || typeof handler !== "function") return () => {};
+  s.on("order:cancelled", handler);
+  return () => s.off("order:cancelled", handler);
+}
+
 export function onSellerReturnRequested(getToken, handler) {
   const s = getOrderSocket(getToken);
   if (!s || typeof handler !== "function") return () => {};

@@ -37,6 +37,7 @@ import {
   emitToCustomer,
   emitToOrder,
   retractDeliveryBroadcastForOrder,
+  emitSellerOrderAlertResolved,
 } from "./orderSocketEmitter.js";
 import { distanceMeters } from "../utils/geoUtils.js";
 import { applyDeliveredSettlement } from "./orderSettlement.js";
@@ -234,6 +235,7 @@ export async function sellerAcceptAtomic(sellerId, orderId) {
   }
 
   await removeSellerTimeoutJob(orderId);
+  emitSellerOrderAlertResolved(updated.seller?._id || updated.seller, updated.orderId, "accepted");
   await scheduleDeliveryTimeoutJob(orderId, 1);
 
   await DeliveryAssignment.create({
@@ -300,6 +302,7 @@ export async function sellerRejectAtomic(sellerId, orderId) {
   }
 
   await removeSellerTimeoutJob(orderId);
+  emitSellerOrderAlertResolved(order.seller, order.orderId, "rejected");
   await compensateOrderCancellation(order, orderId);
   await recordCancellation(order, "SELLER", "seller", "Rejected by seller");
 
@@ -504,6 +507,7 @@ export async function processSellerTimeoutJob({ orderId }) {
 
   if (!updated) return;
 
+  emitSellerOrderAlertResolved(updated.seller, updated.orderId, "expired");
   await compensateOrderCancellation(updated, orderId);
   await recordCancellation(updated, "SYSTEM", "system", "Seller did not accept in time");
 

@@ -22,6 +22,9 @@ export const geocodeAddressController = async (req, res) => {
       formattedAddress: result.formattedAddress,
       placeId: result.placeId,
       types: result.types,
+      city: result.city || "",
+      state: result.state || "",
+      pincode: result.pincode || "",
     });
   } catch (e) {
     const status = e.statusCode || 500;

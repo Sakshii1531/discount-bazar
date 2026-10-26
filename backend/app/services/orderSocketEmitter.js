@@ -8,7 +8,10 @@ import {
   getDeliveryPartnerIdsWithinSellerRadius,
   getDeliveryPartnerIdsWithinCustomerRadius
 } from "./deliveryNearbyService.js";
-import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
+import {
+  emitNotificationEvent,
+  emitOrderAlertDismiss,
+} from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 
 let _getIo = null;
@@ -107,6 +110,47 @@ export function emitNewOrderToSeller(sellerId, payload = {}) {
     ...payload,
     at: new Date().toISOString(),
   });
+}
+
+/**
+ * The seller's pending order alert is settled (accepted / rejected / expired /
+ * cancelled). Every device logged into this seller account must stop ringing
+ * and close the accept/reject popup — not only the one that acted — so this
+ * goes to the whole `seller:<id>` room plus a push dismissal for devices
+ * whose app is backgrounded or killed.
+ */
+export function emitSellerOrderAlertResolved(sellerId, orderId, reason, extra = {}) {
+  const sid = normalizeSellerId(sellerId);
+  if (!sid || !orderId) return;
+  const s = getIo();
+  if (s) {
+    s.to(`seller:${sid}`).emit("order:alert:resolved", {
+      ...extra,
+      orderId,
+      reason,
+      at: new Date().toISOString(),
+    });
+  }
+  emitOrderAlertDismiss("seller", [sid], orderId, reason);
+}
+
+/**
+ * A rider closed an incoming offer on one device (skip / decline). Close it
+ * on the rider's other devices too.
+ */
+export function emitDeliveryOfferClosedForRider(deliveryId, orderId, reason = "skipped") {
+  const id = normalizeDeliveryId(deliveryId);
+  if (!id || !orderId) return;
+  const s = getIo();
+  if (s) {
+    s.to(`delivery:${id}`).emit("delivery:broadcast:withdrawn", {
+      orderId,
+      reason,
+      closedByDeliveryId: id,
+      at: new Date().toISOString(),
+    });
+  }
+  emitOrderAlertDismiss("delivery", [id], orderId, reason);
 }
 
 /**
@@ -341,6 +385,8 @@ export async function emitDeliveryBroadcastForSeller(sellerId, payload) {
 /**
  * Retract an order request from every delivery partner except the winner.
  * This clears stale push/in-app notifications and closes any open popup.
+ * The winner's own room is told as well: the same rider may be logged in
+ * on a second phone that is still ringing for this order.
  */
 export async function retractDeliveryBroadcastForOrder(orderId, winnerDeliveryId) {
   const s = getIo();
@@ -349,6 +395,17 @@ export async function retractDeliveryBroadcastForOrder(orderId, winnerDeliveryId
     winnerId && mongoose.Types.ObjectId.isValid(winnerId)
       ? new mongoose.Types.ObjectId(winnerId)
       : null;
+
+  if (winnerId) {
+    if (s) {
+      s.to(`delivery:${winnerId}`).emit("delivery:broadcast:withdrawn", {
+        orderId,
+        winnerDeliveryId: winnerId,
+        at: new Date().toISOString(),
+      });
+    }
+    emitOrderAlertDismiss("delivery", [winnerId], orderId, "accepted");
+  }
 
   try {
     const query = {
@@ -393,6 +450,12 @@ export async function retractDeliveryBroadcastForOrder(orderId, winnerDeliveryId
         });
       }
     }
+    emitOrderAlertDismiss(
+      "delivery",
+      recipientIds,
+      orderId,
+      winnerId ? "taken" : "withdrawn",
+    );
 
     await Notification.deleteMany({
       recipientModel: "Delivery",

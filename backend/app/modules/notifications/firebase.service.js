@@ -38,6 +38,25 @@ function getMessagingClient() {
   return admin.messaging(app);
 }
 
+// Events that must ring like an incoming order on seller / rider devices.
+const ORDER_ALERT_EVENTS = new Set([
+  "NEW_ORDER",
+  "RETURN_REQUESTED",
+  "RETURN_DROP_OTP",
+  "NEW_DELIVERY_BROADCAST",
+  "NEW_RETURN_BROADCAST",
+  "DELIVERY_ASSIGNED",
+]);
+
+export const ORDER_ALERT_DISMISS_TYPE = "ORDER_ALERT_DISMISS";
+
+// Order notices that settle an alert. They share the alert's tag (so they
+// replace it in the tray) but must never ring the order-alert tone.
+const ORDER_SETTLED_EVENTS = new Set([
+  "ORDER_CANCELLED",
+  "CANCELLATION_APPROVED",
+]);
+
 function isWebLink(value = "") {
   const link = String(value || "").trim();
   return /^https?:\/\//i.test(link);
@@ -79,16 +98,22 @@ export async function sendFCM(tokens = [], payload = {}) {
     responses: [],
   };
 
+  const isSettledNotice = ORDER_SETTLED_EVENTS.has(data.eventType);
   const isOrderAlert =
-    data.eventType === "NEW_ORDER" ||
-    data.type === "NEW_ORDER" ||
-    data.eventType === "order" ||
-    data.eventType === "RETURN_REQUESTED" ||
-    data.eventType === "RETURN_DROP_OTP" ||
-    data.role === "seller" ||
-    payload.type === "NEW_ORDER" ||
-    String(title).toLowerCase().includes("order") ||
-    String(title).toLowerCase().includes("return");
+    !isSettledNotice &&
+    (ORDER_ALERT_EVENTS.has(data.eventType) ||
+      data.type === "NEW_ORDER" ||
+      data.eventType === "order" ||
+      data.role === "seller" ||
+      payload.type === "NEW_ORDER" ||
+      String(title).toLowerCase().includes("order") ||
+      String(title).toLowerCase().includes("return"));
+
+  // Order alerts share one tag per order so a later push for the same order
+  // (e.g. "Order Cancelled") replaces the ringing alert in the tray, even
+  // when the app is killed and the OS renders the notification itself.
+  const alertTag =
+    (isOrderAlert || isSettledNotice) && data.orderId ? String(data.orderId) : "";
 
   if (isOrderAlert) {
     data.sound = "order_alert";
@@ -117,12 +142,14 @@ export async function sendFCM(tokens = [], payload = {}) {
           defaultSound: !isOrderAlert,
           defaultVibrateTimings: true,
           visibility: "PUBLIC",
+          ...(alertTag ? { tag: alertTag } : {}),
           ...(image ? { image } : {}),
         },
       },
       apns: {
         headers: {
           "apns-priority": "10",
+          ...(alertTag ? { "apns-collapse-id": alertTag.slice(0, 64) } : {}),
         },
         payload: {
           aps: {
@@ -165,6 +192,63 @@ export async function sendFCM(tokens = [], payload = {}) {
   return merged;
 }
 
+/**
+ * Data-only, high-priority message telling every device of a user to stop
+ * ringing and clear the tray alert for `orderId` — sent when the order was
+ * accepted / rejected / skipped / taken elsewhere. Data-only so it never
+ * shows (or rings) a notification of its own; the service worker and the
+ * native app handle it by `type === ORDER_ALERT_DISMISS`.
+ */
+export async function sendFCMDismiss(tokens = [], { orderId, reason = "" } = {}) {
+  if (!Array.isArray(tokens) || tokens.length === 0 || !orderId) {
+    return { successCount: 0, failureCount: 0, responses: [] };
+  }
+
+  const messaging = getMessagingClient();
+  const data = toStringMap({
+    type: ORDER_ALERT_DISMISS_TYPE,
+    eventType: ORDER_ALERT_DISMISS_TYPE,
+    orderId: String(orderId),
+    tag: String(orderId),
+    reason,
+  });
+  const merged = { successCount: 0, failureCount: 0, responses: [] };
+
+  for (const chunk of chunkArray(tokens, MAX_FCM_MULTICAST_TOKENS)) {
+    const result = await messaging.sendEachForMulticast({
+      tokens: chunk,
+      data,
+      android: {
+        priority: "high",
+        // A dismissal that arrives after the alert would have expired anyway is useless.
+        ttl: 5 * 60 * 1000,
+      },
+      apns: {
+        headers: {
+          "apns-priority": "5",
+          "apns-push-type": "background",
+        },
+        payload: {
+          aps: { contentAvailable: true },
+        },
+      },
+      webpush: {
+        headers: {
+          Urgency: "high",
+          TTL: String(5 * 60),
+        },
+      },
+    });
+
+    merged.successCount += Number(result.successCount || 0);
+    merged.failureCount += Number(result.failureCount || 0);
+    merged.responses.push(...(result.responses || []));
+  }
+
+  return merged;
+}
+
 export default {
   sendFCM,
+  sendFCMDismiss,
 };

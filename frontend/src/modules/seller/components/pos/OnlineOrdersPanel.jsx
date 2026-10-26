@@ -235,20 +235,29 @@ const OnlineOrdersPanel = ({ orders = [], onChanged, shopName }) => {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                                 <div className="space-y-1 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        {items.map((it, idx) => (
-                                            <span
-                                                key={idx}
-                                                className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-800 font-semibold"
-                                            >
-                                                <span className="text-emerald-700 font-bold">{it.quantity}x</span>
-                                                <span>{it.name || "Item"}</span>
-                                                {it.variantSlot && (
-                                                    <span className="text-[10px] text-slate-500 font-normal">
-                                                        ({it.variantSlot})
-                                                    </span>
-                                                )}
-                                            </span>
-                                        ))}
+                                        {items.map((it, idx) => {
+                                            const product = it.product && typeof it.product === "object" ? it.product : null;
+                                            const rawSku = String(it.variantSku || it.variantSlot || "").trim();
+                                            const matchedVariant = Array.isArray(product?.variants) && rawSku
+                                                ? product.variants.find((v) => String(v?.sku || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?.name || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?._id || "").trim() === rawSku)
+                                                : null;
+                                            const variantLabel = matchedVariant?.name || [matchedVariant?.size, matchedVariant?.colour].filter(Boolean).join(" · ") || (rawSku && !/^[A-Z0-9]{5,}-[A-Z0-9]{3,}$/i.test(rawSku) ? rawSku : "") || it.variantSlot || "";
+
+                                            return (
+                                                <span
+                                                    key={idx}
+                                                    className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-800 font-semibold"
+                                                >
+                                                    <span className="text-emerald-700 font-bold">{it.quantity}x</span>
+                                                    <span>{it.name || "Item"}</span>
+                                                    {variantLabel && (
+                                                        <span className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded">
+                                                            {variantLabel}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            );
+                                        })}
                                     </div>
 
                                     {customerName && (

@@ -248,14 +248,38 @@ const Orders = () => {
                         phone: order.customer?.phone || '',
                         avatar: (order.customer?.name || 'U').charAt(0)
                     },
-                    items: (order.items || []).map((item, itemIdx) => ({
-                        id: item._id || `${rawId}-item-${itemIdx + 1}`,
-                        itemCode: `${shortId}-P${itemIdx + 1}`,
-                        name: item.name,
-                        price: item.price,
-                        qty: item.quantity,
-                        image: item.image
-                    })),
+                    items: (order.items || []).map((item, itemIdx) => {
+                        const rawSku = String(item.variantSku || item.variantSlot || "").trim();
+                        const product = item.product && typeof item.product === "object" ? item.product : null;
+                        const variants = Array.isArray(product?.variants) ? product.variants : [];
+                        let variantLabel = "";
+                        if (rawSku && variants.length > 0) {
+                            const matched = variants.find(
+                                (v) =>
+                                    String(v?.sku || "").trim().toLowerCase() === rawSku.toLowerCase() ||
+                                    String(v?.name || "").trim().toLowerCase() === rawSku.toLowerCase() ||
+                                    String(v?._id || "").trim() === rawSku
+                            );
+                            if (matched) {
+                                variantLabel = matched.name || [matched.size, matched.colour].filter(Boolean).join(" · ") || "";
+                            }
+                        }
+                        if (!variantLabel) {
+                            variantLabel = item.variantName || item.variant || (rawSku && !/^[A-Z0-9]{5,}-[A-Z0-9]{3,}$/i.test(rawSku) ? rawSku : "") || item.variantSlot || "";
+                        }
+
+                        return {
+                            id: item._id || `${rawId}-item-${itemIdx + 1}`,
+                            itemCode: `${shortId}-P${itemIdx + 1}`,
+                            name: item.name,
+                            price: item.price,
+                            qty: item.quantity,
+                            image: item.image,
+                            variant: variantLabel,
+                            variantSlot: item.variantSlot,
+                            product: item.product,
+                        };
+                    }),
                     total: Math.ceil(order.pricing?.total || order.paymentBreakdown?.grandTotal || 0),
                     discount: discount,
                     couponCode: couponCode,
@@ -812,7 +836,14 @@ const Orders = () => {
                                                         <div className="space-y-1">
                                                             {order.items.slice(0, 3).map((it, idx) => (
                                                                 <div key={it.id || idx} className="flex items-center justify-between text-slate-700 font-medium text-[11px]">
-                                                                    <span className="truncate pr-2">{it.name}</span>
+                                                                    <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                                                        <span className="truncate">{it.name}</span>
+                                                                        {it.variant && (
+                                                                            <span className="shrink-0 bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                                                                {it.variant}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                     <span className="font-bold text-slate-900 shrink-0">×{it.qty}</span>
                                                                 </div>
                                                             ))}
@@ -1358,7 +1389,14 @@ const Orders = () => {
                                                             <img src={item.image} alt={item.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                                         </div>
                                                         <div>
-                                                            <p className="text-xs font-bold text-slate-900">{item.name}</p>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <p className="text-xs font-bold text-slate-900">{item.name}</p>
+                                                                {item.variant && (
+                                                                    <span className="bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                                                        {item.variant}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             {item.itemCode && <p className="text-[10px] font-semibold text-slate-500 font-mono mt-0.5">Code: {item.itemCode}</p>}
                                                             <p className="text-xs font-semibold text-slate-600 mt-0.5">{formatCurrencyInteger(item.price)} × {item.qty}</p>
                                                         </div>

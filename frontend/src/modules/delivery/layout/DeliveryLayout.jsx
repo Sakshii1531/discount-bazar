@@ -13,6 +13,7 @@ import {
   onDeliveryBroadcastWithdrawn,
   onNotificationNew,
 } from "@/core/services/orderSocket";
+import { dismissOrderAlertNotifications } from "@core/firebase/pushClient";
 import {
   loadHandledIncomingOrderIds,
   markIncomingOrderHandled,
@@ -225,6 +226,11 @@ const DeliveryLayout = () => {
   const [availableOrdersCount, setAvailableOrdersCount] = useState(0);
   const [isAcceptingOrder, setIsAcceptingOrder] = useState(false);
   const acceptInFlightRef = useRef(false);
+  // Offer this device is accepting/skipping right now — its own withdrawal
+  // echo from the server is handled by that flow, not the socket listener.
+  const decidingOrderIdRef = useRef(null);
+  const myDeliveryIdRef = useRef("");
+  myDeliveryIdRef.current = String(user?._id || user?.id || "");
   const availableOrdersRequestRef = useRef({ inFlight: false, controller: null });
 
   // ── Active-assignment restore ─────────────────────────────────────────
@@ -902,13 +908,27 @@ const DeliveryLayout = () => {
 
       shownOrderIdsRef.current = new Set(shownOrderIdsRef.current).add(orderId);
       markIncomingOrderHandled(orderId);
+      dismissOrderAlertNotifications(orderId);
+
+      if (decidingOrderIdRef.current === orderId) return;
 
       if (activeOrderRef.current?.id === orderId) {
         acceptInFlightRef.current = false;
         setIsAcceptingOrder(false);
         stopOrderRingtone();
         setActiveOrder(null);
-        toast.info("Another delivery partner accepted this order.");
+
+        const me = myDeliveryIdRef.current;
+        const wonByMe = Boolean(me && payload.winnerDeliveryId === me);
+        const closedByMe = Boolean(me && payload.closedByDeliveryId === me);
+        if (wonByMe) {
+          toast.info("You accepted this order on another device.");
+          refreshActive();
+        } else if (closedByMe) {
+          toast.info("You skipped this order on another device.");
+        } else {
+          toast.info("Another delivery partner accepted this order.");
+        }
       }
     });
   }, [user?.isOnline]);
@@ -1050,6 +1070,7 @@ const DeliveryLayout = () => {
   const skipOrder = useCallback(async () => {
     const current = activeOrderRef.current;
     if (!current || acceptInFlightRef.current) return;
+    decidingOrderIdRef.current = current.id;
     try {
       console.log("Delivery Alert - Skipping order:", current.id);
       if (current.isReturnPickup) {
@@ -1061,10 +1082,13 @@ const DeliveryLayout = () => {
       markIncomingOrderHandled(current.id);
       stopOrderRingtone();
       setActiveOrder(null);
+      dismissOrderAlertNotifications(current.id);
       toast.info("Order skipped");
     } catch (error) {
       console.error("Delivery Alert - Skip failed:", error);
       setActiveOrder(null);
+    } finally {
+      decidingOrderIdRef.current = null;
     }
   }, []);
 
@@ -1119,6 +1143,7 @@ const DeliveryLayout = () => {
       return;
     }
     acceptInFlightRef.current = true;
+    decidingOrderIdRef.current = activeOrder.id;
     setIsAcceptingOrder(true);
     try {
       console.log("Delivery Alert - Accepting order:", activeOrder.id);
@@ -1137,6 +1162,7 @@ const DeliveryLayout = () => {
       markIncomingOrderHandled(orderId);
       stopOrderRingtone();
       setActiveOrder(null);
+      dismissOrderAlertNotifications(orderId);
       // The server confirmed the assignment; pick it up in the active list so
       // the dashboard card exists even if the rider backs out right away.
       refreshActive();
@@ -1150,6 +1176,7 @@ const DeliveryLayout = () => {
       setActiveOrder(null);
     } finally {
       acceptInFlightRef.current = false;
+      decidingOrderIdRef.current = null;
       setIsAcceptingOrder(false);
     }
   };

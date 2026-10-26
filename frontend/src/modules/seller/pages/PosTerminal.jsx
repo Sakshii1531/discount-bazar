@@ -32,9 +32,9 @@ const PACKING_WORKFLOW_STATUSES = [
     "PICKUP_READY",
 ];
 
-const resolvePrice = (entity) => {
-    const sale = Number(entity?.salePrice || 0);
-    const mrp = Number(entity?.price || 0);
+const resolvePrice = (entity, fallback) => {
+    const sale = Number(entity?.salePrice ?? fallback?.salePrice ?? 0);
+    const mrp = Number(entity?.price ?? fallback?.price ?? 0);
     return sale > 0 && sale < mrp ? sale : mrp;
 };
 
@@ -245,7 +245,12 @@ const PosTerminal = () => {
             toast.error(`${product.name} is out of stock`);
             return;
         }
-        const price = resolvePrice(variant || product);
+        const price = resolvePrice(variant, product);
+        const variantLabel =
+            variant?.name ||
+            [variant?.size, variant?.colour].filter(Boolean).join(" · ") ||
+            variant?.sku ||
+            "";
 
         setCart((prev) => {
             const existing = prev.find((l) => l.lineKey === lineKey);
@@ -264,7 +269,7 @@ const PosTerminal = () => {
                     lineKey,
                     productId: product._id,
                     variantSku,
-                    variantLabel: variant?.name || "",
+                    variantLabel,
                     name: product.name,
                     price,
                     gstPercent: Number(product.gstPercent || 0),

@@ -17,15 +17,27 @@ function getApiKey() {
 }
 
 function cacheKeyAddress(address, country) {
-  const raw = `geocode:v2:addr:${country || ""}:${address || ""}`.toLowerCase();
+  // v3: results also carry city/state/pincode.
+  const raw = `geocode:v3:addr:${country || ""}:${address || ""}`.toLowerCase();
   const h = crypto.createHash("sha1").update(raw).digest("hex");
-  return `geocode:v2:${h}`;
+  return `geocode:v3:${h}`;
 }
 
 function cacheKeyPlaceId(placeId) {
-  const raw = `geocode:v2:pid:${placeId || ""}`.toLowerCase();
+  const raw = `geocode:v3:pid:${placeId || ""}`.toLowerCase();
   const h = crypto.createHash("sha1").update(raw).digest("hex");
-  return `geocode:v2:${h}`;
+  return `geocode:v3:${h}`;
+}
+
+// City / state / pincode from a Geocoding API result's address components.
+function addressParts(result) {
+  const components = result?.address_components || [];
+  const find = (types) => components.find((c) => types.some((t) => c.types?.includes(t)))?.long_name || "";
+  return {
+    city: find(["locality"]) || find(["administrative_area_level_3"]) || find(["administrative_area_level_2"]),
+    state: find(["administrative_area_level_1"]),
+    pincode: find(["postal_code"]),
+  };
 }
 
 /**
@@ -76,6 +88,9 @@ export async function geocodeAddress(address, { country } = {}) {
         formattedAddress: doc.formattedAddress || addr,
         placeId: doc.placeId || null,
         types: Array.isArray(doc.types) ? doc.types : [],
+        city: doc.city || "",
+        state: doc.state || "",
+        pincode: doc.pincode || "",
       };
     }
   } catch {
@@ -120,6 +135,7 @@ export async function geocodeAddress(address, { country } = {}) {
     formattedAddress: first.formatted_address || addr,
     placeId: first.place_id || null,
     types: Array.isArray(first.types) ? first.types : [],
+    ...addressParts(first),
   };
 
   const expiresAt = new Date(Date.now() + GEOCODE_CACHE_TTL_SEC() * 1000);
@@ -142,6 +158,9 @@ export async function geocodeAddress(address, { country } = {}) {
           formattedAddress: result.formattedAddress,
           placeId: result.placeId,
           types: result.types,
+          city: result.city,
+          state: result.state,
+          pincode: result.pincode,
           expiresAt,
         },
       },
@@ -193,6 +212,9 @@ export async function geocodePlaceId(placeId) {
         formattedAddress: doc.formattedAddress || "",
         placeId: doc.placeId || pid,
         types: Array.isArray(doc.types) ? doc.types : [],
+        city: doc.city || "",
+        state: doc.state || "",
+        pincode: doc.pincode || "",
       };
     }
   } catch {
@@ -229,6 +251,7 @@ export async function geocodePlaceId(placeId) {
     formattedAddress: first.formatted_address || "",
     placeId: first.place_id || pid,
     types: Array.isArray(first.types) ? first.types : [],
+    ...addressParts(first),
   };
 
   const expiresAt = new Date(Date.now() + GEOCODE_CACHE_TTL_SEC() * 1000);
@@ -251,6 +274,9 @@ export async function geocodePlaceId(placeId) {
           formattedAddress: result.formattedAddress,
           placeId: result.placeId,
           types: result.types,
+          city: result.city,
+          state: result.state,
+          pincode: result.pincode,
           expiresAt,
         },
       },

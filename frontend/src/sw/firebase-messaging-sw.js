@@ -43,6 +43,9 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
 
   const messaging = firebase.messaging();
 
+  // Notices that settle an order alert — shown normally, never with the order ringtone.
+  const ORDER_SETTLED_EVENTS = ["ORDER_CANCELLED", "CANCELLATION_APPROVED"];
+
   function buildNotificationOptions(payload = {}) {
     const notification = payload?.notification || {};
     const data = payload?.data || {};
@@ -62,6 +65,7 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
     const image = String(notification.image || data.image || data.imageUrl || "").trim();
 
     const isOrderAlert =
+      !ORDER_SETTLED_EVENTS.includes(data.eventType) && (
       data.eventType === "NEW_ORDER" ||
       data.type === "NEW_ORDER" ||
       data.eventType === "RETURN_REQUESTED" ||
@@ -70,7 +74,7 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
       data.sound === "order_alert" ||
       String(title).toLowerCase().includes("order") ||
       String(title).toLowerCase().includes("return") ||
-      String(tag).toLowerCase().includes("order");
+      String(tag).toLowerCase().includes("order"));
 
     let safeBody = notification.body || data.body || "";
     if (isOrderAlert && (data.itemAmount || data.netEarnings)) {
@@ -281,6 +285,18 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
   });
 
   messaging.onBackgroundMessage((payload) => {
+    // Order settled on another device of the same account: clear its alert.
+    if (payload?.data?.type === "ORDER_ALERT_DISMISS") {
+      const tag = String(payload.data.orderId || "");
+      if (!tag) return undefined;
+      return self.registration
+        .getNotifications({ tag })
+        .then((list) =>
+          list
+            .filter((n) => !ORDER_SETTLED_EVENTS.includes(n.data?.eventType))
+            .forEach((n) => n.close()),
+        );
+    }
     const { title, options } = buildNotificationOptions(payload);
     self.registration.showNotification(title, options);
   });

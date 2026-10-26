@@ -97,6 +97,41 @@ async function ensureServiceWorkerRegistration() {
   return registration;
 }
 
+const ORDER_ALERT_DISMISS_TYPE = "ORDER_ALERT_DISMISS";
+// Notices that settle an order alert — shown normally, never with the order ringtone.
+const ORDER_SETTLED_EVENTS = new Set(["ORDER_CANCELLED", "CANCELLATION_APPROVED"]);
+
+/**
+ * Clear the tray notification for an order alert on this device and ask the
+ * Flutter wrapper (if any) to stop its native ringtone. Called when the order
+ * was settled here or on another device of the same account.
+ */
+export async function dismissOrderAlertNotifications(orderId) {
+  const tag = String(orderId || "").trim();
+  if (!tag || typeof window === "undefined") return;
+
+  if (window.Flutter) {
+    try {
+      TurboCartBridge.send(`dismiss_order_alert:${tag}`);
+    } catch {
+      /* native side may not implement it yet */
+    }
+  }
+
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg?.getNotifications) return;
+    const shown = await reg.getNotifications({ tag });
+    // Keep the "Order Cancelled" notice that replaced the alert; close only the alert.
+    shown
+      .filter((n) => !ORDER_SETTLED_EVENTS.has(n.data?.eventType))
+      .forEach((n) => n.close());
+  } catch {
+    /* ignore */
+  }
+}
+
 async function showSystemNotification({ title, body, data } = {}) {
   // Check delivery or seller app settings before showing any notification
   const isDeliveryRole = data?.role === "delivery";
@@ -130,6 +165,7 @@ async function showSystemNotification({ title, body, data } = {}) {
   const image = String(data?.image || data?.imageUrl || "").trim();
 
   const isOrderAlert =
+    !ORDER_SETTLED_EVENTS.has(data?.eventType) && (
     data?.eventType === "NEW_ORDER" ||
     data?.type === "NEW_ORDER" ||
     data?.eventType === "RETURN_REQUESTED" ||
@@ -138,7 +174,7 @@ async function showSystemNotification({ title, body, data } = {}) {
     data?.sound === "order_alert" ||
     String(safeTitle).toLowerCase().includes("order") ||
     String(safeTitle).toLowerCase().includes("return") ||
-    String(tag).toLowerCase().includes("order");
+    String(tag).toLowerCase().includes("order"));
 
   let safeBody = String(body || "");
   if (isOrderAlert && (data?.itemAmount || data?.netEarnings)) {
@@ -373,6 +409,10 @@ export async function startForegroundPushListener() {
 
   const messaging = getMessaging(app);
   const unsubscribe = onMessage(messaging, async (payload) => {
+    if (payload?.data?.type === ORDER_ALERT_DISMISS_TYPE) {
+      await dismissOrderAlertNotifications(payload.data.orderId);
+      return;
+    }
     const title =
       payload?.notification?.title || payload?.data?.title || "Notification";
     const body =
@@ -391,6 +431,7 @@ export async function startForegroundPushListener() {
 
 export default {
   describePushSupport,
+  dismissOrderAlertNotifications,
   clearStoredFcmToken,
   ensureFcmTokenRegistered,
   getStoredFcmToken,

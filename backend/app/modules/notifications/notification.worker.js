@@ -51,7 +51,7 @@ async function refreshQueueMetrics() {
   }
 }
 
-async function deactivateInvalidTokens(tokens = [], responses = []) {
+export async function deactivateInvalidTokens(tokens = [], responses = []) {
   const invalidTokenIds = [];
 
   responses.forEach((response, index) => {

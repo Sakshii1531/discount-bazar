@@ -6,7 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "@core/context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { customerApi } from "../services/customerApi";
-import { useLocation as useAppLocation } from "../context/LocationContext";
+import { useLocation as useAppLocation, PLACEHOLDER_LOCATION_NAME } from "../context/LocationContext";
 import { loadRazorpayScript } from "@shared/utils/razorpayLoader";
 import {
   MapPin,
@@ -189,7 +189,11 @@ const CheckoutPage = () => {
 
   // Hydrate currentAddress from currentLocation on initial load
   useEffect(() => {
-    if (currentLocation?.name && !currentAddress.address) {
+    if (
+      currentLocation?.name &&
+      currentLocation.name !== PLACEHOLDER_LOCATION_NAME &&
+      (!currentAddress.address || currentAddress.address === PLACEHOLDER_LOCATION_NAME)
+    ) {
       setCurrentAddress((prev) => ({
         ...prev,
         name: user?.name || "Customer",
@@ -198,6 +202,11 @@ const CheckoutPage = () => {
         city: [currentLocation.city, currentLocation.state, currentLocation.pincode]
           .filter(Boolean)
           .join(", "),
+        parts: {
+          city: currentLocation.city || "",
+          state: currentLocation.state || "",
+          pincode: currentLocation.pincode || "",
+        },
         ...(typeof currentLocation.latitude === "number" &&
         typeof currentLocation.longitude === "number"
           ? { location: { lat: currentLocation.latitude, lng: currentLocation.longitude } }
@@ -205,6 +214,36 @@ const CheckoutPage = () => {
       }));
     }
   }, [currentLocation, user, currentAddress.address]);
+
+  // The state shown comes from geocoding the address and pincode, not from the state
+  // stored with it: older saves and cached locations can carry a stale one.
+  const addressParts = currentAddress.parts;
+  useEffect(() => {
+    if (!addressParts || !currentAddress.address) return;
+    const query = [currentAddress.address, addressParts.city, addressParts.pincode]
+      .filter(Boolean)
+      .join(", ");
+    let cancelled = false;
+    customerApi
+      .geocodeAddress(query)
+      .then((resp) => {
+        const state = resp.data?.result?.state;
+        if (cancelled || !state || state === addressParts.state) return;
+        setCurrentAddress((prev) =>
+          prev.parts !== addressParts
+            ? prev
+            : {
+                ...prev,
+                parts: { ...addressParts, state },
+                city: [addressParts.city, state, addressParts.pincode].filter(Boolean).join(", "),
+              },
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [addressParts, currentAddress.address]);
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
   const [editAddressForm, setEditAddressForm] = useState({
     type: "Home",
@@ -342,8 +381,9 @@ const CheckoutPage = () => {
       Number.isFinite(addrLoc.lat) &&
       Number.isFinite(addrLoc.lng);
 
+    const { parts: _parts, ...address } = currentAddress;
     return {
-      ...currentAddress,
+      ...address,
       location: hasAddrLoc ? { lat: addrLoc.lat, lng: addrLoc.lng } : undefined,
     };
   };
@@ -457,13 +497,15 @@ const CheckoutPage = () => {
         return;
       }
 
+      const addrCity = [addr.city, addr.state, addr.pincode].filter(Boolean).join(", ");
       setCurrentAddress({
         type: addr.label,
         name: user?.name || currentAddress.name,
         address: rawText,
-        city: "",
+        city: addrCity || "",
+        parts: { city: addr.city || "", state: addr.state || "", pincode: addr.pincode || "" },
         phone: addr.phone || currentAddress.phone,
-        landmark: "",
+        landmark: addr.landmark || "",
         ...(pid ? { placeId: pid } : {}),
         ...(resolvedLoc ? { location: resolvedLoc } : {}),
       });
@@ -473,9 +515,9 @@ const CheckoutPage = () => {
           {
             name: rawText,
             time: currentLocation?.time || "12-15 mins",
-            city: currentLocation?.city,
-            state: currentLocation?.state,
-            pincode: currentLocation?.pincode,
+            city: addr.city || "",
+            state: addr.state || "",
+            pincode: addr.pincode || "",
             latitude: resolvedLoc.lat,
             longitude: resolvedLoc.lng,
           },
@@ -526,9 +568,9 @@ const CheckoutPage = () => {
           {
             name: resp.data?.result?.formattedAddress || query,
             time: currentLocation?.time || "12-15 mins",
-            city: currentLocation?.city,
-            state: currentLocation?.state,
-            pincode: currentLocation?.pincode,
+            city: resp.data?.result?.city || editAddressForm.city || "",
+            state: resp.data?.result?.state || "",
+            pincode: resp.data?.result?.pincode || "",
             latitude: loc.lat,
             longitude: loc.lng,
           },
@@ -545,6 +587,7 @@ const CheckoutPage = () => {
 
     setCurrentAddress({
       ...editAddressForm,
+      parts: null,
       ...(location ? { location } : {}),
       ...(placeId ? { placeId } : {}),
       ...(formattedAddress ? { formattedAddress } : {}),
@@ -565,6 +608,7 @@ const CheckoutPage = () => {
         city: [liveLocation.city, liveLocation.state, liveLocation.pincode]
           .filter(Boolean)
           .join(", "),
+        parts: null,
         ...(typeof liveLocation.latitude === "number" &&
         typeof liveLocation.longitude === "number"
           ? { location: { lat: liveLocation.latitude, lng: liveLocation.longitude } }
@@ -582,6 +626,11 @@ const CheckoutPage = () => {
         city: [currentLocation.city, currentLocation.state, currentLocation.pincode]
           .filter(Boolean)
           .join(", "),
+        parts: {
+          city: currentLocation.city || "",
+          state: currentLocation.state || "",
+          pincode: currentLocation.pincode || "",
+        },
         ...(typeof currentLocation.latitude === "number" &&
         typeof currentLocation.longitude === "number"
           ? { location: { lat: currentLocation.latitude, lng: currentLocation.longitude } }

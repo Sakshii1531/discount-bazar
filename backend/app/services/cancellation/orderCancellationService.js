@@ -66,6 +66,7 @@ import {
   emitToDelivery,
   emitToSeller,
   retractDeliveryBroadcastForOrder,
+  emitSellerOrderAlertResolved,
 } from "../orderSocketEmitter.js";
 import { buildKey, invalidate } from "../cacheService.js";
 import { orderMatchQueryFromRouteParam } from "../../utils/orderLookup.js";
@@ -399,6 +400,7 @@ async function executeDirectCancellation({
   const reason = describeReason(reasonCode, reasonText);
   let stockUpdates = [];
   let recordId;
+  let cancelledOrder = null;
 
   try {
     await runTransaction(async (session) => {
@@ -427,6 +429,7 @@ async function executeDirectCancellation({
         { new: true, session },
       );
       if (!updated) throw serviceError("lost race", 409, LOST_RACE);
+      cancelledOrder = updated;
 
       const record = await OrderCancellation.findOneAndUpdate(
         { order: order._id },
@@ -505,6 +508,7 @@ async function executeDirectCancellation({
   }
 
   broadcastStockUpdates(stockUpdates);
+  notifySellerOrderCancelled(cancelledOrder || order);
   await invalidateCustomerOrders(order.customer);
   await safeProcess(recordId);
   return { record: await OrderCancellation.findById(recordId), duplicate: false };
@@ -1361,6 +1365,9 @@ export async function recordExternalCancellation(orderOrId, { type = CANCELLATIO
       { _id: order._id, "cancellation.recordId": null },
       { $set: orderSummary(record) },
     );
+    // These records skip runWorkflowCleanup (steps.workflow is pre-set), so
+    // this is the only place the seller hears about the cancel.
+    notifySellerOrderCancelled(order);
     await safeProcess(record._id);
     return record;
   } catch (error) {
@@ -1392,8 +1399,45 @@ export async function onLatePaymentCapture(orderObjectId) {
 /* post-commit processing                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Tell the seller the moment an order is cancelled — not after the retryable
+ * cleanup below — so an incoming-order popup still ringing for it on any of
+ * the seller's devices stops right away. Socket `order:cancelled` for open
+ * apps, plus a silent push dismissal for backgrounded / killed ones.
+ */
+function notifySellerOrderCancelled(order) {
+  const sellerId = idStr(order?.seller);
+  if (!sellerId || !order?.orderId) return;
+  const cancelledBy = order.cancelledBy || null;
+  emitToSeller(sellerId, {
+    event: "order:cancelled",
+    payload: {
+      orderId: order.orderId,
+      workflowStatus: order.workflowStatus || WORKFLOW_STATUS.CANCELLED,
+      status: "cancelled",
+      cancelledBy,
+    },
+  });
+  emitSellerOrderAlertResolved(sellerId, order.orderId, "cancelled", { cancelledBy });
+}
+
 async function runWorkflowCleanup(record, order) {
   const orderId = order.orderId;
+  const payload = {
+    orderId,
+    workflowStatus: order.workflowStatus || WORKFLOW_STATUS.CANCELLED,
+    status: "cancelled",
+    cancelledBy: order.cancelledBy || null,
+    cancellationStatus: record.status,
+    returnToStore: record.returnLeg?.status === RETURN_LEG_STATUS.RETURN_TO_STORE,
+  };
+  // Emit before the awaited cleanup so a slow or failing step cannot hold it back.
+  emitOrderStatusUpdate(orderId, payload, order.customer);
+  emitToSeller(idStr(order.seller), { event: "order:cancelled", payload });
+  if (order.deliveryBoy) {
+    emitToDelivery(idStr(order.deliveryBoy), { event: "order:cancelled", payload });
+  }
+
   await removeSellerTimeout(orderId).catch(() => {});
   const attempts = Math.max(1, Number(order.deliverySearchMeta?.attempt) || 1);
   for (let a = 1; a <= attempts; a += 1) {
@@ -1404,19 +1448,6 @@ async function runWorkflowCleanup(record, order) {
     { $set: { status: "cancelled" } },
   );
   await retractDeliveryBroadcastForOrder(orderId, null).catch(() => {});
-
-  const payload = {
-    orderId,
-    workflowStatus: order.workflowStatus || WORKFLOW_STATUS.CANCELLED,
-    status: "cancelled",
-    cancellationStatus: record.status,
-    returnToStore: record.returnLeg?.status === RETURN_LEG_STATUS.RETURN_TO_STORE,
-  };
-  emitOrderStatusUpdate(orderId, payload, order.customer);
-  emitToSeller(idStr(order.seller), { event: "order:cancelled", payload });
-  if (order.deliveryBoy) {
-    emitToDelivery(idStr(order.deliveryBoy), { event: "order:cancelled", payload });
-  }
   await invalidateCustomerOrders(order.customer);
 }
 

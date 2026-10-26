@@ -13,6 +13,17 @@ const str = (v) => (v === null || v === undefined ? "" : String(v));
 const isBlank = (v) => v === "" || v === null || v === undefined;
 const num = (v) => Number(v);
 
+const toDateInput = (val) => {
+    if (!val) return "";
+    try {
+        const d = new Date(val);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString().slice(0, 10);
+    } catch {
+        return "";
+    }
+};
+
 const formFrom = (p) => ({
     name: p.name || "",
     mrp: str(p.mrp),
@@ -22,6 +33,7 @@ const formFrom = (p) => ({
     purchaseCost: str(p.purchaseCost),
     gstPercent: str(p.gstPercent ?? 0),
     purchaseGstType: p.purchaseGstType || "EXCLUSIVE",
+    expiryDate: toDateInput(p.expiryDate),
     variants: (p.variants || []).map((v, i) => ({
         key: v.sku || `saved-${i}`,
         sku: v.sku,
@@ -31,6 +43,7 @@ const formFrom = (p) => ({
         barcode: v.barcode || "",
         purchaseCost: str(v.purchaseCost),
         stock: v.stock ?? 0,
+        expiryDate: toDateInput(v.expiryDate),
     })),
 });
 
@@ -46,6 +59,7 @@ const newVariantRow = (from = {}) => ({
     purchaseCost: str(from.purchaseCost),
     barcode: "",
     stock: 0,
+    expiryDate: toDateInput(from.expiryDate),
 });
 
 const SKU_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
@@ -134,9 +148,22 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                     purchaseCost: f.purchaseCost,
                     barcode: f.barcode,
                     stock: product.stock ?? 0,
+                    expiryDate: f.expiryDate || toDateInput(product.expiryDate),
                 }];
             const last = rows[rows.length - 1];
-            return { ...f, variants: [...rows, { ...row, price: last.price, salePrice: last.salePrice, purchaseCost: last.purchaseCost }] };
+            return {
+                ...f,
+                variants: [
+                    ...rows,
+                    {
+                        ...row,
+                        price: last.price,
+                        salePrice: last.salePrice,
+                        purchaseCost: last.purchaseCost,
+                        expiryDate: last.expiryDate || "",
+                    },
+                ],
+            };
         });
         setFocusKey(row.key);
     };
@@ -147,7 +174,15 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
             // Undo the conversion when the only added row goes away again.
             if (rows.length === 1 && rows[0].isBase) {
                 const base = rows[0];
-                return { ...f, price: base.price, salePrice: base.salePrice, purchaseCost: base.purchaseCost, barcode: base.barcode, variants: [] };
+                return {
+                    ...f,
+                    price: base.price,
+                    salePrice: base.salePrice,
+                    purchaseCost: base.purchaseCost,
+                    barcode: base.barcode,
+                    expiryDate: base.expiryDate,
+                    variants: [],
+                };
             }
             return { ...f, variants: rows };
         });
@@ -175,6 +210,7 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                 salePrice: isBlank(v.salePrice) ? 0 : num(v.salePrice),
                 barcode: (v.barcode || "").trim(),
                 ...(isBlank(v.purchaseCost) ? {} : { purchaseCost: num(v.purchaseCost) }),
+                expiryDate: v.expiryDate ? v.expiryDate : "",
             });
             body.variants = form.variants.map((v) => {
                 if (v.isNew) return { sku: v.sku.trim().toUpperCase(), ...editable(v), stock: 0 };
@@ -190,6 +226,7 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
             body.salePrice = isBlank(form.salePrice) ? 0 : num(form.salePrice);
             body.barcode = form.barcode.trim();
             if (!isBlank(form.purchaseCost)) body.purchaseCost = num(form.purchaseCost);
+            body.expiryDate = form.expiryDate ? form.expiryDate : "";
         }
 
         setBusy(true);
@@ -291,8 +328,8 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                                            <div className="col-span-2 sm:col-span-1">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                            <div>
                                                 <label className={labelCls}>Name{v.isNew || v.isBase ? " *" : ""}</label>
                                                 <input
                                                     className={inputCls}
@@ -319,6 +356,16 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                                                 <label className={labelCls}>Barcode</label>
                                                 <input className={inputCls} value={v.barcode} onChange={(e) => setVariant(idx, { barcode: e.target.value })} />
                                             </div>
+                                            <div>
+                                                <label className={labelCls}>Expiry Date</label>
+                                                <input
+                                                    className={inputCls}
+                                                    type="date"
+                                                    value={v.expiryDate || ""}
+                                                    onChange={(e) => setVariant(idx, { expiryDate: e.target.value })}
+                                                    aria-label="Variant expiry date"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -331,7 +378,7 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                                 </button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                 <div>
                                     <label className={labelCls}>Selling price (₹) *</label>
                                     <input className={inputCls} type="number" min="0" step="0.01" value={form.price} onChange={(e) => set({ price: e.target.value })} />
@@ -348,13 +395,19 @@ const PurchaseProductEditModal = ({ product, onClose, onSaved }) => {
                                     <label className={labelCls}>Barcode</label>
                                     <input className={inputCls} value={form.barcode} onChange={(e) => set({ barcode: e.target.value })} />
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={addVariant}
-                                    className="col-span-2 sm:col-span-4 flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 px-3 py-2.5 text-xs font-bold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                                >
-                                    <HiOutlinePlus className="h-4 w-4" /> Add variant (sizes, flavours…)
-                                </button>
+                                <div>
+                                    <label className={labelCls}>Expiry Date</label>
+                                    <input className={inputCls} type="date" value={form.expiryDate || ""} onChange={(e) => set({ expiryDate: e.target.value })} aria-label="Product expiry date" />
+                                </div>
+                                <div className="col-span-2 sm:col-span-3 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={addVariant}
+                                        className="w-full flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 px-3 py-2.5 text-xs font-bold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                    >
+                                        <HiOutlinePlus className="h-4 w-4" /> Add variant (sizes, flavours…)
+                                    </button>
+                                </div>
                             </div>
                         )}
 

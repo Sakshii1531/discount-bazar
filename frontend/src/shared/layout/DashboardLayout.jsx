@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import SellerOrdersContext from '@/modules/seller/context/SellerOrdersContext';
 import SellerEarningsContext, { defaultEarnings } from '@/modules/seller/context/SellerEarningsContext';
-import { getOrderSocket, onSellerOrderNew, onReturnDropOtp, onSellerReturnRequested, onAdminWithdrawalNew } from '@/core/services/orderSocket';
+import { getOrderSocket, onSellerOrderNew, onSellerOrderAlertResolved, onSellerOrderCancelled, onReturnDropOtp, onSellerReturnRequested, onAdminWithdrawalNew } from '@/core/services/orderSocket';
+import { dismissOrderAlertNotifications } from '@core/firebase/pushClient';
 import { createSocketTokenReader } from '@core/utils/authStorage';
 import { STORAGE_KEYS } from '@core/utils/storage';
 import orderAlertSound from '@/assets/sounds/order_alert.mp3';
@@ -136,6 +137,13 @@ function isSellerAlertEligible(order) {
     return status === 'pending';
 }
 
+function cancelledOrderMessage(orderId, cancelledBy) {
+    const by = String(cancelledBy || '').toLowerCase();
+    if (by === 'customer') return `Order #${orderId} was cancelled by the customer.`;
+    if (by === 'admin') return `Order #${orderId} was cancelled by the admin.`;
+    return `Order #${orderId} was cancelled.`;
+}
+
 const isEarningsRoute = (path) =>
     path.includes('earnings') || path.includes('withdrawals') || path.includes('transactions');
 
@@ -223,6 +231,9 @@ const DashboardLayout = ({ children, navItems, title }) => {
     const shownReturnOrderIdsRef = useRef(new Set());
     const isFirstLoadRef = useRef(true);
     const newOrderAlertRef = useRef(null);
+    // Order this device is accepting/declining right now — its own
+    // `order:alert:resolved` echo must not toast "handled on another device".
+    const decidingOrderIdRef = useRef(null);
     const newReturnAlertRef = useRef(null);
     const fetchOrdersRef = useRef(null);
     const isOrdersFetchInFlightRef = useRef(false);
@@ -398,6 +409,18 @@ const DashboardLayout = ({ children, navItems, title }) => {
         audio.currentTime = 0;
     };
 
+    // Close the accept/reject popup for an order that was settled elsewhere
+    // (another device on this account, the server timeout, or a cancel).
+    const closeSettledOrderAlert = (orderId) => {
+        const open = newOrderAlertRef.current;
+        if (!orderId || !open || String(open.orderId) !== String(orderId)) return false;
+        newOrderAlertRef.current = null;
+        stopOrderRingtone();
+        setNewOrderAlert(null);
+        dismissOrderAlertNotifications(orderId);
+        return true;
+    };
+
     useEffect(() => {
         shownOrderIdsRef.current = shownOrderIds;
     }, [shownOrderIds]);
@@ -447,6 +470,22 @@ const DashboardLayout = ({ children, navItems, title }) => {
                         const merged = { ...full, ...openAlert, paymentBreakdown: full.paymentBreakdown };
                         newOrderAlertRef.current = merged;
                         setNewOrderAlert(merged);
+                    }
+                }
+
+                // Safety net for a missed `order:alert:resolved` (socket asleep while
+                // the app was backgrounded): the open order is no longer pending.
+                const openNow = newOrderAlertRef.current;
+                if (openNow) {
+                    const latest = allOrders.find((o) => o.orderId === openNow.orderId);
+                    if (latest && !isSellerAlertEligible(latest)) {
+                        const closed = closeSettledOrderAlert(openNow.orderId);
+                        const wasCancelled =
+                            String(latest.status || '').toLowerCase() === 'cancelled' ||
+                            String(latest.workflowStatus || '').toUpperCase() === 'CANCELLED';
+                        if (closed && wasCancelled && decidingOrderIdRef.current !== openNow.orderId) {
+                            toast.info(cancelledOrderMessage(openNow.orderId, latest.cancelledBy));
+                        }
                     }
                 }
 
@@ -568,6 +607,34 @@ const DashboardLayout = ({ children, navItems, title }) => {
             if (fetchOrdersRef.current) fetchOrdersRef.current();
         });
 
+        const unsubscribeAlertResolved = onSellerOrderAlertResolved(getToken, (payload) => {
+            const orderId = payload?.orderId;
+            if (!orderId) return;
+            const decidedHere = decidingOrderIdRef.current === orderId;
+            const closed = closeSettledOrderAlert(orderId);
+            if (!closed || decidedHere) return;
+            const messages = {
+                accepted: `Order #${orderId} was accepted on another device.`,
+                rejected: `Order #${orderId} was declined on another device.`,
+                expired: `Order #${orderId} expired.`,
+                cancelled: cancelledOrderMessage(orderId, payload.cancelledBy),
+            };
+            toast.info(messages[payload.reason] || `Order #${orderId} was already handled.`);
+            if (fetchOrdersRef.current) fetchOrdersRef.current();
+        });
+
+        // Customer / admin / system cancel: stop ringing and drop the popup at once.
+        const unsubscribeCancelled = onSellerOrderCancelled(getToken, (payload) => {
+            const orderId = payload?.orderId;
+            if (!orderId) return;
+            const decidedHere = decidingOrderIdRef.current === orderId;
+            const closed = closeSettledOrderAlert(orderId);
+            if (closed && !decidedHere) {
+                toast.info(cancelledOrderMessage(orderId, payload.cancelledBy));
+            }
+            if (fetchOrdersRef.current) fetchOrdersRef.current();
+        });
+
         const unsubscribeReturnReq = onSellerReturnRequested(getToken, (payload) => {
             console.log("[DashboardLayout] Received return:requested:", payload);
             if (payload?.orderId) {
@@ -593,6 +660,8 @@ const DashboardLayout = ({ children, navItems, title }) => {
 
         return () => {
             unsubscribeSellerNew();
+            unsubscribeAlertResolved();
+            unsubscribeCancelled();
             unsubscribeReturnReq();
             unsubscribeDrop();
         };
@@ -771,11 +840,13 @@ const DashboardLayout = ({ children, navItems, title }) => {
     };
 
     const handleAcceptOrder = async (orderId) => {
+        decidingOrderIdRef.current = orderId;
         try {
             await sellerApi.updateOrderStatus(orderId, { status: 'confirmed' });
             toast.success(`Order #${orderId} Accepted!`);
             stopOrderRingtone();
             setNewOrderAlert(null);
+            dismissOrderAlertNotifications(orderId);
         } catch (error) {
             const msg =
                 error?.response?.data?.message ||
@@ -790,20 +861,26 @@ const DashboardLayout = ({ children, navItems, title }) => {
                 if (fetchOrdersRef.current) fetchOrdersRef.current();
             }
             toast.error(msg);
+        } finally {
+            decidingOrderIdRef.current = null;
         }
     };
 
     const handleDeclineOrder = async (orderId) => {
+        decidingOrderIdRef.current = orderId;
         try {
             await sellerApi.updateOrderStatus(orderId, { status: 'cancelled' });
             toast.error(`Order #${orderId} Declined`);
             stopOrderRingtone();
             setNewOrderAlert(null);
+            dismissOrderAlertNotifications(orderId);
         } catch (error) {
             const msg =
                 error?.response?.data?.message ||
                 "Failed to update order";
             toast.error(msg);
+        } finally {
+            decidingOrderIdRef.current = null;
         }
     };
 
@@ -1069,10 +1146,12 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                                                     const image = it.image || product.mainImage;
                                                                     const qty = Number(it.quantity) || 0;
                                                                     const price = Number(it.price) || 0;
+                                                                    const rawSku = String(it.variantSku || it.variantSlot || "").trim();
                                                                     // Stock is reserved for this order at placement, so this is what's left after it.
                                                                     const variant = Array.isArray(product.variants)
-                                                                        ? product.variants.find((v) => it.variantSlot && (v?.sku === it.variantSlot || v?.name === it.variantSlot))
+                                                                        ? product.variants.find((v) => rawSku && (String(v?.sku || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?.name || "").trim().toLowerCase() === rawSku.toLowerCase() || String(v?._id || "").trim() === rawSku))
                                                                         : null;
+                                                                    const variantLabel = variant?.name || [variant?.size, variant?.colour].filter(Boolean).join(" · ") || (rawSku && !/^[A-Z0-9]{5,}-[A-Z0-9]{3,}$/i.test(rawSku) ? rawSku : "") || it.variantSlot || "";
                                                                     const rawLeft = variant?.stock ?? product.stock;
                                                                     const stockLeft = rawLeft == null || rawLeft === "" || !Number.isFinite(Number(rawLeft)) ? null : Math.max(0, Number(rawLeft));
                                                                     const lowAt = Number(product.lowStockAlert) > 0 ? Number(product.lowStockAlert) : 5;
@@ -1093,11 +1172,18 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                                                             )}
                                                                             <div className="flex-1 min-w-0">
                                                                                 <div className="flex items-start justify-between gap-2">
-                                                                                    <p className="text-sm font-bold text-slate-900 truncate" title={name}>{name}</p>
+                                                                                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                                                                        <p className="text-sm font-bold text-slate-900 truncate" title={name}>{name}</p>
+                                                                                        {variantLabel && (
+                                                                                            <span className="shrink-0 bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-md text-xs">
+                                                                                                {variantLabel}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
                                                                                     <p className="text-sm font-black text-slate-900 shrink-0">₹{formatAmount(price * qty)}</p>
                                                                                 </div>
                                                                                 <p className="text-xs text-slate-500 truncate">
-                                                                                    {it.variantSlot ? `${it.variantSlot} · ` : ""}₹{price} × {qty}
+                                                                                    {variantLabel ? `${variantLabel} · ` : ""}₹{price} × {qty}
                                                                                 </p>
                                                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
                                                                                     {stockBadge && (
