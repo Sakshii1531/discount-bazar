@@ -156,6 +156,12 @@ export default [
     status: [500, 503],
     check: (res) => expect(res.body.result.error.code).toBe("MAPS_KEY_MISSING"),
   },
+  {
+    route: "GET /api/maps/reverse-geocode",
+    name: "validates coordinates",
+    query: {},
+    status: 400,
+  },
 
   // ── Media ─────────────────────────────────────────────────────────────────
   {

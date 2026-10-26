@@ -7,8 +7,6 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "lint:language": "node scripts/check-language.js",
-    "report:language": "node scripts/generate-language-report.js",
     "preview": "vite preview",
     "test": "jest",
     "test:unit": "jest",

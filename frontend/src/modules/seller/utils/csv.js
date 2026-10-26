@@ -3,7 +3,7 @@
  * quoted fields, "" escapes, commas/newlines inside quotes, CRLF or LF, BOM).
  */
 export function parseCsv(text) {
-  const src = String(text || "").replace(/^﻿/, "");
+  const src = String(text || "").replace(/^\uFEFF/, "");
   const rows = [];
   let row = [];
   let field = "";
