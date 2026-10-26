@@ -249,6 +249,8 @@ const PosTerminal = () => {
         const variantLabel =
             variant?.name ||
             [variant?.size, variant?.colour].filter(Boolean).join(" · ") ||
+            product?.weight ||
+            [product?.size, product?.colour].filter(Boolean).join(" · ") ||
             variant?.sku ||
             "";
 

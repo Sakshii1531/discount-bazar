@@ -9,6 +9,58 @@ const resolvePrice = (product) => {
     return sale > 0 && sale < mrp ? sale : mrp;
 };
 
+const resolveSingleVariantLabel = (product) => {
+    const variants = Array.isArray(product?.variants) ? product.variants : [];
+    const first = variants[0];
+
+    const isGeneric = (str) => {
+        if (!str) return true;
+        const lower = str.trim().toLowerCase();
+        return (
+            lower === "default" ||
+            lower === "regular" ||
+            lower === "standard" ||
+            lower === (product?.name || "").trim().toLowerCase()
+        );
+    };
+
+    const firstVariantName = typeof first?.name === "string" ? first.name.trim() : "";
+    if (firstVariantName && !isGeneric(firstVariantName)) {
+        return firstVariantName;
+    }
+
+    const firstSizeColour = [first?.size, first?.colour].filter(Boolean).join(" · ").trim();
+    if (firstSizeColour) {
+        return firstSizeColour;
+    }
+
+    const firstWeight = typeof first?.weight === "string" ? first.weight.trim() : "";
+    if (firstWeight) {
+        return firstWeight;
+    }
+
+    const productWeight = typeof product?.weight === "string" ? product.weight.trim() : "";
+    if (productWeight) {
+        return productWeight;
+    }
+
+    const productSizeColour = [product?.size, product?.colour].filter(Boolean).join(" · ").trim();
+    if (productSizeColour) {
+        return productSizeColour;
+    }
+
+    const productUnit = typeof product?.unit === "string" ? product.unit.trim() : "";
+    if (productUnit) {
+        return productUnit;
+    }
+
+    if (firstVariantName) {
+        return firstVariantName;
+    }
+
+    return "";
+};
+
 const ProductGrid = ({ products, isLoading, onAddProduct }) => {
     if (isLoading) {
         return (
@@ -34,6 +86,7 @@ const ProductGrid = ({ products, isLoading, onAddProduct }) => {
             {products.map((product) => {
                 const variants = Array.isArray(product.variants) ? product.variants : [];
                 const hasVariants = variants.length > 1;
+                const singleVariantLabel = !hasVariants ? resolveSingleVariantLabel(product) : "";
 
                 // Total stock across variants for multi-variant products
                 const totalStock = hasVariants
@@ -83,6 +136,11 @@ const ProductGrid = ({ products, isLoading, onAddProduct }) => {
                                 <p className="text-[11px] font-bold text-slate-800 line-clamp-2 leading-tight h-7">
                                     {product.name}
                                 </p>
+                                {!hasVariants && singleVariantLabel ? (
+                                    <p className="text-[10px] font-semibold text-slate-500 truncate mt-1">
+                                        {singleVariantLabel}
+                                    </p>
+                                ) : null}
                                 <div className="flex items-center justify-between mt-1.5">
                                     <span className="text-xs font-black text-slate-900">
                                         ₹{resolvePrice(product).toLocaleString("en-IN")}
