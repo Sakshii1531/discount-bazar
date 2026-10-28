@@ -1,11 +1,16 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-jest.mock('@core/context/SettingsContext', () => ({
-  useSettings: () => ({
+jest.mock('@core/context/SettingsContext', () => {
+  const value = {
     settings: { deliveryPricingMode: 'fixed_price', fixedDeliveryFee: 10, globalDeliveryTimeMinutes: 15, zeroDeliveryTimeMessage: 'Same Day Delivery' },
-  }),
-}));
+  };
+  return {
+    __esModule: true,
+    default: require('react').createContext(value),
+    useSettings: () => value,
+  };
+});
 
 import { parseCsv, csvToObjects, toCsv } from '@modules/seller/utils/csv';
 import { formatDeliveryFeeLabel } from '@modules/customer/utils/deliveryLabels';

@@ -18,7 +18,6 @@ const OrderProgressTracker = ({
   totalDistanceText = "—",
 }) => {
   const status = getLegacyStatusFromOrder(order);
-  const currentStage = STATUS_TO_STAGE[status] || "confirmed";
 
   const steps = [
     {
@@ -86,7 +85,6 @@ const OrderProgressTracker = ({
           const Icon = step.icon;
           const isCompleted = stepStatus === "completed";
           const isActive = stepStatus === "active";
-          const isPending = stepStatus === "pending";
 
           return (
             <div

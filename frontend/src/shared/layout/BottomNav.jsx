@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
     LayoutDashboard,
@@ -10,9 +10,8 @@ import {
 
 import { useAuth } from '@core/context/AuthContext';
 
-const BottomNav = ({ navItems }) => {
+const BottomNav = () => {
     const { role } = useAuth();
-    const location = useLocation();
     const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
     useEffect(() => {

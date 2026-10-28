@@ -1,7 +1,6 @@
 import React from 'react';
 import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, ScrollText, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
 
 // Helper to parse inline markdown formatting (bold, etc.)
@@ -107,7 +106,6 @@ const renderFormattedContent = (content) => {
 };
 
 const TermsPage = () => {
-    const navigate = useNavigate();
     // Back stays inside the app even when opened directly.
     const goBack = useSafeBack("/login");
     const { settings } = useSettings();

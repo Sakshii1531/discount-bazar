@@ -32,7 +32,7 @@ import InventoryEditModal from '../components/stock/InventoryEditModal';
 
 const StockManagement = () => {
     const navigate = useNavigate();
-    const [activeView, setActiveView] = useState('inventory'); // 'inventory' or 'history'
+    const [activeView] = useState('inventory'); // 'inventory' or 'history'
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [inventory, setInventory] = useState([]);

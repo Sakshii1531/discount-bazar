@@ -1,5 +1,5 @@
-import React from "react";
-import { useSettings } from "@core/context/SettingsContext";
+import React, { useContext } from "react";
+import SettingsContext from "@core/context/SettingsContext";
 
 /**
  * Seller's extra delivery fee and time for one product. Customers see the
@@ -18,12 +18,9 @@ const cleanFee = (v) => {
 const cleanMinutes = (v) => String(v ?? "").split(".")[0].replace(/[^0-9]/g, "");
 
 const ProductDeliverySettings = ({ fee, minutes, onChange, showPreview = true }) => {
-  let settings = {};
-  try {
-    settings = useSettings()?.settings || {};
-  } catch {
-    settings = {};
-  }
+  // Read the context directly: useSettings() throws outside a SettingsProvider,
+  // and this form is also rendered where there is none.
+  const settings = useContext(SettingsContext)?.settings || {};
   const globalFee = Number(
     settings.deliveryPricingMode === "fixed_price"
       ? settings.fixedDeliveryFee ?? settings.customerBaseDeliveryFee ?? 0

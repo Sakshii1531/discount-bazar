@@ -7,32 +7,6 @@ import { HiChevronDown } from "react-icons/hi2";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
-const colorMap = {
-  indigo:
-    "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  rose: "text-rose-600 bg-rose-50 border-rose-100 group-hover:bg-rose-100/50",
-  amber:
-    "text-amber-600 bg-amber-50 border-amber-100 group-hover:bg-amber-100/50",
-  blue: "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  emerald:
-    "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  violet:
-    "text-violet-600 bg-violet-50 border-violet-100 group-hover:bg-violet-100/50",
-  cyan: "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  orange:
-    "text-orange-600 bg-orange-50 border-orange-100 group-hover:bg-orange-100/50",
-  green:
-    "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  sky: "text-brand-600 bg-brand-50 border-brand-100 group-hover:bg-brand-100/50",
-  pink: "text-pink-600 bg-pink-50 border-pink-100 group-hover:bg-pink-100/50",
-  fuchsia:
-    "text-fuchsia-600 bg-fuchsia-50 border-fuchsia-100 group-hover:bg-fuchsia-100/50",
-  red: "text-red-600 bg-red-50 border-red-100 group-hover:bg-red-100/50",
-  slate:
-    "text-slate-600 bg-slate-50 border-slate-100 group-hover:bg-slate-100/50",
-  dark: "text-gray-800 bg-gray-100 border-gray-200 group-hover:bg-gray-200/50",
-};
-
 // Optional third level: a child that has its own `children` renders as a
 // collapsible group of links (e.g. Business > Account > Payment / Received).
 const SidebarSubGroup = ({ child }) => {
@@ -266,7 +240,7 @@ const SidebarItem = ({
             className={cn(
               "p-1.5 rounded-lg transition-all duration-500 shadow-md z-10",
               isActive
-                ? "bg-white/20 text-white"
+                ? "bg-white/20 text-primary-foreground"
                 : "bg-white/5 text-gray-300 group-hover:bg-white/10 group-hover:text-white",
             )}>
             {item.icon && <item.icon className="h-4 w-4" />}
@@ -274,7 +248,8 @@ const SidebarItem = ({
           <span
             className={cn(
               "text-xs tracking-tight transition-all duration-300 z-10",
-              isActive ? "font-bold text-white" : "font-medium text-gray-200 group-hover:text-white",
+              // On the brand background: follow --primary-foreground (dark on light brand colours).
+              isActive ? "font-bold text-primary-foreground" : "font-medium text-gray-200 group-hover:text-white",
             )}>
             {item.label}
           </span>

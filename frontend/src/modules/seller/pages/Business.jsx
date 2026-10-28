@@ -321,7 +321,6 @@ const ExpiryReportCard = ({ items = [], totals = {}, onNavigateTab }) => {
     const totalCount = Number(totals.count || items.length || 0);
     const expiredCount = Number(totals.expired || items.filter(i => i.daysLeft < 0).length || 0);
     const todayCount = Number(totals.today || items.filter(i => i.daysLeft === 0).length || 0);
-    const tomorrowCount = Number(totals.tomorrow || items.filter(i => i.daysLeft === 1).length || 0);
     const next7DaysCount = Number(totals.next7Days || items.filter(i => i.daysLeft >= 0 && i.daysLeft <= 7).length || 0);
     const next30DaysCount = Number(totals.next30Days || items.filter(i => i.daysLeft >= 0 && i.daysLeft <= 30).length || 0);
 
@@ -916,7 +915,7 @@ const PurchasesTab = () => {
                 }
                 sessionStorage.removeItem("seller_purchases_draft");
             }
-        } catch {}
+        } catch { /* corrupt or unavailable draft: start fresh */ }
 
         load();
 
@@ -930,7 +929,7 @@ const PurchasesTab = () => {
             processedCreatedProductIdRef.current = createdId;
             try {
                 window.history.replaceState({}, document.title);
-            } catch {}
+            } catch { /* history API unavailable */ }
         }
 
         posApi.getCatalog({}).then((r) => {
@@ -1063,7 +1062,7 @@ const PurchasesTab = () => {
                 "seller_purchases_draft",
                 JSON.stringify({ form, lines, targetLineIndex: lineIdx, editingId })
             );
-        } catch {}
+        } catch { /* storage unavailable or full: draft is not saved */ }
         navigate("/seller/products/add?returnTo=/seller/business/purchases", {
             state: { returnTo: "/seller/business/purchases", targetLineIndex: lineIdx }
         });
@@ -2932,8 +2931,14 @@ const ReportsTab = () => {
     const [data, setData] = useState(null);
 
     useEffect(() => {
+        // Ignore a response for a report the seller has already moved away from.
+        let active = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the old report while the new one loads
         setData(null);
-        businessApi.report(type, { from, to }).then((r) => setData(unwrap(r))).catch((e) => toast.error(errMsg(e)));
+        businessApi.report(type, { from, to })
+            .then((r) => { if (active) setData(unwrap(r)); })
+            .catch((e) => { if (active) toast.error(errMsg(e)); });
+        return () => { active = false; };
     }, [type, from, to]);
 
     const rows = useMemo(() => (data?.rows || []).map((r) => (r.digitalSales ? { ...r, ...r.digitalSales, digitalSales: undefined } : r)), [data]);
@@ -2984,6 +2989,7 @@ const AccountTab = ({ view }) => {
 
     useEffect(() => {
         let active = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag for the fetch started here
         setLoading(true);
         businessApi.accounts(view, { from, to })
             .then((r) => { if (active) setData(unwrap(r)); })
@@ -2992,7 +2998,12 @@ const AccountTab = ({ view }) => {
         return () => { active = false; };
     }, [view, from, to]);
 
-    useEffect(() => { setTypeFilter("all"); }, [view]);
+    // A different account view starts with its type filter cleared.
+    const [filterView, setFilterView] = useState(view);
+    if (filterView !== view) {
+        setFilterView(view);
+        setTypeFilter("all");
+    }
 
     const rows = useMemo(() => {
         const q = searchTerm.trim().toLowerCase();

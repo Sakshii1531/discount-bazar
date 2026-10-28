@@ -185,14 +185,6 @@ const CheckoutModal = ({
     const cashShortToCredit = cashShort && Boolean(posCustomerId);
     const ledgerRequired = paymentMethod === "CREDIT" || cashShort;
     const selectedCustomer = customers.find((c) => c._id === posCustomerId);
-    // What this bill adds to the selected customer's khata (on top of their existing due)
-    const billDue =
-        cashShortToCredit
-            ? cashShortfall
-            : paymentMethod === "CREDIT" && posCustomerId
-              ? round2(Math.max(0, payable - Math.min(Math.max(0, Number(amountPaid) || 0), payable)))
-              : 0;
-    const currentDue = Number(selectedCustomer?.balance) || 0;
     const dueLabel = (balance) => {
         const b = Number(balance) || 0;
         return b < 0 ? `advance ₹${formatAmount(-b)}` : `previous due ₹${formatAmount(b)}`;

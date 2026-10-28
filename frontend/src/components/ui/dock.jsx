@@ -5,7 +5,7 @@ import React, { useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export const Dock = React.forwardRef(
-    ({ className, children, magnification = 60, distance = 140, direction = "middle", ...props }, ref) => {
+    ({ className, children, magnification = 60, distance = 140, direction: _direction = "middle", ...props }, ref) => {
         const mouseX = useMotionValue(Infinity);
 
         const renderChildren = () => {

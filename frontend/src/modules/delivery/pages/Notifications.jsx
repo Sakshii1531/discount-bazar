@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Bell,
   ArrowLeft,
@@ -21,12 +21,16 @@ import {
   onNotificationNew,
 } from "@/core/services/orderSocket";
 import { createSocketTokenReader } from "@core/utils/authStorage";
+import { useAuth } from "@core/context/AuthContext";
 import { STORAGE_KEYS } from "@core/utils/storage";
 
 const Notifications = () => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const myDeliveryIdRef = useRef("");
+  myDeliveryIdRef.current = String(user?._id || user?.id || "");
 
   const fetchNotifications = async () => {
     try {
@@ -55,7 +59,14 @@ const Notifications = () => {
       setNotifications((current) =>
         current.filter((notification) => notification?.data?.orderId !== orderId),
       );
-      toast.info("An order request was accepted by another partner.");
+      // The same event also arrives when this rider accepted or skipped the
+      // offer (on any device) or the order was cancelled; only a win by
+      // someone else means another partner took it.
+      const me = myDeliveryIdRef.current;
+      const winner = payload.winnerDeliveryId ? String(payload.winnerDeliveryId) : "";
+      if (winner && winner !== me) {
+        toast.info("An order request was accepted by another partner.");
+      }
     });
     const unsubNew = onNotificationNew(getToken, () => {
       fetchNotifications();

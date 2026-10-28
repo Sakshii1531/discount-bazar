@@ -38,7 +38,7 @@ const Profile = () => {
     ratingAverage: user?.ratingAverage || 0,
     ratingCount: user?.ratingCount || 0,
   });
-  const [statsData, setStatsData] = useState({
+  const [, setStatsData] = useState({
     deliveries: 0,
     incentives: 0,
     cashCollected: 0,

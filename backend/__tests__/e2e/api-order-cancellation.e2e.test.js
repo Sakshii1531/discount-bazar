@@ -16,6 +16,7 @@ import Wallet from "../../app/models/wallet.js";
 import Ticket from "../../app/models/ticket.js";
 import { creditWallet } from "../../app/services/finance/walletService.js";
 import { clearCancellationPolicyCache } from "../../app/services/cancellation/cancellationPolicyService.js";
+import { registerOrderSocketGetter } from "../../app/services/orderSocketEmitter.js";
 import {
   onLatePaymentCapture,
   onOrderDelivered,
@@ -154,6 +155,24 @@ describe("pre-pickup self-cancellation", () => {
     expect(results.filter((r) => r.status === 201)).toHaveLength(1);
     expect(await stockNow()).toBe(STOCK);
     expect(await OrderCancellation.countDocuments({ order: order._id })).toBe(1);
+  });
+
+  it("tells the seller once, and closes their order popup, on a direct cancel", async () => {
+    const emits = [];
+    registerOrderSocketGetter(() => ({
+      to: (room) => ({ emit: (event, payload) => emits.push({ room, event, orderId: payload?.orderId }) }),
+    }));
+    try {
+      const order = await makeOrder({ quantity: 1 });
+      const res = await submit(order.orderId, { mode: "CANCEL", reasonCode: "PLACED_BY_MISTAKE" });
+      expect(res.status).toBe(201);
+      const toSeller = (event) =>
+        emits.filter((e) => e.room === `seller:${seller._id}` && e.event === event && e.orderId === order.orderId);
+      expect(toSeller("order:cancelled")).toHaveLength(1);
+      expect(toSeller("order:alert:resolved")).toHaveLength(1);
+    } finally {
+      registerOrderSocketGetter(null);
+    }
   });
 
   it("validates the reason and allows optional details for Other", async () => {

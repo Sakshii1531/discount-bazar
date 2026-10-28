@@ -8,7 +8,7 @@ const NotificationsPage = () => {
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [markingRead, setMarkingRead] = useState(false);
+    const [, setMarkingRead] = useState(false);
 
     useEffect(() => {
         fetchNotifications();

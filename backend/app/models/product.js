@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { isBlankSku, makeProductSku } from "../utils/sku.js";
 
 const productSchema = new mongoose.Schema(
     {
@@ -242,5 +243,17 @@ productSchema.index({ sellerId: 1, approvalStatus: 1, createdAt: -1 });
 productSchema.index({ sellerId: 1, createdAt: -1, _id: -1 });
 productSchema.index({ "returnPolicy.isReturnable": 1, sellerId: 1, status: 1 });
 productSchema.index({ name: "text", tags: "text" }); // For better search if regex is too slow
+
+// Stock, purchase bills and POS lines find a variant by SKU, so every save
+// (seeds, imports, scripts, not only the product controller) gives a blank
+// variant one. Existing SKUs are left exactly as stored.
+productSchema.pre("validate", function fillBlankVariantSkus() {
+    const variants = this.variants || [];
+    if (!variants.some((v) => isBlankSku(v?.sku))) return;
+    const taken = new Set(variants.filter((v) => !isBlankSku(v?.sku)).map((v) => String(v.sku).trim().toUpperCase()));
+    for (const variant of variants) {
+        if (isBlankSku(variant?.sku)) variant.sku = makeProductSku(this.name, taken);
+    }
+});
 
 export default mongoose.model("Product", productSchema);

@@ -499,16 +499,6 @@ const Auth = () => {
     }
   };
 
-  const handlePanelWheel = (e) => {
-    const panel = e.currentTarget;
-    if (panel.scrollHeight <= panel.clientHeight) {
-      return;
-    }
-
-    e.preventDefault();
-    panel.scrollTop += e.deltaY;
-  };
-
 
   // --- Forgot Password Handlers ---
   const handleSendResetOtp = async (e, { isResend = false } = {}) => {

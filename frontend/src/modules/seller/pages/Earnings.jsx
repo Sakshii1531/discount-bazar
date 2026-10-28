@@ -33,8 +33,6 @@ const Earnings = () => {
   const navigate = useNavigate();
   const { earningsData: data, earningsLoading: loading } = useSellerEarnings();
   const [withdrawAmount, setWithdrawAmount] = React.useState("");
-  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = React.useState(false);
-  const [isWithdrawing, setIsWithdrawing] = React.useState(false);
 
   React.useEffect(() => {
     if (data?.balances != null && withdrawAmount === "") {
@@ -42,27 +40,6 @@ const Earnings = () => {
       setWithdrawAmount(avail > 0 ? String(avail) : "");
     }
   }, [data?.balances]);
-
-  const handleWithdraw = () => {
-    const totalBalance = Number(data?.balances?.settledBalance ?? 0);
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0 || amount > totalBalance) {
-      alert(
-        "Please enter a valid amount between ₹0.01 and ₹" +
-        totalBalance.toLocaleString()
-      );
-      return;
-    }
-
-    setIsWithdrawing(true);
-    setTimeout(() => {
-      setIsWithdrawing(false);
-      setIsWithdrawModalOpen(false);
-      alert(
-        `Withdrawal request of ₹${amount.toLocaleString()} submitted successfully!`
-      );
-    }, 1500);
-  };
 
   const handleExportCSV = () => {
     const ledger = Array.isArray(data?.ledger) ? data.ledger : [];

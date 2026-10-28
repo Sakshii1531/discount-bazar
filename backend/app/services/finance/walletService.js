@@ -499,9 +499,14 @@ export async function getAdminFinanceSummary() {
         { $match: { status: "delivered", paymentMode: "ONLINE" } },
         { $group: { _id: null, amount: { $sum: "$paymentBreakdown.platformTotalEarning" } } },
       ]),
+      // Owed (pending / processing) and already paid out, per payout type.
       Payout.aggregate([
-        { $match: { status: { $in: [PAYOUT_STATUS.PENDING, PAYOUT_STATUS.PROCESSING] } } },
-        { $group: { _id: "$payoutType", amount: { $sum: "$amount" } } },
+        {
+          $match: {
+            status: { $in: [PAYOUT_STATUS.PENDING, PAYOUT_STATUS.PROCESSING, PAYOUT_STATUS.COMPLETED] },
+          },
+        },
+        { $group: { _id: { type: "$payoutType", status: "$status" }, amount: { $sum: "$amount" } } },
       ]),
       // System Float (COD) should reflect "cash owed to the system" for COD orders, even before delivery.
       // - After cash is marked collected, we use the persisted `codPendingAmount` (net of remittances).
@@ -574,19 +579,29 @@ export async function getAdminFinanceSummary() {
       ]),
     ]);
 
-  const sellerPendingPayouts =
-    pendingPayouts.find((row) => row._id === PAYOUT_TYPE.SELLER)?.amount || 0;
-  const riderPendingPayouts =
-    pendingPayouts.find((row) => row._id === PAYOUT_TYPE.DELIVERY_PARTNER)?.amount || 0;
+  const payoutSum = (type, statuses) =>
+    pendingPayouts
+      .filter((row) => row._id?.type === type && statuses.includes(row._id?.status))
+      .reduce((sum, row) => sum + (row.amount || 0), 0);
+  const owed = [PAYOUT_STATUS.PENDING, PAYOUT_STATUS.PROCESSING];
+  const sellerPendingPayouts = payoutSum(PAYOUT_TYPE.SELLER, owed);
+  const riderPendingPayouts = payoutSum(PAYOUT_TYPE.DELIVERY_PARTNER, owed);
+  const paidOutPayouts =
+    payoutSum(PAYOUT_TYPE.SELLER, [PAYOUT_STATUS.COMPLETED]) +
+    payoutSum(PAYOUT_TYPE.DELIVERY_PARTNER, [PAYOUT_STATUS.COMPLETED]);
 
   const totalPlatformEarning = roundCurrency(platformGross[0]?.amount || 0);
   // "Available Balance" in the admin wallet UI is treated as a business-level net balance:
-  // total checkout value placed by customers minus pending payout liabilities.
-  // This makes the number update immediately on order placement (COD + ONLINE) and
-  // automatically decreases as seller/rider payout requests are queued.
+  // total checkout value placed by customers minus seller/rider payouts, both
+  // still owed and already paid out. It updates on order placement (COD + ONLINE),
+  // decreases as payouts are queued, and stays down once they are processed
+  // (subtracting only pending ones made it jump back up after each payout).
   const availableBalanceVirtual = roundCurrency(
     Math.max(
-      totalPlatformEarning - roundCurrency(sellerPendingPayouts) - roundCurrency(riderPendingPayouts),
+      totalPlatformEarning -
+        roundCurrency(sellerPendingPayouts) -
+        roundCurrency(riderPendingPayouts) -
+        roundCurrency(paidOutPayouts),
       0,
     ),
   );

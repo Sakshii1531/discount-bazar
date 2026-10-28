@@ -65,6 +65,7 @@ const DeliveryOtpDisplay = ({
   // Sync initialOtp if passed after fetch
   useEffect(() => {
     if (initialOtp && !isDelivered) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- OTP prop arrives after the order is fetched
       setOtpData((prev) => ({
         otp: initialOtp,
         expiresAt: initialExpiresAt || prev?.expiresAt || new Date(Date.now() + 600000).toISOString(),

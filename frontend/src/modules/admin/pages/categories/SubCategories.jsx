@@ -378,28 +378,6 @@ const SubCategories = () => {
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedItems.length === 0) return;
-
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${selectedItems.length} items?`,
-      )
-    ) {
-      try {
-        await Promise.all(
-          selectedItems.map((id) => adminApi.deleteCategory(id)),
-        );
-        toast.success("Subcategories deleted");
-        setSelectedItems([]);
-        fetchCategories();
-      } catch (error) {
-        console.error("Bulk delete error:", error);
-        toast.error("Failed to delete some subcategories");
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">

@@ -12,16 +12,9 @@ import Button from "@/shared/components/ui/Button";
 import Card from "@/shared/components/ui/Card";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { useSettings } from "@core/context/SettingsContext";
 
 const HelpSupport = () => {
   const navigate = useNavigate();
-  const { settings } = useSettings();
-  const supportPhone = settings?.supportPhone || settings?.phone || "+91 98765 43210";
-
-  const handleCallSupport = () => {
-    window.location.href = `tel:${supportPhone.replace(/\s+/g, "")}`;
-  };
 
   const faqs = [
     {

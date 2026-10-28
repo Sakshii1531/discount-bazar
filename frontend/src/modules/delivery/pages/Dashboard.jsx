@@ -50,6 +50,7 @@ const Dashboard = () => {
   // Sync isOnline with user profile from context
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- online flag follows the profile loaded into context
       setIsOnline(user.isOnline);
     }
   }, [user]);
@@ -99,6 +100,7 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch
     fetchStats();
     fetchNotifications();
     if (isOnline) fetchAvailableOrders();

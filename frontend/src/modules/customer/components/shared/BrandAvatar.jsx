@@ -17,6 +17,7 @@ const BrandAvatar = ({ name, logo, className }) => {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- new logo source: retry loading it
     setFailed(false);
     if (logo) {
       setLogoUrl(logo);

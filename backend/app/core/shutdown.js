@@ -16,6 +16,21 @@ let _socketIO = null;
 let _bullQueues = [];
 let _schedulerStopper = null;
 
+/** Rejects with `message` after `ms`, and clears its timer once settled. */
+async function withTimeout(promise, ms, message) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Register HTTP server for graceful shutdown
  * @param {Object} server - HTTP server instance
@@ -176,12 +191,7 @@ async function closeRedis() {
   
   try {
     // Try graceful quit first
-    await Promise.race([
-      client.quit(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Quit timeout')), 5000)
-      )
-    ]);
+    await withTimeout(client.quit(), 5000, 'Quit timeout');
     console.log('[Shutdown] Redis connection closed gracefully');
   } catch (error) {
     console.warn('[Shutdown] Redis quit failed, forcing disconnect:', error.message);
@@ -254,10 +264,7 @@ async function gracefulShutdown(signal) {
     // Step 3: Close Bull queue connections
     console.log('[Shutdown] Step 3: Stopping scheduler jobs...');
     if (_schedulerStopper) {
-      await Promise.race([
-        Promise.resolve(_schedulerStopper()),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Scheduler stop timeout")), 4000)),
-      ]).catch((error) => {
+      await withTimeout(Promise.resolve(_schedulerStopper()), 4000, "Scheduler stop timeout").catch((error) => {
         console.warn("[Shutdown] Scheduler stopper warning:", error.message);
       });
     }

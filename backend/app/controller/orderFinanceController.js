@@ -197,7 +197,10 @@ export const markCodCollectedAfterDelivery = async (req, res) => {
       (req.user?.role === "delivery" ? req.user.id : null);
 
     if (order.financeFlags?.codMarkedCollected) {
-      return handleResponse(res, 200, "COD amount already marked as collected", order);
+      // Same shape as a first call: `order` above only holds the fields
+      // needed for these checks (no paymentStatus / paymentBreakdown).
+      const current = await Order.findById(order._id).lean();
+      return handleResponse(res, 200, "COD amount already marked as collected", current);
     }
 
     const updated = await handleCodOrderFinance(order._id, {

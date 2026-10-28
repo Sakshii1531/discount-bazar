@@ -44,7 +44,7 @@ const ContentManager = () => {
     const [sections, setSections] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    const [activeTab, setActiveTab] = useState('banners');
+    const [, setActiveTab] = useState('banners');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({

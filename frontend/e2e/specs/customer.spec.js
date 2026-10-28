@@ -176,3 +176,22 @@ test.describe('customer: account', () => {
     await expect(page.getByText('How fast is delivery?')).toBeVisible();
   });
 });
+
+test.describe('customer: addresses', () => {
+  test('the Map button on the address form opens the location picker', async ({ page }) => {
+    await loginAs(page, 'customer');
+    await page.goto('/addresses');
+    await page.getByText('Add New Address').click();
+    const form = page.getByRole('dialog').filter({ has: page.getByLabel('Address', { exact: true }) });
+    await expect(form).toBeVisible();
+
+    await form.getByRole('button', { name: 'Map', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: /Select (Shop )?Location/ });
+    await expect(picker).toBeVisible();
+
+    // Closing the picker returns to the still-open address form.
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
+    await expect(form).toBeVisible();
+  });
+});

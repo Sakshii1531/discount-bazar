@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { motion, useMotionValue } from "framer-motion";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   applyCloudinaryTransform,
@@ -56,7 +56,7 @@ const BannerCaption = ({ title, subtitle, fullWidth }) => {
   );
 };
 
-const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false, slideGap = 0, edgeToEdge = false }) => {
+const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false, slideGap: _slideGap = 0, edgeToEdge: _edgeToEdge = false }) => {
   const items = Array.isArray(rawItems) ? rawItems : [];
 
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -65,7 +65,6 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
   );
   const visibleItems = items.slice(0, visibleCount);
   const totalItems = visibleItems.length;
-  const x = useMotionValue(0);
   const containerRef = React.useRef(null);
   const hasMore = visibleCount < items.length;
   const navigate = useNavigate();
@@ -81,10 +80,6 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
     }
     navigate(target.path, target.state ? { state: target.state } : undefined);
   };
-
-  const loadMore = React.useCallback(() => {
-    setVisibleCount((prev) => Math.min(items.length, prev + BANNER_CHUNK_SIZE));
-  }, [items.length]);
 
   React.useEffect(() => {
     setVisibleCount(Math.min(items.length, BANNER_CHUNK_SIZE));
@@ -102,12 +97,15 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
     return () => clearInterval(intervalId);
   }, [totalItems]);
 
+  // Load the next chunk of banners as the carousel nears the last loaded one.
+  const itemCount = items.length;
   React.useEffect(() => {
     if (!hasMore) return;
     if (activeIndex >= totalItems - 2) {
-      loadMore();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- grows the window in response to the active slide
+      setVisibleCount((prev) => Math.min(itemCount, prev + BANNER_CHUNK_SIZE));
     }
-  }, [activeIndex, totalItems, hasMore, loadMore]);
+  }, [activeIndex, totalItems, hasMore, itemCount]);
 
   const handleDragEnd = (_, info) => {
     // Keep the flag up until after the click that follows pointer-up.

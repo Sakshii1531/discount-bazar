@@ -13,6 +13,7 @@ import {
 } from "../../constants/finance.js";
 import { getOrCreateWallet } from "./walletService.js";
 import { createLedgerEntry } from "./ledgerService.js";
+import { computeOverallSettlement } from "./settlementStatus.js";
 
 const roundCurrency = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
 
@@ -124,6 +125,27 @@ export async function processPayout(payoutId, { remarks = "", adminId = null } =
     wallet.availableBalance = roundCurrency((wallet.availableBalance || 0) + amount);
     await wallet.save({ session });
 
+    // Ledger mirror of the pending -> available move, like the queued and
+    // reversed steps, so the ledger reconciles with wallet balances.
+    const relatedOrderIds = payout.relatedOrderIds || [];
+    await createLedgerEntry(
+      {
+        orderId: relatedOrderIds.length === 1 ? relatedOrderIds[0] : null,
+        payoutId: payout._id,
+        walletId: wallet._id,
+        actorType: ownerType,
+        actorId: payout.beneficiaryId,
+        type: payout.payoutType === PAYOUT_TYPE.SELLER
+          ? LEDGER_TRANSACTION_TYPE.SELLER_PAYOUT_PROCESSED
+          : LEDGER_TRANSACTION_TYPE.RIDER_PAYOUT_PROCESSED,
+        direction: LEDGER_DIRECTION.CREDIT,
+        amount,
+        description: `${payout.payoutType} payout processed`,
+        idempotencyKey: `PAYOUT-PROCESSED-${payout._id}`,
+      },
+      { session },
+    );
+
     payout.status = PAYOUT_STATUS.COMPLETED;
     payout.processedAt = new Date();
     payout.remarks = remarks || payout.remarks;
@@ -141,6 +163,7 @@ export async function processPayout(payoutId, { remarks = "", adminId = null } =
         order.settlementStatus = { ...(order.settlementStatus || {}), riderPayout: "COMPLETED" };
         order.financeFlags = { ...(order.financeFlags || {}), riderPayoutQueued: true };
       }
+      order.settlementStatus = computeOverallSettlement(order);
       await order.save({ session });
     }
 

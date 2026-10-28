@@ -72,9 +72,6 @@ const MiniCart = () => {
         };
     }, []);
 
-    // Show up to 2 product images
-    const displayItems = cart.slice(0, 2);
-
     const path = location.pathname.replace(/\/$/, '') || '/';
 
     // Hide MiniCart on checkout page, order details page, profile page, wallet, transactions, wishlist, addresses, support, privacy, and about page

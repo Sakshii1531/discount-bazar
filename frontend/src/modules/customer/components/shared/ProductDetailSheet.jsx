@@ -1249,7 +1249,7 @@ const ProductDetailSheet = () => {
                                                 {reviewLoading ? (
                                                     <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" size={24} /></div>
                                                 ) : reviews.length > 0 ? (
-                                                    reviews.map((r, rIdx) => (
+                                                    reviews.map((r) => (
                                                         <div key={r._id} className="p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-md transition-all">
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className="flex items-center gap-2">

@@ -82,6 +82,7 @@ export const ProductDetailProvider = ({ children }) => {
     useEffect(() => {
         if (historyPushedRef.current && !location.hash.includes('product')) {
             historyPushedRef.current = false;
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- close the sheet when the route changes under it
             performClose();
         }
     }, [location.pathname, location.hash, performClose]);

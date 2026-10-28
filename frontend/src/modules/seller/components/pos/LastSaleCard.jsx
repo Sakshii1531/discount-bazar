@@ -10,6 +10,8 @@ const METHOD_LABELS = { CASH: "Cash", CARD: "Card", QR: "QR / UPI", CREDIT: "Cre
  * leaving the terminal.
  */
 const LastSaleCard = ({ order, onReprint, onEdit, onDismiss, isEditLoading = false }) => {
+    // Fallback time for a bill without createdAt: when the card first showed.
+    const [shownAt] = React.useState(() => Date.now());
     if (!order) return null;
     const items = Array.isArray(order.items) ? order.items : [];
     const itemCount = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
@@ -28,7 +30,7 @@ const LastSaleCard = ({ order, onReprint, onEdit, onDismiss, isEditLoading = fal
                         #{order.orderId} · ₹{formatAmount(order.paymentBreakdown?.grandTotal)}
                     </p>
                     <p className="text-[11px] text-slate-500 truncate">
-                        {new Date(order.createdAt || Date.now()).toLocaleTimeString("en-IN", {
+                        {new Date(order.createdAt || shownAt).toLocaleTimeString("en-IN", {
                             hour: "2-digit",
                             minute: "2-digit",
                         })}{" "}

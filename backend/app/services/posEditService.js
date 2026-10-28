@@ -10,7 +10,7 @@ import { freezeFinancialSnapshot } from "./finance/orderFinanceService.js";
 import { emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { roundCurrency, purchaseBaseCost, lineMrp } from "../utils/money.js";
 import { resolvePosPayment } from "./posPayment.js";
-import { resolveBillCustomerDetails } from "./posSaleService.js";
+import { resolveBillCustomerDetails, resolvePosVariant } from "./posSaleService.js";
 
 const err = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 const keyOf = (product, variant) => `${product}::${variant || ""}`;
@@ -63,17 +63,23 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       const newItems = payload.items.map((line) => {
         const p = pMap.get(String(line.productId));
         if (!p) throw err(404, "One or more items do not belong to your catalog");
-        const k = keyOf(line.productId, line.variantSku);
+        // A line already on the bill keeps its saved variant key so its stock
+        // delta nets out; a new line must name a real variant.
+        const rawKey = keyOf(line.productId, line.variantSku);
+        const variantSku = oldByKey.has(rawKey)
+          ? line.variantSku || ""
+          : resolvePosVariant(p, line.variantSku)?.sku || "";
+        const k = keyOf(line.productId, variantSku);
         const prev = oldByKey.get(k);
         merged.set(k, (merged.get(k) || 0) + line.quantity);
-        const variant = line.variantSku ? (p.variants || []).find((v) => v.sku === line.variantSku) : null;
+        const variant = variantSku ? (p.variants || []).find((v) => v.sku === variantSku) : null;
         return {
           product: line.productId,
           name: prev?.name || p.name,
           quantity: line.quantity,
           price: line.price,
-          mrp: lineMrp(p, line.variantSku, line.price),
-          variantSlot: line.variantSku || undefined,
+          mrp: lineMrp(p, variantSku, line.price),
+          variantSlot: variantSku || undefined,
           image: prev?.image ?? (p.mainImage || ""),
           costPrice: prev?.costPrice ?? purchaseBaseCost(variant?.purchaseCost || p.purchaseCost, p.gstPercent, p.purchaseGstType),
           gstPercent: prev?.gstPercent ?? Number(p.gstPercent || 0),

@@ -22,6 +22,7 @@ import {
 } from "../components/pos";
 import { formatAmount } from "@shared/utils/currency";
 import { posCustomerIdOf } from "@/lib/posCustomer";
+import { posVariantLabel } from "../utils/variantLabel";
 import { downloadPosHeldBillsPDF } from "@/lib/posPdfExport";
 
 const PACKING_WORKFLOW_STATUSES = [
@@ -100,7 +101,7 @@ const PosTerminal = () => {
         setIsTaxInclusive(val);
         try {
             localStorage.setItem("pos:tax_inclusive", String(val));
-        } catch {}
+        } catch { /* storage unavailable: setting lasts this session */ }
     }, []);
 
     const catalogRequestRef = useRef(0);
@@ -237,6 +238,12 @@ const PosTerminal = () => {
 
     const addLineToCart = useCallback((product, variant) => {
         const variantSku = variant?.sku || "";
+        // Stock and cart lines are keyed by variant SKU; a variant saved
+        // without one would share a line with its siblings and not reduce stock.
+        if (variant && !String(variantSku).trim()) {
+            toast.error(`${product.name} has a variant without a SKU. Open the product and save it once, then try again.`);
+            return;
+        }
         const lineKey = `${product._id}::${variantSku}`;
         // While editing a bill, the units already on it are still available to that bill.
         const reserved = Number(editSession?.originalQty?.[lineKey] || 0);
@@ -246,13 +253,7 @@ const PosTerminal = () => {
             return;
         }
         const price = resolvePrice(variant, product);
-        const variantLabel =
-            variant?.name ||
-            [variant?.size, variant?.colour].filter(Boolean).join(" · ") ||
-            product?.weight ||
-            [product?.size, product?.colour].filter(Boolean).join(" · ") ||
-            variant?.sku ||
-            "";
+        const variantLabel = posVariantLabel(product, variant);
 
         setCart((prev) => {
             const existing = prev.find((l) => l.lineKey === lineKey);

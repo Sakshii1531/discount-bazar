@@ -11,7 +11,7 @@ const COLORS = [
 
 const CategoriesPage = () => {
     const [groups, setGroups] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [, setIsLoading] = useState(true);
     const [columnsPerRow, setColumnsPerRow] = useState(() => {
         if (typeof window === 'undefined') return 4;
         if (window.innerHeight < 650 || /Android|iPhone|iPod/i.test(navigator.userAgent)) return 4;

@@ -166,7 +166,7 @@ const AddressesPage = () => {
     const [addForm, setAddForm] = useState(() => {
         const saved = sessionStorage.getItem('addAddressForm');
         if (saved) {
-            try { return JSON.parse(saved); } catch {}
+            try { return JSON.parse(saved); } catch { /* corrupt saved draft: start fresh */ }
         }
         return {
             type: 'home',
@@ -245,7 +245,7 @@ const AddressesPage = () => {
                         
                         // Clean up the formatted address (remove ", India" from the end and any leading plus codes)
                         let cleanAddress = result.formatted_address.replace(/,\s*India$/, '');
-                        cleanAddress = cleanAddress.replace(/^[A-Z0-9\+]{4,12}(?:,\s*)?/, '');
+                        cleanAddress = cleanAddress.replace(/^[A-Z0-9+]{4,12}(?:,\s*)?/, '');
                         
                         setForm(f => ({
                             ...f,
@@ -267,7 +267,7 @@ const AddressesPage = () => {
                     toast.error("Failed to detect address details");
                 }
             },
-            (error) => {
+            () => {
                 toast.dismiss(toastId);
                 toast.error("Please enable location permissions");
             },
@@ -334,29 +334,34 @@ const AddressesPage = () => {
         return true;
     };
 
+    // "Map" button on the add / edit form: fill the form from the picked point.
     const handleMapConfirm = (data) => {
-        if (mapPickerTarget === 'add') {
-            setAddForm(f => ({
-                ...f,
-                address: data.address || f.address,
-                city: data.city || f.city,
-                state: data.state || f.state,
-                pincode: data.pincode || f.pincode,
-                landmark: data.locality || f.landmark,
-                location: { lat: data.lat, lng: data.lng }
-            }));
-        } else if (mapPickerTarget === 'edit') {
-            setEditForm(f => ({
-                ...f,
-                address: data.address || f.address,
-                city: data.city || f.city,
-                state: data.state || f.state,
-                pincode: data.pincode || f.pincode,
-                landmark: data.locality || f.landmark,
-                location: { lat: data.lat, lng: data.lng }
-            }));
-        }
+        const fromMap = (f) => ({
+            ...f,
+            address: data.address || f.address,
+            city: data.city || f.city,
+            state: data.state || f.state,
+            pincode: data.pincode || f.pincode,
+            landmark: data.locality || f.landmark,
+            location: { lat: data.lat, lng: data.lng }
+        });
+        if (mapPickerTarget === 'add') setAddForm(fromMap);
+        else if (mapPickerTarget === 'edit') setEditForm(fromMap);
     };
+
+    // Rendered inside the add / edit dialog so Radix treats it as a nested
+    // layer (a sibling would count as a click outside and close the form).
+    const mapPickerForm = mapPickerTarget === 'edit' ? editForm : addForm;
+    const mapPicker = isMapPickerOpen && (
+        <MapPicker
+            isOpen={isMapPickerOpen}
+            onClose={() => setIsMapPickerOpen(false)}
+            onConfirm={handleMapConfirm}
+            preferCurrentLocationOnOpen={!mapPickerForm?.location}
+            initialLocation={mapPickerForm?.location || null}
+            initialAddress={mapPickerForm?.address || ""}
+        />
+    );
 
     const handleSaveNewAddress = async () => {
         if (!validateAddressForm(addForm)) return;
@@ -758,6 +763,7 @@ const AddressesPage = () => {
                         <Button variant="outline" onClick={handleCloseAddModal} disabled={saving}>Cancel</Button>
                         <Button className="bg-primary hover:bg-brand-700" onClick={handleSaveNewAddress} disabled={saving}>{saving ? 'Saving...' : 'Save Address'}</Button>
                     </DialogFooter>
+                    {mapPickerTarget === 'add' && mapPicker}
                 </DialogContent>
             </Dialog>
 
@@ -842,6 +848,7 @@ const AddressesPage = () => {
                         <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={updating}>Cancel</Button>
                         <Button className="bg-primary hover:bg-brand-700" onClick={handleUpdateAddress} disabled={updating}>{updating ? 'Updating...' : 'Update Address'}</Button>
                     </DialogFooter>
+                    {mapPickerTarget === 'edit' && mapPicker}
                 </DialogContent>
             </Dialog>
 

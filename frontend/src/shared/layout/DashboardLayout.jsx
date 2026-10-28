@@ -176,7 +176,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
         return sessionStorage.getItem('seller_dismissed_notif_banner') === '1';
     });
     const [isEnablingPush, setIsEnablingPush] = useState(false);
-    const { user, logout, role } = useAuth();
+    const { role } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -292,7 +292,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
             try {
                 withdrawalAudioRef.current.pause();
                 withdrawalAudioRef.current.currentTime = 0;
-            } catch {}
+            } catch { /* audio element not playable; nothing to stop */ }
         }
     };
 

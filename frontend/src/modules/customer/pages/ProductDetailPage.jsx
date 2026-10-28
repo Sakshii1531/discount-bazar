@@ -91,7 +91,7 @@ const ProductDetailPage = () => {
     };
 
     const [ratingSummary, setRatingSummary] = useState({ average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
-    const [selectedStarFilter, setSelectedStarFilter] = useState(null);
+    const [selectedStarFilter] = useState(null);
 
     const fetchReviews = async () => {
         try {

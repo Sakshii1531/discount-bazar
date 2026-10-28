@@ -31,6 +31,7 @@ import { registerScheduledJob, startScheduledJobs } from "./app/services/distrib
 import { getOrderAutoCancelJobHandler, getOrderAutoCancelJobInterval } from "./app/jobs/orderAutoCancelJob.js";
 import { getReturnWindowReleaseJobHandler, getReturnWindowReleaseJobInterval } from "./app/jobs/returnWindowReleaseJob.js";
 import { getCommunicationEscalationJobHandler, getCommunicationEscalationJobInterval } from "./app/jobs/communicationEscalationJob.js";
+import { getVariantSkuRepairJobHandler, getVariantSkuRepairJobInterval } from "./app/jobs/variantSkuRepairJob.js";
 import { getCancellationReconcileJobHandler, getCancellationReconcileJobInterval } from "./app/jobs/cancellationReconcileJob.js";
 import {
   getPayoutBatchJobHandler,
@@ -413,6 +414,13 @@ async function startScheduler() {
     getCancellationReconcileJobHandler()
   );
 
+  // Give product variants saved without a SKU one (on start, then hourly)
+  registerScheduledJob(
+    'variantSkuRepairJob',
+    getVariantSkuRepairJobInterval(),
+    getVariantSkuRepairJobHandler()
+  );
+
   // Register payout batch job (if enabled)
   if (isPayoutBatchJobEnabled()) {
     registerScheduledJob(
@@ -448,7 +456,7 @@ async function startScheduler() {
   await startScheduledJobs();
   registerSchedulerStopper(stopScheduledJobs);
 
-  const scheduledJobs = ['orderAutoCancelJob', 'returnWindowReleaseJob', 'communicationEscalationJob', 'cancellationReconcileJob'];
+  const scheduledJobs = ['orderAutoCancelJob', 'returnWindowReleaseJob', 'communicationEscalationJob', 'cancellationReconcileJob', 'variantSkuRepairJob'];
   if (isPayoutBatchJobEnabled()) scheduledJobs.push('payoutBatchJob');
   if (isWalletLedgerVerifierEnabled()) scheduledJobs.push('walletLedgerVerifierJob');
   if (isFirebaseTrackingCleanupJobEnabled()) scheduledJobs.push('firebaseTrackingCleanupJob');

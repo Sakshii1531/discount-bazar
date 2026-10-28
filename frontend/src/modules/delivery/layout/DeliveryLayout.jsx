@@ -223,7 +223,7 @@ const DeliveryLayout = () => {
   const shownOrderIdsRef = useRef(new Set());
   const activeOrderRef = useRef(null);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
-  const [availableOrdersCount, setAvailableOrdersCount] = useState(0);
+  const [, setAvailableOrdersCount] = useState(0);
   const [isAcceptingOrder, setIsAcceptingOrder] = useState(false);
   const acceptInFlightRef = useRef(false);
   // Offer this device is accepting/skipping right now — its own withdrawal
@@ -391,7 +391,7 @@ const DeliveryLayout = () => {
     if (appSettings.vibration && typeof navigator !== "undefined" && navigator.vibrate) {
       try {
         navigator.vibrate([400, 200, 400, 200, 400]);
-      } catch {}
+      } catch { /* vibration unsupported or blocked */ }
     }
 
     if (!ringtoneRetryTimerRef.current) {
@@ -926,8 +926,10 @@ const DeliveryLayout = () => {
           refreshActive();
         } else if (closedByMe) {
           toast.info("You skipped this order on another device.");
-        } else {
+        } else if (payload.winnerDeliveryId) {
           toast.info("Another delivery partner accepted this order.");
+        } else {
+          toast.info("This order is no longer available.");
         }
       }
     });

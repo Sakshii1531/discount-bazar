@@ -1,11 +1,10 @@
+import crypto from "crypto";
 import express from "express";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import request from "supertest";
 import { jest } from "@jest/globals";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import { configureTestEnv, blockExternalNetwork } from "./e2e/helpers/testApp.js";
 
 import User from "../app/models/customer.js";
 import Seller from "../app/models/seller.js";
@@ -20,11 +19,31 @@ import LedgerEntry from "../app/models/ledgerEntry.js";
 import FinanceAuditLog from "../app/models/financeAuditLog.js";
 import StockHistory from "../app/models/stockHistory.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// Hermetic like the e2e harness: never read backend/.env (real SMS, push,
+// maps and storage keys) and never reach a non-local host. Only the database
+// URL given for this run is kept.
+const E2E_MONGO_URI = process.env.MONGO_URI_E2E || process.env.MONGO_URI;
+configureTestEnv();
+blockExternalNetwork();
 
-process.env.REDIS_DISABLED = process.env.REDIS_DISABLED || "true";
+// Real Razorpay adapter with test secrets, so the signature check runs for
+// real; only the gateway's create-order network call is faked.
+const RZP_SECRET = "rzp_test_secret_for_finance_e2e";
+process.env.PAYMENT_PROVIDER = "razorpay";
+process.env.RAZORPAY_KEY_ID = "rzp_test_finance_e2e";
+process.env.RAZORPAY_KEY_SECRET = RZP_SECRET;
+const { RazorpayAdapter } = await import("../app/services/payment/providers/razorpay.adapter.js");
+const { __setActivePaymentProviderForTests } = await import("../app/services/payment/providerRegistry.js");
+class FakeGatewayRazorpay extends RazorpayAdapter {
+  async initiatePayment({ merchantOrderId, amountPaise, currency = "INR" }) {
+    const id = `order_fin${crypto.randomBytes(5).toString("hex")}`;
+    const gatewayResponse = { id, amount: Math.round(amountPaise), currency, status: "created" };
+    return { merchantOrderId, gatewayOrderId: id, amount: Math.round(amountPaise), currency, keyId: process.env.RAZORPAY_KEY_ID, gatewayResponse };
+  }
+}
+__setActivePaymentProviderForTests(new FakeGatewayRazorpay(), "razorpay");
+const { createPaymentOrderForOrderRef } = await import("../app/services/paymentService.js");
+const signRzp = (payload) => crypto.createHmac("sha256", RZP_SECRET).update(payload).digest("hex");
 
 const { verifyToken, allowRoles } = await import("../app/middleware/authMiddleware.js");
 const {
@@ -229,7 +248,7 @@ async function seedCoreData() {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = process.env.JWT_SECRET || "e2e-test-secret";
-    mongoUri = process.env.MONGO_URI_E2E || process.env.MONGO_URI;
+    mongoUri = E2E_MONGO_URI;
     if (!mongoUri) {
       throw new Error("Set MONGO_URI_E2E (or MONGO_URI) to run API E2E tests");
     }
@@ -240,6 +259,9 @@ async function seedCoreData() {
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
     });
+    // Build every collection and index before the first transaction, or the
+    // fresh database can fail order placement with "catalog changes" errors.
+    await Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).init()));
     app = buildApp();
   });
 
@@ -309,7 +331,7 @@ async function seedCoreData() {
       .send(orderPayload);
 
     expect(createRes.status).toBe(201);
-    const created = createRes.body.result;
+    const created = createRes.body.result.order || createRes.body.result;
     expect(created.paymentMode).toBe("ONLINE");
     expect(created.paymentBreakdown.grandTotal).toBe(270);
     expect(created.paymentBreakdown.sellerPayoutTotal).toBe(180);
@@ -330,19 +352,26 @@ async function seedCoreData() {
       "Cannot settle delivered online order before payment capture",
     );
 
+    // Customer pays through the gateway, then the app posts the signed callback.
+    const { payment } = await createPaymentOrderForOrderRef({ orderRef: orderId, userId: String(customer._id) });
+    const rzpOrderId = payment.rawGatewayResponse?.razorpayOrderId || payment.gatewayOrderId;
+    const rzpPaymentId = `pay_${randomSuffix()}`;
     const verifyOnlineRes = await request(app)
       .post(`/api/orders/${orderId}/payment/verify-online`)
       .set("Authorization", `Bearer ${customerToken}`)
-      .send({ transactionId: `txn_${randomSuffix()}` });
+      .send({ merchantOrderId: rzpOrderId, transactionId: rzpPaymentId, signature: signRzp(`${rzpOrderId}|${rzpPaymentId}`) });
     expect(verifyOnlineRes.status).toBe(200);
-    expect(verifyOnlineRes.body.result.paymentStatus).toBe("PAID");
+    // The gateway payment is captured and the order itself becomes PAID.
+    expect(verifyOnlineRes.body.result.paymentStatus).toMatch(/CAPTURED|PAID/);
+    expect((await Order.findOne({ orderId }).lean()).paymentStatus).toBe("PAID");
 
     const deliveredRes = await request(app)
       .post(`/api/orders/${orderId}/delivered`)
       .set("Authorization", `Bearer ${riderToken}`)
       .send({});
     expect(deliveredRes.status).toBe(200);
-    expect(deliveredRes.body.result.settlementStatus.sellerPayout).toBe("PENDING");
+    // Seller payout waits out the return window (returnWindowReleaseJob releases it).
+    expect(deliveredRes.body.result.settlementStatus.sellerPayout).toBe("HOLD");
     expect(deliveredRes.body.result.settlementStatus.riderPayout).toBe("PENDING");
     expect(deliveredRes.body.result.settlementStatus.adminEarningCredited).toBe(true);
 
@@ -368,6 +397,15 @@ async function seedCoreData() {
     expect(processRes.status).toBe(200);
     expect(processRes.body.result.completed).toBe(2);
 
+    // The admin "Available Balance" card stays at the platform's share once
+    // the seller and rider are paid out (it used to jump back to 270).
+    const adminSummaryAfterPayout = await request(app)
+      .get("/api/admin/finance/summary")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(adminSummaryAfterPayout.body.result.availableBalance).toBe(50);
+    expect(adminSummaryAfterPayout.body.result.sellerPendingPayouts).toBe(0);
+    expect(adminSummaryAfterPayout.body.result.deliveryPendingPayouts).toBe(0);
+
     const sellerWallet = await Wallet.findOne({
       ownerType: "SELLER",
       ownerId: storedOrder.seller,
@@ -386,7 +424,9 @@ async function seedCoreData() {
     expect(sellerWallet.pendingBalance).toBe(0);
     expect(riderWallet.availableBalance).toBe(40);
     expect(riderWallet.pendingBalance).toBe(0);
-    expect(adminWallet.availableBalance).toBe(50); // 270 capture - 220 payouts
+    // The stored admin wallet records money received (270 captured); the
+    // admin card's business balance (checked above) nets out the payouts.
+    expect(adminWallet.availableBalance).toBe(270);
     expect(completedOrder.settlementStatus.overall).toBe("COMPLETED");
     expect(completedOrder.settlementStatus.sellerPayout).toBe("COMPLETED");
     expect(completedOrder.settlementStatus.riderPayout).toBe("COMPLETED");
@@ -440,7 +480,7 @@ async function seedCoreData() {
       });
 
     expect(createRes.status).toBe(201);
-    const orderId = createRes.body.result.orderId;
+    const orderId = (createRes.body.result.order || createRes.body.result).orderId;
     const orderDoc = await Order.findOne({ orderId });
     orderDoc.deliveryBoy = rider._id;
     orderDoc.deliveryPartner = rider._id;
@@ -460,9 +500,12 @@ async function seedCoreData() {
     expect(deliveredRes.status).toBe(200);
     expect(deliveredRes.body.result.paymentMode).toBe("COD");
     expect(deliveredRes.body.result.paymentStatus).toBe("CASH_COLLECTED");
-    // Net of rider commission (grandTotal 160 - riderPayoutTotal 35)
-    expect(deliveredRes.body.result.paymentBreakdown.codCollectedAmount).toBe(125);
-    expect(deliveredRes.body.result.paymentBreakdown.codPendingAmount).toBe(125);
+    // Net of rider commission: what the rider owes the platform.
+    const deliveredPb = deliveredRes.body.result.paymentBreakdown;
+    const codNet = deliveredPb.grandTotal - deliveredPb.riderPayoutTotal;
+    expect(codNet).toBeGreaterThan(60);
+    expect(deliveredPb.codCollectedAmount).toBe(codNet);
+    expect(deliveredPb.codPendingAmount).toBe(codNet);
 
     const collectRes = await request(app)
       .post(`/api/orders/${orderId}/cod/mark-collected`)
@@ -471,7 +514,7 @@ async function seedCoreData() {
     expect(collectRes.status).toBe(200);
     expect(collectRes.body.message).toContain("already marked");
     expect(collectRes.body.result.paymentStatus).toBe("CASH_COLLECTED");
-    expect(collectRes.body.result.paymentBreakdown.codPendingAmount).toBe(125);
+    expect(collectRes.body.result.paymentBreakdown.codPendingAmount).toBe(codNet);
 
     const collectAgainRes = await request(app)
       .post(`/api/orders/${orderId}/cod/mark-collected`)
@@ -483,8 +526,8 @@ async function seedCoreData() {
     const overReconcile = await request(app)
       .post(`/api/orders/${orderId}/cod/reconcile`)
       .set("Authorization", `Bearer ${adminToken}`)
-      .send({ amount: 200, deliveryPartnerId: String(rider._id) });
-    expect(overReconcile.status).toBe(500);
+      .send({ amount: codNet + 1, deliveryPartnerId: String(rider._id) });
+    expect(overReconcile.status).toBe(400);
     expect(overReconcile.body.message).toContain("exceeds COD pending amount");
 
     const reconcilePartial = await request(app)
@@ -493,15 +536,15 @@ async function seedCoreData() {
       .send({ amount: 60, deliveryPartnerId: String(rider._id) });
     expect(reconcilePartial.status).toBe(200);
     expect(reconcilePartial.body.result.paymentBreakdown.codRemittedAmount).toBe(60);
-    expect(reconcilePartial.body.result.paymentBreakdown.codPendingAmount).toBe(65);
+    expect(reconcilePartial.body.result.paymentBreakdown.codPendingAmount).toBe(codNet - 60);
     expect(reconcilePartial.body.result.paymentStatus).toBe("PARTIALLY_REMITTED");
 
     const reconcileFinal = await request(app)
       .post(`/api/orders/${orderId}/cod/reconcile`)
       .set("Authorization", `Bearer ${adminToken}`)
-      .send({ amount: 65, deliveryPartnerId: String(rider._id) });
+      .send({ amount: codNet - 60, deliveryPartnerId: String(rider._id) });
     expect(reconcileFinal.status).toBe(200);
-    expect(reconcileFinal.body.result.paymentBreakdown.codRemittedAmount).toBe(125);
+    expect(reconcileFinal.body.result.paymentBreakdown.codRemittedAmount).toBe(codNet);
     expect(reconcileFinal.body.result.paymentBreakdown.codPendingAmount).toBe(0);
     expect(reconcileFinal.body.result.paymentStatus).toBe("COD_RECONCILED");
 
@@ -516,7 +559,7 @@ async function seedCoreData() {
     const codOrder = await Order.findOne({ orderId }).lean();
 
     expect(riderWallet.cashInHand).toBe(0);
-    expect(adminWallet.availableBalance).toBe(125);
+    expect(adminWallet.availableBalance).toBe(codNet);
     expect(codOrder.paymentBreakdown.codPendingAmount).toBe(0);
 
     const summaryRes = await request(app)
@@ -524,9 +567,9 @@ async function seedCoreData() {
       .set("Authorization", `Bearer ${adminToken}`);
     expect(summaryRes.status).toBe(200);
     expect(summaryRes.body.result.systemFloatCOD).toBe(0);
-    expect(summaryRes.body.result.reconciledCODInflows).toBe(125);
-    expect(summaryRes.body.result.sellerPendingPayouts).toBe(90);
-    expect(summaryRes.body.result.deliveryPendingPayouts).toBe(35);
+    expect(summaryRes.body.result.reconciledCODInflows).toBe(codNet);
+    expect(summaryRes.body.result.sellerPendingPayouts).toBe(deliveredPb.sellerPayoutTotal);
+    expect(summaryRes.body.result.deliveryPendingPayouts).toBe(deliveredPb.riderPayoutTotal);
 
     const codLedger = await LedgerEntry.find({ orderId: codOrder._id }).lean();
     const codTypes = codLedger.map((entry) => entry.type);

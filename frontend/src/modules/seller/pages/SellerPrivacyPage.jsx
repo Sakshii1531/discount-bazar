@@ -1,11 +1,9 @@
 import React, { useEffect } from 'react';
 import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, ShieldCheck, Store, CreditCard, Lock, FileText, AlertCircle, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
 
 const SellerPrivacyPage = () => {
-  const navigate = useNavigate();
   const { settings } = useSettings();
   const appName = settings?.appName || 'Discount Bazar';
   const companyName = settings?.companyName || appName;

@@ -381,7 +381,7 @@ export const generateOrdersPDF = async (orders) => {
         (o.status ?? 'Pending').toUpperCase(),
         (o.payment ?? 'COD').toUpperCase(),
     ]);
-    y = drawTable(doc, headers, rows, y, ['left', 'left', 'left', 'left', 'right', 'left', 'left']);
+    drawTable(doc, headers, rows, y, ['left', 'left', 'left', 'left', 'right', 'left', 'left']);
 
     drawFooter(doc, generatedAt);
     return { blob: doc.output('blob'), fileName: `seller-orders-report-${dateStr}.pdf` };

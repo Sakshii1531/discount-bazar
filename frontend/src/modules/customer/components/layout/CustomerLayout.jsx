@@ -25,7 +25,7 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
 
         const cleanupPickup = onReturnPickupOtp(() => token, (payload) => {
             console.log('[CustomerLayout] Return Pickup OTP Received:', payload);
-            toast.custom((t) => (
+            toast.custom(() => (
                 <div className="bg-white border-2 border-brand-600 rounded-3xl p-5 shadow-2xl animate-in slide-in-from-bottom-full duration-500 max-w-md w-full">
                     <div className="flex items-start gap-4">
                         <div className="h-12 w-12 bg-brand-100 rounded-2xl flex items-center justify-center text-brand-600 shrink-0">
@@ -49,7 +49,7 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
 
         const cleanupDrop = onReturnDropOtp(() => token, (payload) => {
             console.log('[CustomerLayout] Return Drop OTP Received:', payload);
-            toast.custom((t) => (
+            toast.custom(() => (
                 <div className="bg-white border-2 border-green-600 rounded-3xl p-5 shadow-2xl animate-in slide-in-from-bottom-full duration-500 max-w-md w-full">
                     <div className="flex items-start gap-4">
                         <div className="h-12 w-12 bg-green-100 rounded-2xl flex items-center justify-center text-green-600 shrink-0">

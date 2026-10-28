@@ -14,13 +14,11 @@ const SlideToPay = ({
     const controls = useAnimation();
     const x = useMotionValue(0);
     const [containerWidth, setContainerWidth] = useState(0);
-    const [sliderWidth, setSliderWidth] = useState(56); // Width of the sliding circle
+    const [sliderWidth] = useState(56); // Width of the sliding circle
 
     // Maximum drag distance
     const maxDrag = Math.max(0, containerWidth - sliderWidth - 8); // 8px padding
 
-    // Transform x to background opacity or color if needed
-    const opacity = useTransform(x, [0, maxDrag], [1, 0]);
     const textOpacity = useTransform(x, [0, maxDrag * 0.5], [1, 0]);
     const shimmerOpacity = useTransform(x, [0, maxDrag * 0.3], [1, 0]);
 

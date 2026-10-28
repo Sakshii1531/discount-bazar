@@ -11,11 +11,13 @@ const REFUND_LABELS = { CASH: "Cash", CARD: "Card", QR: "QR / UPI", CREDIT: "Adj
  * 80mm return / refund slip for a PosReturn (same print layout as ReceiptPrint).
  */
 const ReturnReceipt = ({ ret, shopName, seller = {}, onClose, printAdapter = () => window.print() }) => {
+    // A saved return always has createdAt; only a draft falls back to when the slip opened.
+    const [openedAt] = React.useState(() => Date.now());
     if (!ret) return null;
 
     const items = Array.isArray(ret.items) ? ret.items : [];
     const storeTitle = shopName || seller.shopName || seller.name || "Store";
-    const when = new Date(ret.createdAt || Date.now());
+    const when = new Date(ret.createdAt || openedAt);
     const refundTotal = Number(ret.refundTotal || 0);
 
     return (

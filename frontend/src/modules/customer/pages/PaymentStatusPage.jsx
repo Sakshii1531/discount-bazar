@@ -3,17 +3,15 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, X, Loader2, AlertTriangle, ArrowRight, RefreshCcw } from "lucide-react";
 import { customerApi } from "../services/customerApi";
-import { useToast } from "@shared/components/ui/Toast";
 import Button from "@shared/components/ui/Button";
 
 const PaymentStatusPage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { showToast } = useToast();
     
     const merchantOrderId = searchParams.get("merchantOrderId");
     const [status, setStatus] = useState("verifying"); // verifying, success, failure, timeout
-    const [orderDetails, setOrderDetails] = useState(null);
+    const [, setOrderDetails] = useState(null);
     const [error, setError] = useState("");
     const [retryCount, setRetryCount] = useState(0);
     const maxRetries = 10;
@@ -76,6 +74,7 @@ const PaymentStatusPage = () => {
 
     useEffect(() => {
         if (merchantOrderId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- payment status fetch / polling
             verifyPayment();
             pollInterval.current = setInterval(() => {
                 setRetryCount(prev => {

@@ -39,12 +39,19 @@ function returnPickupJobId(orderId, attempt) {
 }
 
 async function raceWithTimeout(promise, timeoutMs, timeoutMessage) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs),
-    ),
-  ]);
+  // Clear the timer once the race settles so it cannot keep the process
+  // (or a test worker) alive for the rest of timeoutMs.
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function scheduleSellerTimeout(orderId) {

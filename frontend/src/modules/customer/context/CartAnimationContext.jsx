@@ -110,6 +110,7 @@ const FlyingItem = ({ item }) => {
     };
 
     // Initial calculation
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- position measured from the DOM
     setTarget(findTarget());
 
     // Update target after a short delay to account for entrance animations

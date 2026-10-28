@@ -102,7 +102,7 @@ const CheckoutPage = () => {
     clearCart,
     isItemOutOfStock,
   } = useCart();
-  const { wishlist, addToWishlist, fetchFullWishlist, isFullDataFetched } =
+  const { wishlist, addToWishlist, fetchFullWishlist } =
     useWishlist();
   const { showToast } = useToast();
   const { user, isAuthenticated } = useAuth();
@@ -158,7 +158,7 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
 
   // State management
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("now");
+  const [selectedTimeSlot] = useState("now");
   const [selectedPayment, setSelectedPayment] = useState("cash");
   const [selectedTip, setSelectedTip] = useState(0);
   const [showAllCartItems, setShowAllCartItems] = useState(false);

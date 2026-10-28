@@ -19,9 +19,9 @@ import { Button } from "@/components/ui/button";
  * it is purely presentational; the parent only needs the saved result.
  */
 const CheckoutAddressSection = React.memo(function CheckoutAddressSection({
-  currentAddress,
+  currentAddress: _currentAddress,
   savedRecipient,
-  savedAddresses,
+  savedAddresses: _savedAddresses,
   onSelectAddress,
   onEditAddress,
   onUseCurrentLocation,

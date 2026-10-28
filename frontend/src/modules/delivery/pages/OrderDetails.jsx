@@ -48,22 +48,6 @@ const getPublicStatusStage = (internalStep) => {
   return 1;
 };
 
-// Maps return backend status → 5-step UI
-// Step 1: Accepted, navigate to customer
-// Step 2: At customer, upload proof + customer OTP
-// Step 3: In transit, navigate to seller
-// Step 4: At seller, request seller OTP
-// Step 5: Completed
-const orderOfReturn = (s) => {
-  if (!s || s === "none") return 1;
-  const lower = s.toLowerCase();
-  if (["returned", "qc_passed", "qc_failed", "refund_completed"].includes(lower)) return 5;
-  if (lower === "return_drop_pending") return 4;
-  if (lower === "return_in_transit") return 3;
-  if (lower === "return_pickup_assigned") return 1;
-  return 1; // return_approved also = 1
-};
-
 const PUBLIC_STATUS_STEPS = [
   { id: 1, label: "Confirmed" },
   { id: 2, label: "Out for Delivery" },

@@ -1,11 +1,9 @@
 import React, { useEffect } from 'react';
 import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, ShieldCheck, Bike, Award, DollarSign, AlertTriangle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
 
 const DeliveryTermsPage = () => {
-  const navigate = useNavigate();
   // Back stays inside the app even when opened directly.
   const goBack = useSafeBack("/delivery/auth");
   const { settings } = useSettings();

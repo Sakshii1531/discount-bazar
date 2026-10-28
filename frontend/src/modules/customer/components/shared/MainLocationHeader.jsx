@@ -41,10 +41,9 @@ function CategoryNavColumn({
   isActive,
   categoryAccent,
   onCategorySelect,
-  headerFontColor,
-  headerIconColor,
+  headerFontColor: _headerFontColor,
+  headerIconColor: _headerIconColor,
 }) {
-  const iconColor = headerIconColor || "#111111";
   const colRef = useRef(null);
   const labelRef = useRef(null);
   const [lr, setLr] = useState({ l: 22, r: 78 });
@@ -168,7 +167,7 @@ const MainLocationHeader = ({
       .then((m) => setCartAnimData(m.default))
       .catch(() => {});
   }, []);
-  const { currentLocation, refreshLocation, isFetchingLocation } =
+  const { currentLocation, isFetchingLocation } =
     useLocation();
   const { isOpen: isProductDetailOpen } = useProductDetail();
   const { settings } = useSettings();
@@ -240,12 +239,6 @@ const MainLocationHeader = ({
   // Search Logic
   const handleSearchClick = () => {
     navigate("/search");
-  };
-
-  const handleSearchKeyDown = (e) => {
-    if (e.key === "Enter") {
-      navigate("/search", { state: { query: e.target.value } });
-    }
   };
 
   // Search placeholder animation
@@ -329,20 +322,10 @@ const MainLocationHeader = ({
   const headerRoundness = useTransform(scrollY, [0, 160], [0, 0]);
   const bgOpacity = useTransform(scrollY, [0, 160], [1, 1]);
 
-  // Content animations
-  const contentHeight = useTransform(scrollY, [0, 160], ["64px", "64px"]);
-  const contentOpacity = useTransform(scrollY, [0, 160], [1, 1]);
-  const navHeight = useTransform(scrollY, [0, 200], ["60px", "60px"]);
-  const navOpacity = useTransform(scrollY, [0, 200], [1, 1]);
-  const navMargin = useTransform(scrollY, [0, 200], [4, 4]);
-  const categorySpacing = useTransform(scrollY, [0, 200], [3, 3]);
   const cartOpacity = useTransform(scrollY, [0, 110, 150], [1, 1, 1]);
   const cartScale = useTransform(scrollY, [0, 110, 150], [1, 1, 1]);
 
-  // Helper to hide elements completely when collapsed to prevent clicks
-  const displayContent = useTransform(scrollY, (value) => "block");
-  const displayNav = useTransform(scrollY, (value) => "flex");
-  const displayCart = useTransform(scrollY, (value) => "block");
+  const displayCart = useTransform(scrollY, () => "block");
 
   const baseHeaderColor = activeCategory?.headerColor || "var(--primary)";
   const headerFontColor = activeCategory?.headerFontColor || "#111827";

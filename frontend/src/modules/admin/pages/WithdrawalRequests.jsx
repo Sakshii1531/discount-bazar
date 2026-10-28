@@ -147,8 +147,8 @@ const WithdrawalRequests = () => {
             if (filterStatus !== 'all') commonParams.status = filterStatus;
 
             const [sellerRes, deliveryRes] = await Promise.all([
-                adminApi.getSellerWithdrawals({ ...commonParams, page: sellerPageNum }).catch(err => ({ data: { success: false, result: {} } })),
-                adminApi.getDeliveryWithdrawals({ ...commonParams, page: deliveryPageNum }).catch(err => ({ data: { success: false, result: {} } }))
+                adminApi.getSellerWithdrawals({ ...commonParams, page: sellerPageNum }).catch(() => ({ data: { success: false, result: {} } })),
+                adminApi.getDeliveryWithdrawals({ ...commonParams, page: deliveryPageNum }).catch(() => ({ data: { success: false, result: {} } }))
             ]);
 
             if (sellerRes.data.success) {
@@ -449,7 +449,7 @@ const WithdrawalRequests = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {currentData.map((req, i) => (
+                                {currentData.map((req) => (
                                     <tr key={req._id} className="group hover:bg-slate-50/30 transition-all">
                                         <td className="px-6 py-5 pl-8">
                                             <div className="flex items-center gap-4">

@@ -71,8 +71,9 @@ test.describe('seller: workspace', () => {
 
   test('products page lists the seller catalogue', async ({ page }) => {
     await page.goto('/seller/products');
-    await expect(page.getByText('Fresh Milk').first()).toBeVisible();
-    await expect(page.getByText('Brown Bread').first()).toBeVisible();
+    // Visible only: the page also renders a mobile card list, hidden on desktop.
+    await expect(page.getByText('Fresh Milk').filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText('Brown Bread').filter({ visible: true }).first()).toBeVisible();
   });
 
   test('orders page lists incoming orders', async ({ page, api }) => {

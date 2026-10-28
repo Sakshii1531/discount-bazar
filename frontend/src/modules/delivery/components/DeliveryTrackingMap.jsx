@@ -417,8 +417,6 @@ const DeliveryTrackingMapComponent = ({
     map.fitBounds(bounds, 24);
   }, []);
 
-  const strokeColor = "#2563eb";
-
   useEffect(() => {
     if (!isLoaded || !mapInstance || !window.google?.maps) return undefined;
 

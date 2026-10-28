@@ -17,7 +17,7 @@ const SafetyPrivacy = () => {
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch {}
+      } catch { /* corrupt saved settings: use defaults */ }
     }
     return [];
   });

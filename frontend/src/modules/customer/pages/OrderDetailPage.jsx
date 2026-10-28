@@ -161,24 +161,14 @@ const OrderDetailPage = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
   const [liveLocation, setLiveLocation] = useState(null);
-  const [trail, setTrail] = useState([]);
+  const [, setTrail] = useState([]);
   const [routePolyline, setRoutePolyline] = useState(null);
   const [handoffOtp, setHandoffOtp] = useState(null);
   const [clockTick, setClockTick] = useState(Date.now());
-  const parsedReturnWindowMinutes = parseInt(
-    import.meta.env.VITE_RETURN_WINDOW_MINUTES || "2",
-    10,
-  );
-  const returnWindowMinutes =
-    Number.isFinite(parsedReturnWindowMinutes) && parsedReturnWindowMinutes > 0
-      ? parsedReturnWindowMinutes
-      : 2;
   // Progress reported by the map: { onRoute, remainingRatio } for the current route
   const [routeProgress, setRouteProgress] = useState(null);
   const routeRequestRef = useRef({ phase: "", startedAt: 0 });
-  const [returnCountdown, setReturnCountdown] = useState(null);
   const refreshRef = useRef({ inFlight: false, lastAt: 0, timer: null });
-  const extraRoomRef = useRef("");
 
   // Single source of truth for the various ids that may refer to this
   // order (URL param vs canonical order.orderId vs checkoutGroupId). The
@@ -735,28 +725,6 @@ const OrderDetailPage = () => {
       </div>
     );
   }
-
-  const canRequestReturn = () => {
-    if (!order) return false;
-    if (order.status === "cancelled") return false;
-    if (order.status !== "delivered") return false;
-    if (
-      returnDetails &&
-      returnDetails.returnStatus &&
-      returnDetails.returnStatus !== "none" &&
-      returnDetails.returnStatus !== null
-    ) {
-      return false;
-    }
-
-    // Check if at least one item in the order is returnable
-    const hasReturnableItem = Array.isArray(order.items) && order.items.some(item => {
-      const isReturnable = item.returnEligible ?? item.returnPolicy?.isReturnable;
-      return isReturnable;
-    });
-
-    return hasReturnableItem;
-  };
 
   const toggleItemSelection = (index) => {
     setSelectedReturnItems((prev) => {

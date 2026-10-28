@@ -53,7 +53,6 @@ const Analytics = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [statsData, setStatsData] = useState(null);
-  const [timeRange, setTimeRange] = useState("Last 7 Days");
   const [activeTab, setActiveTab] = useState("Overview");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);

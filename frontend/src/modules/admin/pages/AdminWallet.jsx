@@ -63,7 +63,7 @@ const AdminWallet = () => {
             if (summaryRes.data.success || ledgerRes.data.success) {
                 const summary = summaryRes.data.result || {};
                 const ledger = ledgerRes.data.result || {};
-                const formatActor = (actor, defaultVal) => {
+                const formatActor = (actor) => {
                     if (!actor || actor === 'SYSTEM') return 'System Float';
                     if (actor === 'DELIVERY_PARTNER' || actor === 'RIDER') return 'Delivery Partner';
                     if (actor === 'SELLER' || actor === 'MERCHANT') return 'Seller';
@@ -621,7 +621,7 @@ const AdminWallet = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
-                                            {filteredTransactions.map((txn, i) => (
+                                            {filteredTransactions.map((txn) => (
                                                 <tr
                                                     key={txn.id}
                                                     onClick={() => setSelectedTransaction(txn)}

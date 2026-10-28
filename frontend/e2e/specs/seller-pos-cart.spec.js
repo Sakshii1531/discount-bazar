@@ -34,7 +34,8 @@ async function fillCart(page, api, catalogSize = MANY) {
   for (const p of items.slice(0, MANY)) {
     await page.getByText(p.name, { exact: true }).first().click();
   }
-  await expect(page.getByText(`${MANY} items`)).toBeVisible();
+  // Exact: the bill also shows "N items in cart".
+  await expect(page.getByText(`${MANY} items`, { exact: true })).toBeVisible();
 }
 
 for (const height of [900, 700]) {
@@ -109,7 +110,6 @@ for (const width of [1280, 1536, 1920]) {
     const checkout = page.getByRole('button', { name: 'Checkout', exact: true });
     const r = await checkout.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " rounded-2xl ")][1]').evaluate((el) => {
       const b = el.getBoundingClientRect();
-      const grid = document.querySelector('.grid').getBoundingClientRect();
       const lastCard = [...document.querySelectorAll('button')].filter((x) => x.textContent.includes('POS Item')).map((x) => x.getBoundingClientRect().right);
       const bar = [...document.querySelectorAll('div')].find((d) => d.className.includes('overflow-x-auto') && d.textContent.startsWith('All'));
       return { billRight: b.right, billLeft: b.left, vw: document.documentElement.clientWidth, maxCardRight: Math.max(...lastCard), barScrolls: bar.scrollWidth > bar.clientWidth, barRight: bar.getBoundingClientRect().right };

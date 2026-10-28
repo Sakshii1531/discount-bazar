@@ -180,7 +180,7 @@ const AdminSettings = () => {
             ...prev,
             productApproval: {
                 ...(prev.productApproval || {}),
-                [field]: !Boolean(prev.productApproval?.[field]),
+                [field]: !prev.productApproval?.[field],
             },
         }));
     };

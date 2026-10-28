@@ -18,7 +18,7 @@ import { useAuth } from '@core/context/AuthContext';
 import { adminApi } from '../services/adminApi';
 
 const AdminProfile = () => {
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('profile');

@@ -44,7 +44,7 @@ async function createTestCustomer(customerId = null) {
     email: `test.customer.${Date.now()}@test.com`,
     phone: "1234567890",
     password: "hashedpassword",
-    role: "customer",
+    role: "user",
     walletBalance: 0,
   });
 
@@ -110,10 +110,13 @@ async function createValidOtp(orderId, orderMongoId, code = "1234") {
   const codeHash = OrderOtp.hashCode(code);
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
+  // The app stores the plain code next to its hash (deliveryOtpService,
+  // orderWorkflowService); only that code can be shown to the customer.
   const otp = await OrderOtp.create({
     orderId,
     orderMongoId,
     codeHash,
+    code,
     expiresAt,
     lastGeneratedAt: new Date(),
     consumedAt: null,
@@ -326,9 +329,8 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
    * Edge Case: Expired OTP Should Not Be Displayed
    * 
    * Customer views page with expired OTP in database.
-   * Expected: No OTP should be displayed
-   * 
-   * **EXPECTED OUTCOME**: This test should PASS even on unfixed code (no OTP expected)
+   * Expected: the expired code is never shown. For an order out for delivery
+   * the details API issues a fresh OTP instead (orderQueryService).
    */
   test("Edge Case: Expired OTP should not be displayed", async () => {
     // Setup
@@ -344,6 +346,7 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
       orderId,
       orderMongoId: order._id,
       codeHash,
+      code: otpCode,
       expiresAt: expiredAt,
       lastGeneratedAt: new Date(Date.now() - 10 * 60 * 1000),
       consumedAt: null,
@@ -358,12 +361,13 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
     expect(response.status).toBe(200);
     const orderData = response.body.result;
 
-    // Expired OTP should NOT be displayed
-    expect(orderData.deliveryOtp).toBeUndefined();
+    // Expired OTP should NOT be displayed; a fresh one replaces it
+    expect(orderData.deliveryOtp).not.toBe(otpCode);
+    expect(orderData.deliveryOtp).toMatch(/^\d{4}$/);
 
     // Cleanup
     await Order.deleteOne({ _id: order._id });
-    await OrderOtp.deleteOne({ _id: otp._id });
+    await OrderOtp.deleteMany({ orderId });
     await User.deleteOne({ _id: customer._id });
   });
 
@@ -371,9 +375,8 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
    * Edge Case: Consumed OTP Should Not Be Displayed
    * 
    * Customer views page with consumed OTP in database.
-   * Expected: No OTP should be displayed
-   * 
-   * **EXPECTED OUTCOME**: This test should PASS even on unfixed code (no OTP expected)
+   * Expected: the consumed code is never shown (a fresh one is issued while
+   * the order is still out for delivery).
    */
   test("Edge Case: Consumed OTP should not be displayed", async () => {
     // Setup
@@ -388,6 +391,7 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
       orderId,
       orderMongoId: order._id,
       codeHash,
+      code: otpCode,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       lastGeneratedAt: new Date(),
       consumedAt: new Date(), // Already consumed
@@ -403,11 +407,11 @@ describeDb("Bug Condition Exploration: Customer Cannot See OTP After Page Refres
     const orderData = response.body.result;
 
     // Consumed OTP should NOT be displayed
-    expect(orderData.deliveryOtp).toBeUndefined();
+    expect(orderData.deliveryOtp).not.toBe(otpCode);
 
     // Cleanup
     await Order.deleteOne({ _id: order._id });
-    await OrderOtp.deleteOne({ _id: otp._id });
+    await OrderOtp.deleteMany({ orderId });
     await User.deleteOne({ _id: customer._id });
   });
 

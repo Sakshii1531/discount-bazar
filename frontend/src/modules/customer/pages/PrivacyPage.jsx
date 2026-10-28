@@ -1,11 +1,9 @@
 import React from 'react';
 import useSafeBack from "@/core/hooks/useSafeBack";
 import { ChevronLeft, Shield } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@core/context/SettingsContext';
 
 const PrivacyPage = () => {
-    const navigate = useNavigate();
     const goBack = useSafeBack("/login");
     const { settings } = useSettings();
     const appName = settings?.appName || 'App';

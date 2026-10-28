@@ -35,7 +35,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
   const [selectedTags, setSelectedTags] = useState([]);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submittedCount, setSubmittedCount] = useState(0);
+  const [, setSubmittedCount] = useState(0);
 
   useEffect(() => {
     if (isOpen && orderId) {

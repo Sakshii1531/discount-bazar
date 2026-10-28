@@ -61,7 +61,7 @@ const LiveTrackingMap = memo(({
   status = "out for delivery",
   eta = "8 mins",
   riderName = "Ramesh Kumar",
-  riderPhone,
+  riderPhone: _riderPhone,
   riderImage,
   riderLocation,
   sellerLocation,
@@ -72,9 +72,9 @@ const LiveTrackingMap = memo(({
   onOpenInMaps,
 }) => {
   const mapRef = useRef(null);
-  const [mapInstance, setMapInstance] = useState(null);
+  const [, setMapInstance] = useState(null);
   const isSearching = SEARCHING_STATUSES.includes(status?.toLowerCase());
-  const [progress, setProgress] = useState(0);
+  const [, setProgress] = useState(0);
   const [dots, setDots] = useState("");
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -126,7 +126,7 @@ const LiveTrackingMap = memo(({
       console.warn("[LiveTrackingMap] Error focusing on rider:", err);
       try {
         map.panTo({ lat: rider.lat, lng: rider.lng });
-      } catch {}
+      } catch { /* map not ready; keep the current view */ }
     }
   }, []);
 

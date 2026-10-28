@@ -42,9 +42,14 @@ export function resolveOrderIdentifiers(order, routeParam) {
 }
 
 export function useOrderIdentifiers(routeParam, order) {
+  // Memoize on exactly the fields resolveOrderIdentifiers reads.
+  const orderId = order?.orderId;
+  const checkoutGroupId = order?.checkoutGroupId;
+  const mongoId = order?._id;
+  const id = order?.id;
   const resolved = useMemo(
-    () => resolveOrderIdentifiers(order, routeParam),
-    [routeParam, order?.orderId, order?.checkoutGroupId, order?._id, order?.id],
+    () => resolveOrderIdentifiers({ orderId, checkoutGroupId, _id: mongoId, id }, routeParam),
+    [routeParam, orderId, checkoutGroupId, mongoId, id],
   );
 
   // Mirror identifiers into a ref so socket callbacks (which capture once)

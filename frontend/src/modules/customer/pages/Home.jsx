@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
-import { useInViewAnimation } from "@/core/hooks/useInViewAnimation";
 import { Sparkles, Heart, Snowflake, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 // MUI Icons (shared with admin & icon selector)
@@ -25,7 +24,6 @@ import CardBanner from "@/assets/CardBanner.jpg";
 import SectionRenderer from "../components/experience/SectionRenderer";
 import ExperienceBannerCarousel from "../components/experience/ExperienceBannerCarousel";
 import { useLocation } from "../context/LocationContext";
-import { useSettings } from "@core/context/SettingsContext";
 import Lottie from "lottie-react";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import { getJSON, remove as removeStorage, STORAGE_KEYS } from "@core/utils/storage";
@@ -243,13 +241,10 @@ const Home = () => {
   const { scrollY } = useScroll();
   const { isOpen: isProductDetailOpen } = useProductDetail();
   const { currentLocation, isFetchingLocation, isLocationResolved, refreshLocation } = useLocation();
-  const { settings } = useSettings();
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
-  const quickCatsRef = useRef(null);
   const cachedHomePageData = getCachedHomePageData(currentLocation);
 
-  const { ref: particleContainerRef, isVisible: particlesVisible } = useInViewAnimation();
   const heroRef = useRef(null);
   const [heroVisible, setHeroVisible] = useState(true);
 
@@ -283,8 +278,6 @@ const Home = () => {
   const [experienceSections, setExperienceSections] = useState(() => cachedHomePageData?.experienceSections || []);
   const [headerSections, setHeaderSections] = useState([]);
   const [heroConfig, setHeroConfig] = useState(() => cachedHomePageData?.heroConfig || heroConfigMemoryCache.__home__ || EMPTY_HERO_CONFIG);
-  const [mobileBannerIndex, setMobileBannerIndex] = useState(0);
-  const [isInstantBannerJump, setIsInstantBannerJump] = useState(false);
   const [categoryMap, setCategoryMap] = useState(() => cachedHomePageData?.categoryMap || {});
   const [subcategoryMap, setSubcategoryMap] = useState(() => cachedHomePageData?.subcategoryMap || {});
   const [pendingReturn, setPendingReturn] = useState(null);
@@ -330,7 +323,7 @@ const Home = () => {
       setExperienceSections(sections);
       const cached = homePageDataCache.get(cacheKey);
       if (cached) homePageDataCache.set(cacheKey, { ...cached, experienceSections: sections });
-    } catch {}
+    } catch { /* experience sections are optional; keep the page without them */ }
   };
 
   const fetchData = async ({ forceRefresh = false } = {}) => {
@@ -453,15 +446,6 @@ const Home = () => {
     return () => { if (link.parentNode) link.parentNode.removeChild(link); };
   }, [heroConfig?.banners?.items?.[0]?.imageUrl]);
 
-  useEffect(() => {
-    const totalSlides = 3;
-    const intervalId = setInterval(() => { setMobileBannerIndex((prev) => prev >= totalSlides - 1 ? prev : prev + 1); }, 3500);
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const handleBannerTransitionEnd = () => { if (mobileBannerIndex === 2) { setIsInstantBannerJump(true); setMobileBannerIndex(0); } };
-  useEffect(() => { if (!isInstantBannerJump) return; const id = requestAnimationFrame(() => setIsInstantBannerJump(false)); return () => cancelAnimationFrame(id); }, [isInstantBannerJump]);
-
   const productsById = useMemo(() => { const map = {}; products.forEach((p) => { map[p._id || p.id] = p; }); return map; }, [products]);
   const effectiveQuickCategories = useMemo(() => {
     const ids = heroConfig.categoryIds || [];
@@ -472,7 +456,6 @@ const Home = () => {
   const sectionsForRenderer = headerSections.length ? headerSections : experienceSections;
   const isMobile = useMemo(() => isMobileOrWebView(), []);
   const opacity = useTransform(scrollY, (heroVisible && !isMobile) ? [0, 300] : [0, 0], [1, 0.6]);
-  const y = useTransform(scrollY, (heroVisible && !isMobile) ? [0, 300] : [0, 0], [0, 80]);
   const scale = useTransform(scrollY, (heroVisible && !isMobile) ? [0, 300] : [0, 0], [1, 0.95]);
   const pointerEvents = useTransform(scrollY, (heroVisible && !isMobile) ? [0, 100] : [0, 0], ["auto", "none"]);
 
@@ -482,11 +465,6 @@ const Home = () => {
     if (!allSections.length) return;
     if (allSections.some((s) => s._id === pendingReturn.sectionId)) { const el = document.getElementById(`section-${pendingReturn.sectionId}`); if (el) { el.scrollIntoView({ behavior: "instant", block: "start" }); removeStorage(STORAGE_KEYS.EXPERIENCE_RETURN, { storage: "session" }); setPendingReturn(null); } }
   }, [headerSections, experienceSections, pendingReturn]);
-
-  const renderFloatingElements = (type, isVisible = true) => {
-    if (isMobile) return null;
-    return null; // Particles were already simplified out earlier
-  };
 
   // Coming-soon only once we know the user's real location and it has no stores.
   const needsLocation = !isFetchingLocation && !isLocationResolved;

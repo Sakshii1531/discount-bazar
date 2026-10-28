@@ -265,6 +265,34 @@ function buildPosBreakdown({
   };
 }
 
+/**
+ * The variant a till line sells. Stock for a product with variants lives on
+ * the variant (master stock is re-summed from them after every sale), so a
+ * line that names no variant, or one that is not on the product, would sell
+ * without reducing stock. A lone variant is used when none is named.
+ */
+export function resolvePosVariant(product, requestedSku) {
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  if (!variants.length) return null;
+  const wanted = String(requestedSku || "").trim().toUpperCase();
+  const match = wanted
+    ? variants.find((v) => String(v?.sku || "").trim().toUpperCase() === wanted)
+    : variants.length === 1
+      ? variants[0]
+      : null;
+  if (match && String(match.sku || "").trim()) return match;
+  const missingSku = match || (!wanted && variants.some((v) => !String(v?.sku || "").trim()));
+  const err = new Error(
+    missingSku
+      ? `${product.name} has a variant without a SKU. Open the product and save it once to generate SKUs, then try again.`
+      : wanted
+        ? `${product.name}: variant ${requestedSku} not found`
+        : `${product.name}: choose a variant`,
+  );
+  err.statusCode = 400;
+  throw err;
+}
+
 /** Loads the seller's own products for the till lines (name/cost/GST/category snapshots). */
 async function hydratePosItems({ sellerId, payloadItems, session = null }) {
   const productIds = payloadItems.map((item) => item.productId);
@@ -281,17 +309,19 @@ async function hydratePosItems({ sellerId, payloadItems, session = null }) {
       err.statusCode = 404;
       throw err;
     }
+    const variant = resolvePosVariant(product, item.variantSku);
+    const variantSku = variant?.sku || "";
     return {
       productId: item.productId,
       productName: product.name,
       quantity: item.quantity,
       price: item.price,
-      mrp: lineMrp(product, item.variantSku, item.price),
-      variantSku: item.variantSku || "",
+      mrp: lineMrp(product, variantSku, item.price),
+      variantSku,
       image: product.mainImage || "",
       // Cost snapshot excl. GST (product cost may be saved GST-inclusive)
       costPrice: purchaseBaseCost(
-        (item.variantSku && (product.variants || []).find((v) => v.sku === item.variantSku)?.purchaseCost) ||
+        variant?.purchaseCost ||
           product.purchaseCost,
         product.gstPercent,
         product.purchaseGstType,

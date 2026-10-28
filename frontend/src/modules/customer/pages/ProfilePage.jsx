@@ -8,7 +8,7 @@ import { useAuth } from '@core/context/AuthContext';
 import { useSettings } from '@core/context/SettingsContext';
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, role, logout, refreshUser } = useAuth();
+    const { user, logout, refreshUser } = useAuth();
     const { settings } = useSettings();
     const appName = settings?.appName || 'App';
     const [showLogoutModal, setShowLogoutModal] = React.useState(false);

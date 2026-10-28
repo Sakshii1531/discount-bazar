@@ -19,6 +19,7 @@ import {
   updateCashInHand,
 } from "./walletService.js";
 import { createPendingPayoutForOrder } from "./payoutService.js";
+import { computeOverallSettlement } from "./settlementStatus.js";
 import Transaction from "../../models/transaction.js";
 import { emitNotificationEvent } from "../../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../../modules/notifications/notification.constants.js";
@@ -57,25 +58,6 @@ async function findOrderForUpdate(orderOrId, session) {
     }
   }
   return order;
-}
-
-function computeOverallSettlement(order) {
-  const settlement = order.settlementStatus || {};
-  const sellerDone = settlement.sellerPayout === "COMPLETED";
-  const riderDone =
-    settlement.riderPayout === "COMPLETED" ||
-    settlement.riderPayout === "NOT_APPLICABLE";
-  const adminDone = Boolean(settlement.adminEarningCredited);
-
-  if (sellerDone && riderDone && adminDone) {
-    settlement.overall = ORDER_SETTLEMENT_STATUS.COMPLETED;
-    if (!settlement.reconciledAt) settlement.reconciledAt = new Date();
-  } else if (sellerDone || riderDone || adminDone) {
-    settlement.overall = ORDER_SETTLEMENT_STATUS.PARTIAL;
-  } else {
-    settlement.overall = ORDER_SETTLEMENT_STATUS.PENDING;
-  }
-  return settlement;
 }
 
 function syncLegacyPricing(order) {

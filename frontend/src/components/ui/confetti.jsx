@@ -47,6 +47,7 @@ export const Confetti = ({ isExploding = false }) => {
                     color: colors[Math.floor(Math.random() * colors.length)]
                 });
             }
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- random particle layout, generated once per burst
             setParticles(newParticles);
         }
     }, [isExploding]);

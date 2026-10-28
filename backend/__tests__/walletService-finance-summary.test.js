@@ -58,15 +58,20 @@ describe("getAdminFinanceSummary", () => {
       .mockResolvedValueOnce([{ _id: null, amount: 9999 }]); // platformGross = SUM(grandTotal/pricing.total)
 
     mockPayoutAggregate.mockResolvedValueOnce([
-      { _id: "SELLER", amount: 180 },
-      { _id: "DELIVERY_PARTNER", amount: 40 },
+      { _id: { type: "SELLER", status: "PENDING" }, amount: 180 },
+      { _id: { type: "DELIVERY_PARTNER", status: "PROCESSING" }, amount: 40 },
+      { _id: { type: "SELLER", status: "COMPLETED" }, amount: 500 },
+      { _id: { type: "DELIVERY_PARTNER", status: "COMPLETED" }, amount: 70 },
     ]);
 
     const summary = await getAdminFinanceSummary();
 
     expect(summary.systemFloatCOD).toBe(375.55);
     expect(summary.totalPlatformEarning).toBe(9999);
-    expect(summary.availableBalance).toBe(9779);
+    expect(summary.sellerPendingPayouts).toBe(180);
+    expect(summary.deliveryPendingPayouts).toBe(40);
+    // Collected minus payouts owed and already paid out: 9999 - 220 - 570.
+    expect(summary.availableBalance).toBe(9209);
     expect(summary.walletAvailableBalance).toBe(999);
     expect(mockOrderAggregate).toHaveBeenCalledTimes(5);
     expect(mockPayoutAggregate).toHaveBeenCalledTimes(1);

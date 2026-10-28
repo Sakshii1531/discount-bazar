@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, Clock3, ShieldAlert, Store, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +10,6 @@ import { onSellerApproved } from "@core/services/orderSocket";
 
 const ApplicationPending = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { isAuthenticated, role, user, isLoading, login, logout, token } = useAuth();
   const { settings } = useSettings();
   const isUnlockingRef = useRef(false);

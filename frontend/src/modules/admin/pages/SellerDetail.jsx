@@ -42,7 +42,7 @@ const SellerDetail = () => {
     const [orderSearch, setOrderSearch] = useState('');
 
     // Mock Data for Seller
-    const [seller, setSeller] = useState({
+    const [seller] = useState({
         id: id || 'SEL-001',
         shopName: 'Fresh Mart Superstore',
         ownerName: 'Rahul Sharma',

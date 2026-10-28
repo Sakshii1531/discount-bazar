@@ -47,8 +47,6 @@ const NotificationComposer = () => {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const [location, setLocation] = useState('all');
-    const [lastOrder, setLastOrder] = useState('any');
     const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
     const [emojiTarget, setEmojiTarget] = useState('title'); // 'title' | 'message'
     const [emojiPickerPos, setEmojiPickerPos] = useState({ top: 0, left: 0 });

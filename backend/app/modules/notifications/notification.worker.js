@@ -201,6 +201,7 @@ export async function deliverNotificationById(notificationId) {
   }
 
   let fcmResponse;
+  let fcmTimer;
   try {
     fcmResponse = await Promise.race([
       sendFCM(
@@ -213,12 +214,12 @@ export async function deliverNotificationById(notificationId) {
           data: (({ commCheck: _omit, ...rest }) => rest)(notification.data || {}),
         },
       ),
-      new Promise((_, reject) =>
-        setTimeout(
+      new Promise((_, reject) => {
+        fcmTimer = setTimeout(
           () => reject(new Error("FCM send timeout")),
           NOTIFICATION_QUEUE_JOB_TIMEOUT_MS(),
-        ),
-      ),
+        );
+      }),
     ]);
   } catch (error) {
     await Notification.updateOne(
@@ -236,6 +237,8 @@ export async function deliverNotificationById(notificationId) {
       role: notification.role,
     });
     throw error;
+  } finally {
+    clearTimeout(fcmTimer);
   }
 
   const attempted = Number(tokens.length || 0);

@@ -39,6 +39,7 @@ export const PendingReviewProvider = ({ children }) => {
 
   // Initial fetch and on role/token changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on login / role change
     fetchCounts();
   }, [fetchCounts]);
 

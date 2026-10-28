@@ -291,8 +291,6 @@ const OfferSectionsManagement = () => {
         </div>
         <div className="divide-y divide-slate-50">
           {sections.map((section, idx) => {
-            const sectionCatIds = (section.categoryIds || []).map((c) => (typeof c === "object" && c?._id ? c._id : c));
-            const sectionSellerIds = (section.sellerIds || []).map((s) => (typeof s === "object" && s?._id ? s._id : s));
             const catNames = (section.categoryIds || []).length
               ? (section.categoryIds || []).map((c) => (typeof c === "object" && c?.name ? c.name : categoryMap[c]?.name || c)).join(", ")
               : (section.categoryId?.name || "—");

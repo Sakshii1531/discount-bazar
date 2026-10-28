@@ -90,7 +90,8 @@ test.describe('seller: product brand field', () => {
     Object.assign(api.state.orders[0], { status: 'confirmed', workflowStatus: 'SELLER_ACCEPTED' });
     await loginAs(page, 'seller');
     await page.goto('/seller/products');
-    await expect(page.getByText('Fresh Milk').first()).toBeVisible();
+    // Visible only: the page also renders a mobile card list, hidden on desktop.
+    await expect(page.getByText('Fresh Milk').filter({ visible: true }).first()).toBeVisible();
     await page.locator('td button').first().click();
     const trigger = page.getByRole('button', { name: /select a brand/i });
     await trigger.scrollIntoViewIfNeeded();

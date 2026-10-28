@@ -213,7 +213,7 @@ const AddProduct = () => {
         localStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(TAB_STORAGE_KEY);
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
       setFormData(initialFormData);
       setModalTab("general");
     }
@@ -280,14 +280,14 @@ const AddProduct = () => {
         const serialized = JSON.stringify(toSave);
         localStorage.setItem(STORAGE_KEY, serialized);
         sessionStorage.setItem(STORAGE_KEY, serialized);
-      } catch {}
+      } catch { /* storage unavailable or full: draft is not saved */ }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [formData]);
 
   const [dbCategories, setDbCategories] = useState([]);
-  const [isLoadingCats, setIsLoadingCats] = useState(true);
+  const [, setIsLoadingCats] = useState(true);
 
   useEffect(() => {
     setFormData((prev) => {
@@ -502,7 +502,7 @@ const AddProduct = () => {
         localStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(TAB_STORAGE_KEY);
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
 
       const createdProd = response?.data?.result;
       if (returnTo) {

@@ -45,12 +45,6 @@ const EditProfilePage = () => {
         };
     }, [mediaStream]);
 
-    const isMobileDevice = () => {
-        if (typeof window === 'undefined') return false;
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            (window.matchMedia && window.matchMedia('(max-width: 768px)').matches && 'ontouchstart' in window);
-    };
-
     const processImageFile = async (file) => {
         if (!file) return;
 

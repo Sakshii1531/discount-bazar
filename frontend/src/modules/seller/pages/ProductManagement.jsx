@@ -355,7 +355,7 @@ const ProductManagement = () => {
       missingImage:
         summaryStats?.missingImage ??
         safeProducts.filter((p) =>
-          !Boolean(p.mainImage || p.image || (Array.isArray(p.galleryImages) && p.galleryImages.length > 0))
+          !(p.mainImage || p.image || (Array.isArray(p.galleryImages) && p.galleryImages.length > 0))
         ).length,
     }),
     [safeProducts, summaryStats, total],
@@ -529,11 +529,6 @@ const ProductManagement = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const exportProducts = () => {
-    console.log("Exporting products...");
-    alert("Exporting " + safeProducts.length + " products as CSV (Simulation)");
   };
 
   const handleDeleteClick = (product) => {

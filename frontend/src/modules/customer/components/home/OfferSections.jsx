@@ -9,7 +9,7 @@ import {
 } from "@/shared/constants/offerSectionOptions";
 import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 
-const OfferSections = ({ sections, noServiceData }) => {
+const OfferSections = ({ sections }) => {
   if (!sections || sections.length === 0) return null;
 
   return (

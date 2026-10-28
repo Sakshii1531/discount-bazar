@@ -508,7 +508,9 @@ async function executeDirectCancellation({
   }
 
   broadcastStockUpdates(stockUpdates);
-  notifySellerOrderCancelled(cancelledOrder || order);
+  // runWorkflowCleanup (via safeProcess below) sends the seller's
+  // `order:cancelled`; only the popup dismissal must not wait for it.
+  notifySellerOrderCancelled(cancelledOrder || order, { socket: false });
   await invalidateCustomerOrders(order.customer);
   await safeProcess(recordId);
   return { record: await OrderCancellation.findById(recordId), duplicate: false };
@@ -1403,21 +1405,24 @@ export async function onLatePaymentCapture(orderObjectId) {
  * Tell the seller the moment an order is cancelled — not after the retryable
  * cleanup below — so an incoming-order popup still ringing for it on any of
  * the seller's devices stops right away. Socket `order:cancelled` for open
- * apps, plus a silent push dismissal for backgrounded / killed ones.
+ * apps (skipped with `socket: false` when runWorkflowCleanup will send it),
+ * plus a silent push dismissal for backgrounded / killed ones.
  */
-function notifySellerOrderCancelled(order) {
+function notifySellerOrderCancelled(order, { socket = true } = {}) {
   const sellerId = idStr(order?.seller);
   if (!sellerId || !order?.orderId) return;
   const cancelledBy = order.cancelledBy || null;
-  emitToSeller(sellerId, {
-    event: "order:cancelled",
-    payload: {
-      orderId: order.orderId,
-      workflowStatus: order.workflowStatus || WORKFLOW_STATUS.CANCELLED,
-      status: "cancelled",
-      cancelledBy,
-    },
-  });
+  if (socket) {
+    emitToSeller(sellerId, {
+      event: "order:cancelled",
+      payload: {
+        orderId: order.orderId,
+        workflowStatus: order.workflowStatus || WORKFLOW_STATUS.CANCELLED,
+        status: "cancelled",
+        cancelledBy,
+      },
+    });
+  }
   emitSellerOrderAlertResolved(sellerId, order.orderId, "cancelled", { cancelledBy });
 }
 

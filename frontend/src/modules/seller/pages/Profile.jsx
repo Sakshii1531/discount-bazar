@@ -80,7 +80,7 @@ const SellerProfile = () => {
             ...(typeof pref.sound === "boolean" && { sound: pref.sound }),
             ...(typeof pref.vibration === "boolean" && { vibration: pref.vibration }),
           };
-          try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged)); } catch {}
+          try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged)); } catch { /* storage unavailable: settings last this session */ }
           return merged;
         });
       })
@@ -91,7 +91,7 @@ const SellerProfile = () => {
     const nextVal = !notifSettings[key];
     const updated = { ...notifSettings, [key]: nextVal };
     setNotifSettings(updated);
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch {}
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch { /* storage unavailable: settings last this session */ }
 
     if (key === "pushNotifications" && nextVal) {
       try {

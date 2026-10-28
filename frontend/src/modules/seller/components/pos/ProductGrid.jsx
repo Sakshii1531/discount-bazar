@@ -1,64 +1,13 @@
 import React from "react";
 import { HiOutlineArchiveBoxXMark, HiOutlineSquares2X2 } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
+import { posVariantLabel } from "../../utils/variantLabel";
 
 const resolvePrice = (product) => {
     const firstVariant = Array.isArray(product?.variants) && product.variants[0];
     const sale = Number(product?.salePrice ?? firstVariant?.salePrice ?? 0);
     const mrp = Number(product?.price ?? firstVariant?.price ?? 0);
     return sale > 0 && sale < mrp ? sale : mrp;
-};
-
-const resolveSingleVariantLabel = (product) => {
-    const variants = Array.isArray(product?.variants) ? product.variants : [];
-    const first = variants[0];
-
-    const isGeneric = (str) => {
-        if (!str) return true;
-        const lower = str.trim().toLowerCase();
-        return (
-            lower === "default" ||
-            lower === "regular" ||
-            lower === "standard" ||
-            lower === (product?.name || "").trim().toLowerCase()
-        );
-    };
-
-    const firstVariantName = typeof first?.name === "string" ? first.name.trim() : "";
-    if (firstVariantName && !isGeneric(firstVariantName)) {
-        return firstVariantName;
-    }
-
-    const firstSizeColour = [first?.size, first?.colour].filter(Boolean).join(" · ").trim();
-    if (firstSizeColour) {
-        return firstSizeColour;
-    }
-
-    const firstWeight = typeof first?.weight === "string" ? first.weight.trim() : "";
-    if (firstWeight) {
-        return firstWeight;
-    }
-
-    const productWeight = typeof product?.weight === "string" ? product.weight.trim() : "";
-    if (productWeight) {
-        return productWeight;
-    }
-
-    const productSizeColour = [product?.size, product?.colour].filter(Boolean).join(" · ").trim();
-    if (productSizeColour) {
-        return productSizeColour;
-    }
-
-    const productUnit = typeof product?.unit === "string" ? product.unit.trim() : "";
-    if (productUnit) {
-        return productUnit;
-    }
-
-    if (firstVariantName) {
-        return firstVariantName;
-    }
-
-    return "";
 };
 
 const ProductGrid = ({ products, isLoading, onAddProduct }) => {
@@ -86,7 +35,7 @@ const ProductGrid = ({ products, isLoading, onAddProduct }) => {
             {products.map((product) => {
                 const variants = Array.isArray(product.variants) ? product.variants : [];
                 const hasVariants = variants.length > 1;
-                const singleVariantLabel = !hasVariants ? resolveSingleVariantLabel(product) : "";
+                const singleVariantLabel = !hasVariants ? posVariantLabel(product, variants[0] || null) : "";
 
                 // Total stock across variants for multi-variant products
                 const totalStock = hasVariants

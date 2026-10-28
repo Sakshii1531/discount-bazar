@@ -317,7 +317,7 @@ const FAQManagement = () => {
                     {/* FAQ Grid/List */}
                     <div className="space-y-4">
                         <AnimatePresence mode='popLayout'>
-                            {filteredAndSortedFaqs.map((faq, index) => (
+                            {filteredAndSortedFaqs.map((faq) => (
                                 <motion.div
                                     key={faq.id}
                                     layout

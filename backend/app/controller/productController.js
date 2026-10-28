@@ -41,6 +41,7 @@ import { computePurchaseGst } from "../utils/money.js";
 import { parseAndValidateReturnPolicy } from "../validation/returnPolicyValidation.js";
 import { decorateProductsWithDelivery, quoteCartDelivery } from "../services/deliveryQuoteService.js";
 import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
+import { dynamicSuffix, makeProductSku, fillBlankVariantSkus } from "../utils/sku.js";
 import {
   buildProductRecommendations,
   enrichCatalogProducts,
@@ -88,29 +89,6 @@ function parseSellerIdFilters({ sellerId, sellerIds }) {
   }
 
   return [];
-}
-
-/**
- * Generates a short (~6 char) suffix that is unique per call.
- * Uses the last 4 chars of the current timestamp in base-36 + 2 random base-36 chars.
- * e.g. "K3X9AB"
- */
-function dynamicSuffix() {
-  return (Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 4)).toUpperCase();
-}
-
-/**
- * Auto-generates a product SKU that is unique per call.
- * Format: <UP-TO-5-CHAR-NAME-PREFIX>-<6-CHAR-DYNAMIC-SUFFIX>
- * e.g.  "RICE-K3X9AB"
- */
-function makeProductSku(name) {
-  const prefix = String(name || "")
-    .trim()
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 5)
-    .toUpperCase() || "ITEM";
-  return `${prefix}-${dynamicSuffix()}`;
 }
 
 /**
@@ -1031,16 +1009,13 @@ export const createProduct = async (req, res) => {
     }
 
     if (Array.isArray(productData.variants) && productData.variants.length > 0) {
-      productData.variants = productData.variants.map((variant, idx) => ({
-        ...variant,
-        sku:
-          variant?.sku && String(variant.sku).trim()
-            ? String(variant.sku).trim().toUpperCase()
-            : makeProductSku(productData.name, idx + 1),
-      }));
+      productData.variants = fillBlankVariantSkus(
+        productData.variants.map((variant) => ({ ...variant })),
+        productData.name,
+      );
 
       const rawSku = (!productData.sku || String(productData.sku).trim() === "")
-        ? (productData.variants[0]?.sku || makeProductSku(productData.name, 1))
+        ? (productData.variants[0]?.sku || makeProductSku(productData.name))
         : String(productData.sku).trim().toUpperCase();
       productData.sku = await ensureUniqueSku(rawSku);
 
@@ -1060,7 +1035,7 @@ export const createProduct = async (req, res) => {
       }
     } else {
       const rawSku = (!productData.sku || String(productData.sku).trim() === "")
-        ? makeProductSku(productData.name, 1)
+        ? makeProductSku(productData.name)
         : String(productData.sku).trim().toUpperCase();
       productData.sku = await ensureUniqueSku(rawSku);
     }
@@ -1265,16 +1240,13 @@ export const updateProduct = async (req, res) => {
     }
 
     if (Array.isArray(productData.variants) && productData.variants.length > 0) {
-      productData.variants = productData.variants.map((variant, idx) => ({
-        ...variant,
-        sku:
-          variant?.sku && String(variant.sku).trim()
-            ? String(variant.sku).trim().toUpperCase()
-            : makeProductSku(skuBaseName, idx + 1),
-      }));
+      productData.variants = fillBlankVariantSkus(
+        productData.variants.map((variant) => ({ ...variant })),
+        skuBaseName,
+      );
 
       const rawSku = (!productData.sku || String(productData.sku).trim() === "")
-        ? (productData.variants[0]?.sku || product.sku || makeProductSku(skuBaseName, 1))
+        ? (productData.variants[0]?.sku || product.sku || makeProductSku(skuBaseName))
         : String(productData.sku).trim().toUpperCase();
       productData.sku = await ensureUniqueSku(rawSku, product._id);
 

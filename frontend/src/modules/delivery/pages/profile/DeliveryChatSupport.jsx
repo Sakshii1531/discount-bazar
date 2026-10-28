@@ -14,7 +14,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSettings } from "@core/context/SettingsContext";
 import { useAuth } from "@core/context/AuthContext";
 import axiosInstance from "@core/api/axios";
 import { deliveryApi } from "../../services/deliveryApi";
@@ -80,7 +79,6 @@ const QUICK_TOPICS = [
 const DeliveryChatSupport = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { settings } = useSettings();
 
   const [ticketId, setTicketId] = useState(null);
   const [messages, setMessages] = useState([]);
