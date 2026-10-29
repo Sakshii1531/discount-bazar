@@ -9,6 +9,17 @@ const cashDaySchema = new mongoose.Schema(
     countedClosingCash: { type: Number, default: null },
     closed: { type: Boolean, default: false },
     closedAt: { type: Date, default: null },
+    // Audit trail of every close and reopen (a finalized day is never edited in place).
+    history: [
+      {
+        _id: false,
+        action: { type: String, enum: ["CLOSED", "REOPENED"], required: true },
+        at: { type: Date, default: Date.now },
+        countedClosingCash: { type: Number, default: null },
+        // Required when reopening: why a finalized closing is being changed.
+        reason: { type: String, trim: true, default: "" },
+      },
+    ],
   },
   { timestamps: true },
 );

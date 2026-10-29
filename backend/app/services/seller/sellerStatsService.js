@@ -104,6 +104,9 @@ async function computeSellerStats(sellerOid, range) {
       $match: {
         seller: sellerOid,
         status: { $ne: "cancelled" },
+        // An online order sits in CREATED until its payment is captured; a
+        // failed or abandoned payment is not a sale.
+        workflowStatus: { $ne: "CREATED" },
       },
     },
     {

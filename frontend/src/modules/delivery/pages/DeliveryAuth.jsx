@@ -386,8 +386,6 @@ const DeliveryAuth = () => {
     if (isUnlockingRef.current) return;
     isUnlockingRef.current = true;
 
-    toast.success("Account approved! Unlocking dashboard...");
-
     const approvedRider = payload?.delivery || payload || {};
     const authToken =
       payload?.token ||
@@ -395,6 +393,27 @@ const DeliveryAuth = () => {
         ? sessionStorage.getItem("pending_delivery_token") || localStorage.getItem("pending_delivery_token")
         : "") ||
       token;
+
+    // The public status check never hands out a token: a rider who was
+    // waiting without one signs in with an OTP like everyone else.
+    if (!authToken) {
+      toast.success("Account approved! Please log in to continue.");
+      try {
+        sessionStorage.removeItem("pending_delivery_id");
+        sessionStorage.removeItem("pending_delivery_phone");
+        localStorage.removeItem("pending_delivery_id");
+        localStorage.removeItem("pending_delivery_phone");
+      } catch {
+        /* ignore */
+      }
+      setShowPendingModal(false);
+      setMode("login");
+      setStep("form");
+      isUnlockingRef.current = false;
+      return;
+    }
+
+    toast.success("Account approved! Unlocking dashboard...");
 
     if (authToken) {
       login({

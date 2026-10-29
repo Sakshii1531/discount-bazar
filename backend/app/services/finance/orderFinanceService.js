@@ -21,6 +21,7 @@ import {
 import { createPendingPayoutForOrder } from "./payoutService.js";
 import { computeOverallSettlement } from "./settlementStatus.js";
 import Transaction from "../../models/transaction.js";
+import { WORKFLOW_STATUS } from "../../constants/orderWorkflow.js";
 import { emitNotificationEvent } from "../../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../../modules/notifications/notification.constants.js";
 
@@ -536,8 +537,17 @@ export async function settleDeliveredOrder(orderOrId, { actorId = null } = {}) {
     session.startTransaction();
     const order = await findOrderForUpdate(orderOrId, session);
 
+    // A cancelled order is final: settling it would mark it delivered and
+    // queue seller/rider payouts for goods that never arrived.
+    if (order.status === "cancelled" || order.workflowStatus === WORKFLOW_STATUS.CANCELLED) {
+      throw Object.assign(new Error("A cancelled order cannot be marked delivered"), { statusCode: 409 });
+    }
+
     if (order.status !== "delivered") {
       order.status = "delivered";
+    }
+    if (order.workflowVersion >= 2 && order.workflowStatus !== WORKFLOW_STATUS.DELIVERED) {
+      order.workflowStatus = WORKFLOW_STATUS.DELIVERED;
     }
     order.orderStatus = "delivered";
     if (!order.deliveredAt) {

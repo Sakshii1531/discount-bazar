@@ -147,8 +147,10 @@ export const customerApi = {
   },
   getProductRatingEligibility: (orderId) =>
     axiosInstance.get(`/product-ratings/eligibility/${encodeURIComponent(String(orderId || "").trim())}`),
-  submitProductRating: (data) =>
-    axiosInstance.post("/product-ratings", data),
+  submitProductRating: (data) => {
+    invalidateCache("/product-ratings/products");
+    return axiosInstance.post("/product-ratings", data);
+  },
   getOrderProductRatings: (orderId) =>
     axiosInstance.get(`/product-ratings/orders/${encodeURIComponent(String(orderId || "").trim())}`),
   getProductRatingsList: (productId, params) =>

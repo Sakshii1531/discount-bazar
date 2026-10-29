@@ -46,6 +46,7 @@ import {
   verifyToken,
   allowRoles,
   requireApprovedSeller,
+  requireAvailableRider,
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -84,7 +85,7 @@ router.post(
 router.post(
   "/:id/cod/reconcile",
   verifyToken,
-  allowRoles("delivery", "admin"),
+  allowRoles("admin"),
   reconcileCodCashSubmission,
 );
 
@@ -162,12 +163,14 @@ router.get(
   "/available",
   verifyToken,
   allowRoles("admin", "delivery"),
+  requireAvailableRider({ listOffline: true }),
   getAvailableOrders,
 );
 router.put(
   "/accept/:orderId",
   verifyToken,
   allowRoles("admin", "delivery"),
+  requireAvailableRider(),
   acceptOrder,
 );
 router.put(
@@ -180,6 +183,7 @@ router.put(
   "/returns/:orderId/accept-pickup",
   verifyToken,
   allowRoles("admin", "delivery"),
+  requireAvailableRider(),
   acceptReturnPickup,
 );
 router.put(

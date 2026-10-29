@@ -11,6 +11,12 @@ import { emitNotificationEvent } from "../modules/notifications/notification.ser
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import { emitPendingReviewUpdateToAdmins } from "../services/orderSocketEmitter.js";
 import { updateDeliveryPartnerAggregates } from "../services/deliveryRatingService.js";
+import { countRiderActiveOrders } from "../services/delivery/riderActiveOrdersService.js";
+
+const RIDER_OTP_MAX_FAILED_ATTEMPTS = () =>
+    parseInt(process.env.OTP_MAX_FAILED_ATTEMPTS || "5", 10);
+const RIDER_OTP_LOCKOUT_MINUTES = () =>
+    parseInt(process.env.OTP_LOCKOUT_MINUTES || "15", 10);
 
 const generateToken = (delivery) =>
     jwt.sign(
@@ -141,10 +147,10 @@ export const loginDelivery = async (req, res) => {
             return handleResponse(res, 404, "Delivery partner not found");
         }
         if (!delivery.isVerified) {
+            // Anyone can type a phone number here: never return the rider's record.
             return handleResponse(res, 403, "Your application is still pending admin approval", {
                 pendingApproval: true,
                 deliveryId: delivery._id,
-                delivery,
             });
         }
 
@@ -179,19 +185,56 @@ export const verifyDeliveryOTP = async (req, res) => {
     try {
         const { phone, otp } = req.body;
 
-        if (!phone || !otp) {
+        // Strings only: an object such as { "$ne": null } would otherwise act as
+        // a query operator and match any rider with an unexpired code.
+        if (!phone || !otp || typeof phone !== "string" || !["string", "number"].includes(typeof otp)) {
             return handleResponse(res, 400, "Phone and OTP are required");
         }
 
-        const delivery = await Delivery.findOne({
-            phone,
-            otp,
-            otpExpiry: { $gt: Date.now() },
-        });
-
+        const delivery = await Delivery.findOne({ phone: phone.trim() }).select(
+            "+otp +otpExpiry +otpFailedAttempts +otpLockedUntil",
+        );
         if (!delivery) {
             return handleResponse(res, 400, "Invalid or expired OTP");
         }
+
+        const now = Date.now();
+        if (delivery.otpLockedUntil && delivery.otpLockedUntil.getTime() > now) {
+            return handleResponse(res, 423, "Too many failed attempts. Please try again later.");
+        }
+
+        const codeMatches =
+            Boolean(delivery.otp) &&
+            delivery.otpExpiry &&
+            delivery.otpExpiry.getTime() > now &&
+            delivery.otp === String(otp).trim();
+
+        if (!codeMatches) {
+            // Atomic count, so parallel guesses cannot slip past the limit.
+            const counted = await Delivery.findOneAndUpdate(
+                { _id: delivery._id },
+                { $inc: { otpFailedAttempts: 1 } },
+                { new: true },
+            ).select("+otpFailedAttempts");
+            if ((counted?.otpFailedAttempts || 0) >= RIDER_OTP_MAX_FAILED_ATTEMPTS()) {
+                // Lock, and burn the code so it cannot be guessed after the lock.
+                await Delivery.updateOne(
+                    { _id: delivery._id },
+                    {
+                        $set: {
+                            otpLockedUntil: new Date(now + RIDER_OTP_LOCKOUT_MINUTES() * 60 * 1000),
+                            otpFailedAttempts: 0,
+                        },
+                        $unset: { otp: 1, otpExpiry: 1 },
+                    },
+                );
+                return handleResponse(res, 423, "Too many failed attempts. Please try again later.");
+            }
+            return handleResponse(res, 400, "Invalid or expired OTP");
+        }
+
+        delivery.otpFailedAttempts = 0;
+        delivery.otpLockedUntil = undefined;
 
         if (!delivery.isVerified) {
             // New signup OTP verification
@@ -297,6 +340,19 @@ export const updateDeliveryProfile = async (req, res) => {
         // Fire-and-forget — never blocks the HTTP response. A failed cleanup
         // is also safe: the scheduled sweep job will pick it up on TTL.
         if (willGoOffline) {
+            // Offline stops new offers only. Parcels already accepted stay
+            // assigned, and live tracking for them must keep running.
+            const activeOrders = await countRiderActiveOrders(delivery._id);
+            if (activeOrders > 0) {
+                const result = delivery.toJSON();
+                result.activeOrders = activeOrders;
+                return handleResponse(
+                    res,
+                    200,
+                    `You are offline for new orders. Finish your ${activeOrders} active ${activeOrders === 1 ? "delivery" : "deliveries"}; they stay assigned to you.`,
+                    result,
+                );
+            }
             clearRiderPresence(String(delivery._id)).catch(() => {});
         }
 
@@ -308,7 +364,10 @@ export const updateDeliveryProfile = async (req, res) => {
 
 export const checkDeliveryApplicationStatus = async (req, res) => {
     try {
-        const deliveryId = req.user?.id || req.query.deliveryId;
+        // A token is issued only to the signed-in rider asking about their own
+        // account. A lookup by phone or id is public and returns approval only.
+        const self = req.user?.role === "delivery" ? req.user.id : null;
+        const deliveryId = self || req.query.deliveryId;
         const phone = req.query.phone;
 
         let query = null;
@@ -331,12 +390,14 @@ export const checkDeliveryApplicationStatus = async (req, res) => {
         }
 
         const isApproved = delivery.isVerified === true;
-        const token = generateToken(delivery);
+        if (!self || String(delivery._id) !== String(self)) {
+            return handleResponse(res, 200, "Application status fetched successfully", { isApproved });
+        }
 
         return handleResponse(res, 200, "Application status fetched successfully", {
             isApproved,
             delivery,
-            token,
+            token: generateToken(delivery),
         });
     } catch (error) {
         return handleResponse(res, 500, error.message);

@@ -358,7 +358,7 @@ export async function fetchAvailableOrdersForDelivery({
     v2Orders = filterV2OrdersByRadius(
       v2OrdersRaw,
       deliveryPartner.location.coordinates,
-    );
+    ).map(redactOfferContactDetails);
   }
 
   let legacyOrders = [];
@@ -379,6 +379,7 @@ export async function fetchAvailableOrdersForDelivery({
       .populate("customer", "name phone")
       .populate("seller", "shopName address name location")
       .lean();
+    legacyOrders = legacyOrders.map(redactOfferContactDetails);
   }
 
   let returnPickups = [];
@@ -420,10 +421,13 @@ export async function fetchAvailableOrdersForDelivery({
       .populate("seller", "shopName address name location")
       .lean();
 
-    returnPickups = returnPickupsRaw.map((rp) => ({
-      ...rp,
-      isReturnPickup: true,
-    }));
+    returnPickups = returnPickupsRaw.map((rp) => {
+      const pickup = { ...rp, isReturnPickup: true };
+      // Contact details only once the return is this rider's to collect.
+      return String(rp.returnDeliveryBoy || "") === String(userId)
+        ? pickup
+        : redactOfferContactDetails(pickup);
+    });
   }
 
   const orders = mergeAvailableOrders(
@@ -513,6 +517,20 @@ export function redactContactDetails(order, role) {
       if (order.customer && typeof order.customer === "object") delete order.customer.phone;
       if (order.seller && typeof order.seller === "object") delete order.seller.phone;
     }
+  }
+  return order;
+}
+
+/**
+ * A rider looking at an offer they have not accepted gets the store and drop
+ * area, not the customer's phone or email.
+ */
+export function redactOfferContactDetails(order) {
+  if (!order || typeof order !== "object") return order;
+  if (order.address && typeof order.address === "object") delete order.address.phone;
+  if (order.customer && typeof order.customer === "object") {
+    delete order.customer.phone;
+    delete order.customer.email;
   }
   return order;
 }
@@ -661,13 +679,18 @@ export async function getOrderWithAccess(orderId, userId, role) {
 
   const payload = decorateOrderWithReturnEligibility(order);
   redactContactDetails(payload, roleNorm);
+  if (isBroadcastedOrder && !isAssignedDeliveryBoy) {
+    redactOfferContactDetails(payload);
+  }
 
-  // Attach or auto-generate delivery OTP when order is in delivery state so customer app receives it
+  // Attach or auto-generate the delivery OTP for the customer who reads it out
+  // at the door. It must never reach the rider (who could then complete the
+  // hand-over alone) or the seller.
   const isOutForDelivery =
     order.workflowStatus === WORKFLOW_STATUS.OUT_FOR_DELIVERY ||
     String(order.status || "").toLowerCase() === "out_for_delivery";
 
-  if (isOutForDelivery) {
+  if (isOutForDelivery && (isOwnerCustomer || isAdmin)) {
     let activeOtpDoc = await OrderOtp.findOne({
       orderId: order.orderId,
       type: "delivery",

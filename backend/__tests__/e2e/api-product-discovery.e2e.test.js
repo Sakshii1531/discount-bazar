@@ -92,6 +92,66 @@ async function order(customer, seller, items, overrides = {}) {
 
 const names = (items) => items.map((p) => p.name);
 
+describe("GET /api/products?search=", () => {
+  async function seedSpices() {
+    const catalog = await seedCatalog();
+    const spices = await Category.create({ name: "Spices & Masala", slug: `spices-${Date.now()}`, type: "category", parentId: catalog.header._id });
+    const powders = await Category.create({ name: "Powdered Spices", slug: `powders-${Date.now()}`, type: "subcategory", parentId: spices._id });
+    const tree = { header: catalog.header.toObject(), category: spices.toObject(), subcategory: powders.toObject() };
+    const spiceProducts = {
+      redChilli: await fx.createProduct(catalog.seller, tree, { name: "Aarafh Red Chilli Powder", brand: "Aarafh" }),
+      haldi: await fx.createProduct(catalog.seller, tree, { name: "Everest Haldi", brand: "Everest" }),
+      ginger: await fx.createProduct(catalog.seller, tree, { name: "Ginger Powder", brand: "Catch" }),
+      dahiwala: await fx.createProduct(catalog.seller, tree, { name: "Badahi Pickle", brand: "Local" }),
+    };
+    return { ...catalog, spiceProducts };
+  }
+  const search = async (term) => {
+    const res = await request(app).get("/api/products").query({ ...near, search: term, limit: 100 });
+    expect(res.status).toBe(200);
+    return names(res.body.result.items).sort();
+  };
+
+  it("matches spelling variants, case and surrounding spaces", async () => {
+    const { spiceProducts } = await seedSpices();
+    for (const term of ["Red Chilli", "red chilli", "chili", "  CHILLI powder ", "chilli powder"]) {
+      expect(await search(term)).toEqual([spiceProducts.redChilli.name]);
+    }
+  });
+
+  it("finds Hindi names from English and English names from Hindi", async () => {
+    const { spiceProducts } = await seedSpices();
+    expect(await search("Lal Mirch")).toEqual([spiceProducts.redChilli.name]);
+    expect(await search("lal mirch powder")).toEqual([spiceProducts.redChilli.name]);
+    expect(await search("turmeric")).toEqual([spiceProducts.haldi.name]);
+    expect(await search("adrak")).toEqual([spiceProducts.ginger.name]);
+    // A swapped-in synonym only matches whole words: "curd" -> "dahi" must not find "Badahi"
+    expect(await search("curd")).toEqual([]);
+  });
+
+  it("matches header, category and subcategory names when no product name matches", async () => {
+    const { spiceProducts, products } = await seedSpices();
+    const allSpices = Object.values(spiceProducts).map((p) => p.name).sort();
+    expect(await search("spices")).toEqual(allSpices);
+    expect(await search("masala")).toEqual(allSpices);
+    expect(await search("ginger spices")).toEqual([spiceProducts.ginger.name]);
+    expect(await search("flours")).toEqual([products.atta.name, products.besan.name].sort());
+    // A product named "Refined" exists, so the rest of the Refined Oil subcategory is not added
+    expect(await search("refined")).toEqual([products.fortuneSoy.name]);
+  });
+
+  it("still hides inactive, unapproved and out-of-area products", async () => {
+    const { products } = await seedSpices();
+    const found = await search("mustard oil");
+    expect(found).toContain(products.fortuneMustard.name);
+    expect(found).toContain(products.tataMustardOos.name);
+    for (const hidden of [products.inactiveMustard, products.pendingMustard, products.farMustard]) {
+      expect(found).not.toContain(hidden.name);
+    }
+    expect(await search("zzqx not in catalogue")).toEqual([]);
+  });
+});
+
 describe("brand and slug lookups", () => {
   it("GET /api/products?brand= matches the brand field exactly, ignoring case and spaces", async () => {
     const { products } = await seedCatalog();

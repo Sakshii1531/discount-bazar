@@ -343,9 +343,16 @@ async function seedCoreData() {
     storedOrder.deliveryPartner = rider._id;
     await storedOrder.save();
 
-    const prematureDelivered = await request(app)
+    // A rider completes delivery only through the customer's OTP.
+    const riderShortcut = await request(app)
       .post(`/api/orders/${orderId}/delivered`)
       .set("Authorization", `Bearer ${riderToken}`)
+      .send({});
+    expect(riderShortcut.status).toBe(409);
+
+    const prematureDelivered = await request(app)
+      .post(`/api/orders/${orderId}/delivered`)
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({});
     expect(prematureDelivered.status).toBe(500);
     expect(prematureDelivered.body.message).toContain(
@@ -367,7 +374,7 @@ async function seedCoreData() {
 
     const deliveredRes = await request(app)
       .post(`/api/orders/${orderId}/delivered`)
-      .set("Authorization", `Bearer ${riderToken}`)
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({});
     expect(deliveredRes.status).toBe(200);
     // Seller payout waits out the return window (returnWindowReleaseJob releases it).
@@ -495,7 +502,7 @@ async function seedCoreData() {
 
     const deliveredRes = await request(app)
       .post(`/api/orders/${orderId}/delivered`)
-      .set("Authorization", `Bearer ${riderToken}`)
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({});
     expect(deliveredRes.status).toBe(200);
     expect(deliveredRes.body.result.paymentMode).toBe("COD");

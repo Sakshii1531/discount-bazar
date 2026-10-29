@@ -109,11 +109,14 @@ const Dashboard = () => {
   const handleOnlineToggle = async () => {
     const newStatus = !isOnline;
     try {
-      await deliveryApi.updateProfile({ isOnline: newStatus });
+      const res = await deliveryApi.updateProfile({ isOnline: newStatus });
       await refreshUser(); // Refresh global auth state
       setIsOnline(newStatus);
       if (newStatus) {
         toast.success("You are now ONLINE. Finding orders...");
+      } else if (res?.data?.result?.activeOrders > 0) {
+        // Going offline never drops a parcel already accepted.
+        toast.info(res.data.message);
       } else {
         toast.info("You are now OFFLINE. No new orders.");
       }

@@ -150,7 +150,7 @@ export function buildLedgerInvoice({ kind, entry, entries = [], party, business 
   const paid = isBill && entry.refId
     ? round2(
         entries
-          .filter((e) => e.kind === "PAYMENT" && e.refModel === entry.refModel && String(e.refId) === String(entry.refId))
+          .filter((e) => e.kind === "PAYMENT" && !e.voided && e.refModel === entry.refModel && String(e.refId) === String(entry.refId))
           .reduce((s, e) => s + Number(e.amount || 0), 0),
       )
     : 0;

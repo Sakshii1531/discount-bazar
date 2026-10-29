@@ -24,6 +24,16 @@ const partyLedgerEntrySchema = new mongoose.Schema(
     refNo: { type: String, default: "" },
     note: { type: String, trim: true, default: "" },
     date: { type: Date, default: Date.now },
+    // Client-generated key for a manually recorded payment: a resubmitted form
+    // (double click, retry after a timeout) returns the first entry instead of
+    // recording the money twice.
+    clientRef: { type: String, trim: true },
+    // Entries are never deleted. When a bill is edited or cancelled its entries
+    // are voided and a reversing entry (opposite effect, `reverses` = original)
+    // is written, also voided: balances net to zero, the statement keeps both
+    // lines, and cash reports skip voided pairs.
+    voided: { type: Boolean, default: false },
+    reverses: { type: mongoose.Schema.Types.ObjectId, default: null },
   },
   { timestamps: true },
 );
@@ -31,5 +41,9 @@ const partyLedgerEntrySchema = new mongoose.Schema(
 partyLedgerEntrySchema.index({ seller: 1, partyType: 1, party: 1, date: -1 });
 partyLedgerEntrySchema.index({ seller: 1, refModel: 1, refId: 1 });
 partyLedgerEntrySchema.index({ seller: 1, kind: 1, date: -1 });
+partyLedgerEntrySchema.index(
+  { seller: 1, clientRef: 1 },
+  { unique: true, partialFilterExpression: { clientRef: { $type: "string" } } },
+);
 
 export default mongoose.model("PartyLedgerEntry", partyLedgerEntrySchema);

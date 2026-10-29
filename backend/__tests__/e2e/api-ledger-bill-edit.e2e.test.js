@@ -68,7 +68,7 @@ describe("customer (udhaar) bill edit", () => {
 
     ledger = await ledgerOf("customers", customerId);
     // 3 x 45 = 135 on credit, 35 paid at billing -> 100 still owed; one SALE row only.
-    expect(ledger.entries.filter((e) => e.kind === "SALE").map((e) => e.amount)).toEqual([135]);
+    expect(ledger.entries.filter((e) => e.kind === "SALE" && !e.voided).map((e) => e.amount)).toEqual([135]);
     expect(ledger.balance).toBe(100);
 
     // Wrong payment method: it was actually paid in cash -> nothing owed.
@@ -78,7 +78,9 @@ describe("customer (udhaar) bill edit", () => {
       .send({ items: [{ productId: String(milk._id), quantity: 3, price: 45 }], posPaymentMethod: "CASH", reason: "Paid cash" });
     expect(toCash.status).toBe(200);
     ledger = await ledgerOf("customers", customerId);
-    expect(ledger.entries).toEqual([]);
+    // The earlier credit entries stay on the statement as voided pairs.
+    expect(ledger.entries.filter((e) => !e.voided)).toEqual([]);
+    expect(ledger.entries.length).toBeGreaterThan(0);
     expect(ledger.balance).toBe(0);
     expect(await stock(milk._id)).toBe(97);
   });
@@ -118,6 +120,6 @@ describe("supplier bill edit", () => {
     expect(await stock(milk._id)).toBe(108);
     ledger = await ledgerOf("suppliers", supplierId);
     expect(ledger.balance).toBe(140); // 240 billed - 100 paid
-    expect(ledger.entries.filter((e) => e.kind === "PURCHASE").map((e) => e.amount)).toEqual([240]);
+    expect(ledger.entries.filter((e) => e.kind === "PURCHASE" && !e.voided).map((e) => e.amount)).toEqual([240]);
   });
 });

@@ -28,6 +28,12 @@ const reviewSchema = new mongoose.Schema(
             enum: ["pending", "approved", "rejected"],
             default: "pending",
         },
+        // Set once the review is copied into ProductRating (see legacyReviewMigrationService)
+        migratedRatingId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "ProductRating",
+            default: null,
+        },
     },
     { timestamps: true }
 );

@@ -66,6 +66,9 @@ import { sellerMarkReady } from "../services/communication/communicationService.
 import { assertRiderCanTakeOrder } from "../services/delivery/riderActiveOrdersService.js";
 import { getSellerTz, DEFAULT_TZ } from "../services/businessTime.js";
 
+// Workflow states a seller can still accept from (an online order waits in CREATED until paid).
+const SELLER_ACCEPTABLE_STATUSES = [WORKFLOW_STATUS.SELLER_PENDING, WORKFLOW_STATUS.CREATED];
+
 // Date filters follow the seller's business timezone; admins see the platform default.
 const listTz = (user) => (user?.role === "seller" ? getSellerTz(user.id) : DEFAULT_TZ);
 
@@ -415,21 +418,26 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     if (order.workflowVersion >= 2 && role === "seller") {
+      if (order.seller?.toString() !== userId) {
+        return handleResponse(res, 403, "Access denied. You are not authorized to update this order.");
+      }
       if (status === "confirmed") {
         try {
           const updated = await sellerAcceptAtomic(userId, canonicalOrderId);
           return handleResponse(res, 200, "Order accepted", updated);
         } catch (e) {
-          // Never fall back onto an order that was cancelled meanwhile — the
-          // fallback save below would resurrect it.
+          // No direct-save fallback: it skipped the payment check (an unpaid
+          // online order could be accepted) and moved an order that already
+          // had a rider back to DELIVERY_SEARCH, starting a second search.
           const fresh = await Order.findById(order._id).select("status workflowStatus").lean();
           if (fresh?.status === "cancelled" || fresh?.workflowStatus === WORKFLOW_STATUS.CANCELLED) {
             return handleResponse(res, 409, "This order was cancelled by the customer.");
           }
-          logger.warn("sellerAcceptAtomic failed, falling back to direct status update", {
-            orderId: canonicalOrderId,
-            error: e.message,
-          });
+          if (fresh?.workflowStatus && !SELLER_ACCEPTABLE_STATUSES.includes(fresh.workflowStatus)) {
+            const refreshed = await Order.findById(order._id);
+            return handleResponse(res, 200, "Order already accepted", refreshed);
+          }
+          return handleResponse(res, e.statusCode || 409, e.message);
         }
       }
       if (status === "packed") {

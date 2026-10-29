@@ -127,3 +127,23 @@ describe('downloadStatementPdf', () => {
     }
   });
 });
+
+describe('buildStatement with voided rows', () => {
+  it('labels the voided original and its reversal so bill edits stay traceable', () => {
+    const st = buildStatement({
+      kind: 'customers',
+      party: { name: 'Ravi' },
+      entries: [
+        { _id: 'a', date: '2026-10-01', kind: 'SALE', effect: 1, amount: 100, balance: 100, items: [], voided: true },
+        { _id: 'b', date: '2026-10-01', kind: 'SALE', effect: -1, amount: 100, balance: 0, items: [], voided: true, reverses: 'a', note: 'Reversed (bill edited)' },
+        { _id: 'c', date: '2026-10-01', kind: 'SALE', effect: 1, amount: 120, balance: 120, items: [] },
+      ],
+      balance: 120,
+    });
+    expect(st.rows.map((r) => [r.type, r.debit, r.credit, r.balance])).toEqual([
+      ['Sale (voided)', 100, null, 100],
+      ['Sale (reversal)', null, 100, 0],
+      ['Sale', 120, null, 120],
+    ]);
+  });
+});

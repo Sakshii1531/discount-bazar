@@ -1,4 +1,5 @@
 import { getRiderActiveOrders } from "../services/delivery/riderActiveOrdersService.js";
+import { redactContactDetails } from "../services/orderQueryService.js";
 import Order from "../models/order.js";
 import { orderMatchQueryFromRouteParam } from "../utils/orderLookup.js";
 import Transaction from "../models/transaction.js";
@@ -23,6 +24,7 @@ import {
   getDeliveryStats as getDeliveryStatsFromService,
   getDeliveryEarnings as getDeliveryEarningsFromService,
   getDeliveryCodCashSummary as getDeliveryCodCashSummaryFromService,
+  getRiderWithdrawableBalance,
   invalidateDeliveryEarningsCache,
 } from "../services/delivery/deliveryEarningsService.js";
 import { emitWithdrawalRequestedToAdmins } from "../services/orderSocketEmitter.js";
@@ -264,6 +266,7 @@ export const getMyDeliveryOrders = async (req, res) => {
                     },
                 ],
             };
+        } else if (normalized === "returns") {
             query = {
                 returnStatus: { $nin: ["none", "return_requested", "return_rejected"] },
                 $or: [
@@ -279,8 +282,14 @@ export const getMyDeliveryOrders = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(100)
             .populate("seller", "shopName address")
-            .populate("customer", "name phone")
+            .populate("customer", "name")
             .lean();
+
+        // History is a record, not a contact list: no customer numbers for
+        // finished orders (live ones get them from the contact endpoint).
+        for (const order of orders) {
+            redactContactDetails(order, "delivery");
+        }
 
         return handleResponse(res, 200, "Delivery orders fetched", orders);
     } catch (error) {
@@ -292,49 +301,77 @@ export const getMyDeliveryOrders = async (req, res) => {
    REQUEST WITHDRAWAL (Delivery)
 ================================ */
 export const requestWithdrawal = async (req, res) => {
+    const deliveryBoyId = req.user.id;
+    let locked = false;
     try {
-        const deliveryBoyId = req.user.id;
-        const { amount } = req.body;
-
-        if (!amount || amount <= 0) {
+        const amount = roundCurrency(Number(req.body?.amount));
+        if (!Number.isFinite(amount) || amount <= 0) {
             return handleResponse(res, 400, "Please enter a valid amount");
         }
 
-        // 1. Calculate current available balance
-        const transactions = await Transaction.find({ user: deliveryBoyId, userModel: 'Delivery' });
+        // A retry of the same request (double tap, timeout) returns the first one.
+        const idemKey = String(req.headers["idempotency-key"] || "").trim().slice(0, 100);
+        const reference = idemKey ? `WDR-DL-${deliveryBoyId}-${idemKey}` : null;
+        if (reference) {
+            const existing = await Transaction.findOne({ reference, user: deliveryBoyId }).lean();
+            if (existing) {
+                return handleResponse(res, 200, "Withdrawal request already submitted", existing);
+            }
+        }
 
-        const settledBalance = transactions
-            .filter(t => t.status === 'Settled')
-            .reduce((acc, t) => acc + t.amount, 0);
+        const rider = await Delivery.findById(deliveryBoyId).select("name phone accountHolder accountNumber ifsc").lean();
+        if (!rider) {
+            return handleResponse(res, 404, "Delivery partner not found");
+        }
 
-        const pendingPayouts = transactions
-            .filter(t => (t.status === 'Pending' || t.status === 'Processing') && t.type === 'Withdrawal')
-            .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+        // Serialize per rider: the balance check and the write must not interleave
+        // with another request, or two withdrawals could both pass the check.
+        const now = new Date();
+        const lease = await Delivery.findOneAndUpdate(
+            {
+                _id: deliveryBoyId,
+                $or: [{ withdrawalLockedUntil: null }, { withdrawalLockedUntil: { $lt: now } }],
+            },
+            { $set: { withdrawalLockedUntil: new Date(now.getTime() + 15000) } },
+        );
+        if (!lease) {
+            return handleResponse(res, 409, "A withdrawal request is already being processed. Please wait.");
+        }
+        locked = true;
 
-        const availableBalance = settledBalance - pendingPayouts;
+        if (reference) {
+            const existing = await Transaction.findOne({ reference, user: deliveryBoyId }).lean();
+            if (existing) {
+                return handleResponse(res, 200, "Withdrawal request already submitted", existing);
+            }
+        }
 
+        // Same figure the earnings screen shows: earnings only, never COD cash in hand.
+        const { availableBalance } = await getRiderWithdrawableBalance(deliveryBoyId);
         if (amount > availableBalance) {
             return handleResponse(res, 400, `Insufficient balance. Available: ₹${availableBalance}`);
         }
 
-        // 2. Fetch rider details to snapshot bank info
-        const rider = await Delivery.findById(deliveryBoyId).select("name phone accountHolder accountNumber ifsc").lean();
+        const accountNumber = String(rider.accountNumber || "").replace(/\s/g, "");
+        const ifsc = String(rider.ifsc || "").trim().toUpperCase();
+        if (!/^\d{9,18}$/.test(accountNumber) || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+            return handleResponse(res, 400, "Add a valid bank account number and IFSC before withdrawing");
+        }
 
-        // 3. Create Withdrawal Transaction
         const withdrawal = await Transaction.create({
             user: deliveryBoyId,
             userModel: "Delivery",
             type: "Withdrawal",
             amount: -Math.abs(amount),
             status: "Pending",
-            reference: `WDR-DL-${Date.now()}`,
+            reference: reference || `WDR-DL-${Date.now()}`,
             metadata: {
                 payoutMethod: "BANK_TRANSFER",
-                destinationDetails: rider?.accountNumber ? `A/C: ${rider.accountNumber} (${rider.ifsc || 'IFSC N/A'})` : "Bank Transfer",
+                destinationDetails: `A/C: ${accountNumber} (${ifsc})`,
                 bankDetails: {
-                    accountHolder: rider?.accountHolder || rider?.name,
-                    accountNumber: rider?.accountNumber,
-                    ifsc: rider?.ifsc
+                    accountHolder: rider.accountHolder || rider.name,
+                    accountNumber,
+                    ifsc,
                 }
             }
         });
@@ -342,7 +379,7 @@ export const requestWithdrawal = async (req, res) => {
         try {
             emitWithdrawalRequestedToAdmins({
                 withdrawal,
-                user: rider || { name: "Delivery Partner" },
+                user: rider,
                 userModel: "Delivery",
                 amount,
             });
@@ -357,6 +394,13 @@ export const requestWithdrawal = async (req, res) => {
         return handleResponse(res, 201, "Withdrawal request submitted successfully", withdrawal);
     } catch (error) {
         return handleResponse(res, 500, error.message);
+    } finally {
+        if (locked) {
+            await Delivery.updateOne(
+                { _id: deliveryBoyId },
+                { $unset: { withdrawalLockedUntil: 1 } },
+            ).catch(() => {});
+        }
     }
 };
 

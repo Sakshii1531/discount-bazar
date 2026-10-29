@@ -60,10 +60,6 @@ async function main() {
   console.log("  shopName:", seller.shopName || "(n/a)");
   console.log("  location [lng, lat]:", seller.location?.coordinates);
   console.log("  serviceRadius (km):", seller.serviceRadius ?? 5);
-  console.log(
-    "  DELIVERY_BROADCAST_REQUIRE_VERIFIED:",
-    process.env.DELIVERY_BROADCAST_REQUIRE_VERIFIED || "(unset = false)",
-  );
   console.log("");
 
   const online = await Delivery.countDocuments({ isOnline: true });

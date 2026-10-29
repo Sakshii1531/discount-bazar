@@ -286,8 +286,8 @@ export async function cashMovements(sellerId, from, to) {
     posSalesByTender(s, between),
     sumBy(Order, { seller: s, orderSource: { $ne: "POS" }, workflowStatus: "DELIVERED", createdAt: between }, "$paymentMode", "$paymentBreakdown.grandTotal"),
     // credit-sale "paid at billing" entries are already counted in posSales as cash
-    sumBy(PartyLedgerEntry, { seller: s, partyType: "CUSTOMER", kind: "PAYMENT", refModel: { $ne: "Order" }, date: between }, "$method", "$amount"),
-    sumBy(PartyLedgerEntry, { seller: s, partyType: "SUPPLIER", kind: "PAYMENT", date: between }, "$method", "$amount"),
+    sumBy(PartyLedgerEntry, { seller: s, partyType: "CUSTOMER", kind: "PAYMENT", voided: { $ne: true }, refModel: { $ne: "Order" }, date: between }, "$method", "$amount"),
+    sumBy(PartyLedgerEntry, { seller: s, partyType: "SUPPLIER", kind: "PAYMENT", voided: { $ne: true }, date: between }, "$method", "$amount"),
     sumBy(PosReturn, { seller: s, createdAt: between }, "$refundMethod", "$refundTotal"),
     sumBy(Expense, { seller: s, date: between }, "$method", "$amount"),
     sumBy(CashEntry, { seller: s, date: between }, "$direction", "$amount"),
@@ -416,7 +416,7 @@ async function partyNames(entries) {
 
 async function paymentsMade(s, between) {
   const [supplierPaid, refunds, expenses, manual] = await Promise.all([
-    PartyLedgerEntry.find({ seller: s, partyType: "SUPPLIER", kind: "PAYMENT", date: between }).lean(),
+    PartyLedgerEntry.find({ seller: s, partyType: "SUPPLIER", kind: "PAYMENT", voided: { $ne: true }, date: between }).lean(),
     // CREDIT refunds only reduce the customer's udhaar; no money leaves the shop.
     PosReturn.find({ seller: s, createdAt: between, refundMethod: { $ne: "CREDIT" } }).lean(),
     Expense.find({ seller: s, date: between }).lean(),
@@ -454,7 +454,7 @@ async function paymentsReceived(s, between) {
       .select("orderId createdAt paymentMode paymentBreakdown.grandTotal address.name")
       .lean(),
     // "paid at billing" entries are already part of the POS sale amount.
-    PartyLedgerEntry.find({ seller: s, partyType: "CUSTOMER", kind: "PAYMENT", refModel: { $ne: "Order" }, date: between }).lean(),
+    PartyLedgerEntry.find({ seller: s, partyType: "CUSTOMER", kind: "PAYMENT", voided: { $ne: true }, refModel: { $ne: "Order" }, date: between }).lean(),
     CashEntry.find({ seller: s, direction: "IN", date: between }).lean(),
   ]);
   const names = await partyNames(receipts);

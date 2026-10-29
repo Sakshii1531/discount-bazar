@@ -48,6 +48,47 @@ const isWithinRatingWindow = (deliveredAt) => {
 };
 
 /**
+ * Review state of one product for the product page. Ratings are one per
+ * delivered order item, so buying the product again opens a new review.
+ * `pendingOrderItemId` is the newest delivered, unreturned, unrated item
+ * still inside the rating window (null when there is nothing to rate).
+ */
+export const getProductReviewState = async (customerId, productId) => {
+  const orders = await Order.find({ customer: customerId, "items.product": productId })
+    .select("items orderStatus status deliveredAt updatedAt")
+    .sort({ deliveredAt: -1, updatedAt: -1 })
+    .lean();
+  const deliveredOrders = orders.filter(isOrderDelivered);
+  const ratedItemIds = new Set(
+    (
+      await ProductRating.find({ customerId, productId }).select("orderItemId").lean()
+    ).map((r) => String(r.orderItemId)),
+  );
+
+  let pendingOrderItemId = null;
+  for (const order of deliveredOrders) {
+    if (!isWithinRatingWindow(getOrderDeliveredAt(order))) continue;
+    const item = (order.items || []).find(
+      (i) =>
+        String(i.product) === String(productId) &&
+        i.returnStatus !== "completed" &&
+        i.returnStatus !== "approved" &&
+        !ratedItemIds.has(String(i._id)),
+    );
+    if (item) {
+      pendingOrderItemId = item._id;
+      break;
+    }
+  }
+
+  return {
+    hasPurchased: deliveredOrders.length > 0,
+    hasReviewed: ratedItemIds.size > 0,
+    pendingOrderItemId,
+  };
+};
+
+/**
  * Safely update Product Aggregate rating stats atomically
  */
 const updateProductAggregate = async (productId, deltaCount, deltaSum, deltaDist, session = null) => {

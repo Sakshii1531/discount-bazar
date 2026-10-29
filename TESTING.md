@@ -83,6 +83,10 @@ Earlier hand-written suites:
   tickets, settings, categories, role isolation.
 - `api-security`: forged and `alg=none` JWTs, and admin-only coupon/FAQ writes.
 - `api-otp-security`: signup OTPs cannot be used to sign in to an existing account.
+- `api-rider-integrity`: rider sign-in and approval status, approval/suspension/
+  online gating, offer acceptance races, the hand-over OTP (leaks, attempt
+  limits, retries, the `/delivered` shortcut), COD reconcile, withdrawals
+  (balance, double taps, bank details), history tabs.
 
 ### Frontend unit tests (`frontend/src/__tests__/unit`)
 - **core**: token/auth storage, the storage manager (TTL, schema wipe, logout
@@ -186,6 +190,120 @@ Each fix has a regression test.
     The admin picks the target from dropdowns and product search instead of
     typing a slug/ID, and hero banners can be linked too
     (`src/__tests__/unit/customer/bannerLinks.test.jsx`).
+
+**Customer search and reviews**
+20. Changing the search keyword kept the previous keyword's products and count on
+    screen until the new search returned; a search of only spaces showed
+    "No items found". Search showed at most 100 results; it now pages with
+    "Load more" and shows the real total (`e2e/specs/customer.spec.js`).
+21. Search missed common variants: "chili" did not find "Chilli", "Lal Mirch" did
+    not find "Red Chilli Powder", and category names ("spices") matched nothing.
+    `services/productSearchService.js` makes doubled letters optional, searches
+    Hindi grocery names alongside English ones (and back), and, when no product
+    name matches, matches header, category and subcategory names (`api-product-discovery`,
+    `unit/services/productSearch.test.js`).
+22. Reviews written on the product page went to the legacy `Review` collection,
+    which the page never listed and the rating never counted, and allowed only
+    one review per product ever, so a repeat purchase could not be reviewed. The
+    form now rates the newest delivered, unrated order item (one review per
+    product per delivered order). `scripts/migrate-legacy-reviews.js` moves
+    existing legacy reviews across (`api-product-review-repeat`).
+
+**Seller panel: stock, orders and cash register** (`api-seller-integrity`)
+23. Manual stock adjustments read the product, changed it in memory and saved
+    it, so a sale made in between was lost. A correction larger than the stock was
+    clamped to 0 while the history logged the full amount, and on a product with
+    several variants an adjustment with no variant changed the first one. Each
+    adjustment is now one atomic update. Over-removal returns 409, and a variant is
+    required.
+24. Editing a product (name, price, images) wrote back the stock read at the
+    start of the request. That undid any online order, POS sale or cancellation
+    that landed while the edit was saving. The save is now guarded on `updatedAt`
+    and merges in the live stock.
+25. The older stock-release path (seller reject, timeouts, failed payments)
+    could restore stock twice when two cancellations ran at once, and failed on
+    variants with no stock counter. It now uses the cancellation service's atomic
+    release, which runs once per order.
+26. When a seller's accept failed, the endpoint fell back to a plain status save.
+    That let a seller accept an online order before its payment was captured. It
+    also sent an order that already had a rider back to `DELIVERY_SEARCH`, which
+    started a second rider search. Accept now goes only through the atomic path.
+27. Seller dashboard and earnings counted online orders still waiting for
+    payment (`CREATED`) as sales.
+28. Expenses on a closed business day could be deleted, which changed the
+    finalized cash closing. Deleting a missing expense returned success.
+29. Closing an already-closed day overwrote its counted cash. Re-closing now
+    returns 409. Reopening a day that is open returns 409. Every close and reopen
+    is kept in `CashDay.history`. Reopening needs a reason, which is saved there.
+30. POS bills worked out GST before the discount, so ₹100 at 18% exclusive GST
+    less ₹10 came to ₹108 instead of ₹106.20. On inclusive bills the total was
+    right but the GST shown was too high (₹15.25 instead of ₹13.73). A discount
+    now lowers the taxable value: the sale, its preview and bill edits share
+    `services/posTax.js`, and the checkout screen scales the register's GST to the
+    discounted amount. A tax amount the cashier types is used as entered.
+31. Udhaar payments could be recorded twice by a double click or a retry, and a
+    customer could pay more than they owed. The payment form now sends a
+    `clientRef` key, so a resubmission returns the first entry, and paying more
+    than is due returns 409.
+32. Editing or cancelling a purchase bill or a POS credit bill deleted its ledger
+    entries. They are now kept and marked `voided`, with a voided reversing entry
+    (`reverses`) written beside each. Balances net out, the statement shows the
+    trail (marked "voided" / "reversal"), and cash reports skip voided pairs, so
+    payments are not counted twice.
+
+**Rider app** (`api-rider-integrity`)
+33. `GET /delivery/application-status?phone=` needed no sign-in and returned a
+    signed rider token, so anyone who knew a rider's number could act as that
+    rider. A public lookup now returns only `isApproved`, and only the signed-in
+    rider gets a token. A pending rider's login response no longer includes the
+    rider record (bank account, documents).
+34. Rider OTP sign-in passed the request body straight into the query, so
+    `{"otp": {"$ne": null}}` signed in any rider with an unexpired code. There was
+    also no limit on wrong codes. Inputs must now be strings, and 5 wrong codes
+    lock sign-in for 15 minutes and void the code (`OTP_MAX_FAILED_ATTEMPTS`,
+    `OTP_LOCKOUT_MINUTES`).
+35. Pending, suspended and offline riders could see offers and accept orders. The
+    approval flag was checked only at sign-in, but a pending rider still got a
+    token, and offers went to unapproved riders by default. Offers, accepts and
+    return pickups now need an approved, active, online rider. An admin can
+    suspend a rider (`isActive: false`), which also takes them offline. Pickup and
+    hand-over stay open, so a rider who is suspended mid-trip can still deliver
+    the parcel they hold.
+36. A rider could accept an order before the seller had accepted it, including an
+    online order still awaiting payment. Accept now needs the order to be looking
+    for a rider (`DELIVERY_SEARCH`).
+37. Order details sent the plaintext delivery OTP to the assigned rider (and the
+    seller), so the rider could complete the hand-over without the customer. The
+    code now goes only to the customer and admins.
+38. `POST /orders/:id/delivered` let the assigned rider (or any rider, when the
+    order had none yet) mark an order delivered with no OTP and log the COD
+    cash as collected. It also worked on cancelled orders and left
+    `workflowStatus` behind. A rider can now only re-run settlement after the OTP
+    has completed the delivery. A cancelled order cannot be settled, and an
+    admin override also sets `workflowStatus: DELIVERED`.
+39. A rider could call `POST /orders/:id/cod/reconcile` on their own order, which
+    clears their COD liability and credits the admin wallet with no cash handed
+    over. Reconcile is now admin-only.
+40. Wrong delivery-OTP guesses sent in parallel could go past the 3-attempt limit,
+    and the same correct code sent twice in parallel was used twice. A retry
+    after a lost response got a 409 even though the order was delivered. The
+    attempt count and the use of the code are now atomic, and a retry by the same
+    rider returns the completed delivery. The OTP can no longer be requested
+    before pickup.
+41. The withdrawal check added up every settled rider transaction, including COD
+    cash collections, so a rider holding ₹500 of customer cash could withdraw it
+    as earnings. The earnings screen counted only the newest 200 transactions.
+    Both now use one sum over all earnings less withdrawals. Withdrawals are also
+    serialized per rider and accept an `Idempotency-Key`, so a double tap creates
+    one request. A non-numeric amount and missing or invalid bank details are
+    rejected.
+42. The history's Cancelled tab listed return orders, and the Returns tab
+    showed everything. Finished orders in history no longer carry customer phone
+    numbers, and riders viewing an offer they have not accepted no longer see
+    the customer's phone or email.
+43. Going offline during a delivery cleared the rider's live-tracking presence,
+    so the customer's map stopped updating. The order stays assigned and tracked,
+    and the response tells the rider how many deliveries they still have.
 
 ## Delivery fee and delivery time (global + product)
 

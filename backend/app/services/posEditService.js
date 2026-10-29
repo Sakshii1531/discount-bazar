@@ -4,12 +4,13 @@ import Product from "../models/product.js";
 import PosReturn from "../models/posReturn.js";
 import PosCustomer from "../models/posCustomer.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
-import { applyStock } from "./businessService.js";
+import { applyStock, reverseLedgerEntries } from "./businessService.js";
 import { assertDayOpen } from "./businessTime.js";
 import { freezeFinancialSnapshot } from "./finance/orderFinanceService.js";
 import { emitProductStockUpdate } from "./orderSocketEmitter.js";
 import { roundCurrency, purchaseBaseCost, lineMrp } from "../utils/money.js";
 import { resolvePosPayment } from "./posPayment.js";
+import { computePosTotals } from "./posTax.js";
 import { resolveBillCustomerDetails, resolvePosVariant } from "./posSaleService.js";
 
 const err = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -108,42 +109,24 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       const pb = order.paymentBreakdown?.toObject ? order.paymentBreakdown.toObject() : { ...order.paymentBreakdown };
       const isTaxInclusive = payload.isTaxInclusive !== undefined ? payload.isTaxInclusive : (order.isTaxInclusive !== false);
       const subtotal = roundCurrency(newItems.reduce((s, i) => s + i.price * i.quantity, 0));
-      const discount = Math.min(roundCurrency(payload.discount ?? pb.discountTotal ?? 0), subtotal);
-      
-      let computedTax = 0;
-      if (isTaxInclusive) {
-        if (payload.taxTotal != null) {
-          computedTax = roundCurrency(payload.taxTotal);
-        } else if (payload.taxPercent != null) {
-          const base = (subtotal * 100) / (100 + payload.taxPercent);
-          computedTax = roundCurrency(subtotal - base);
-        } else {
-          computedTax = roundCurrency(
-            newItems.reduce((sum, item) => {
-              const rate = Number(item.gstPercent || 0);
-              if (rate <= 0) return sum;
-              const lineTotal = item.price * item.quantity;
-              const base = (lineTotal * 100) / (100 + rate);
-              return sum + (lineTotal - base);
-            }, 0),
-          );
-        }
-      } else {
-        // No tax sent: keep the bill's effective tax rate on the new subtotal
-        // (re-using the old rupee amount would leave tax stale after a qty change).
-        const oldSubtotal = Number(pb.productSubtotal || 0);
-        computedTax = payload.taxTotal != null
-          ? roundCurrency(payload.taxTotal)
-          : payload.taxPercent != null
-            ? roundCurrency((subtotal * payload.taxPercent) / 100)
-            : oldSubtotal > 0
-              ? roundCurrency(((pb.taxTotal || 0) * subtotal) / oldSubtotal)
-              : roundCurrency(pb.taxTotal || 0);
+      // No tax sent on an exclusive bill: keep its effective rate on the new
+      // taxable amount (re-using the old rupee amount would go stale after a qty change).
+      let taxPercent = payload.taxPercent;
+      if (!isTaxInclusive && payload.taxTotal == null && payload.taxPercent == null) {
+        const oldTaxable = Number(pb.productSubtotal || 0) - Number(pb.discountTotal || 0);
+        taxPercent = oldTaxable > 0 ? ((pb.taxTotal || 0) * 100) / oldTaxable : 0;
       }
-
-      const grand = isTaxInclusive
-        ? roundCurrency(Math.max(0, subtotal - discount))
-        : roundCurrency(Math.max(0, subtotal + computedTax - discount));
+      const totals = computePosTotals({
+        items: newItems,
+        subtotal,
+        discount: payload.discount ?? pb.discountTotal ?? 0,
+        isTaxInclusive,
+        taxPercent,
+        taxTotal: payload.taxTotal,
+      });
+      const discount = totals.discountTotal;
+      const computedTax = totals.taxTotal;
+      const grand = totals.grandTotal;
       const oldGrand = pb.grandTotal || 0;
       const payoutRatio = oldGrand > 0 ? (pb.sellerPayoutTotal || 0) / oldGrand : 1;
 
@@ -214,7 +197,7 @@ export async function editPosSale({ sellerId, orderId, payload, actorId }) {
       });
 
       // --- ledger: rewrite this bill's customer entries ---
-      await PartyLedgerEntry.deleteMany({ seller: sellerId, refModel: "Order", refId: order._id }, { session });
+      await reverseLedgerEntries({ seller: sellerId, refModel: "Order", refId: order._id }, "bill edited", session);
       if (isCredit) {
         const base = { seller: sellerId, partyType: "CUSTOMER", party: customerId, refModel: "Order", refId: order._id, refNo: order.orderId, date: order.createdAt };
         await PartyLedgerEntry.create(

@@ -27,3 +27,24 @@ export function buildSearchRegex(term, { anchored = true, caseInsensitive = true
     ...(caseInsensitive ? { $options: "i" } : {}),
   };
 }
+
+/**
+ * Case-insensitive substring regex for one search word that tolerates
+ * doubled letters, so "chili" and "chilli" (or "masala"/"massala") find the
+ * same products. Each run of a repeated letter becomes `letter+`; digits and
+ * other characters must match exactly.
+ */
+export function buildLenientWordRegex(word) {
+  const chars = Array.from(String(word ?? "").toLowerCase());
+  let pattern = "";
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i];
+    if (/\p{L}/u.test(ch)) {
+      while (chars[i + 1] === ch) i += 1;
+      pattern += `${escapeRegex(ch)}+`;
+    } else {
+      pattern += escapeRegex(ch);
+    }
+  }
+  return { $regex: pattern, $options: "i" };
+}

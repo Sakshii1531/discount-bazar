@@ -84,6 +84,46 @@ test.describe('customer: browsing', () => {
     await expect(page.getByText('Brown Bread')).toHaveCount(0);
   });
 
+  test('search shows the full match count and loads more pages', async ({ page, api }) => {
+    const all = Array.from({ length: 45 }, (_, i) => ({
+      ...data.products[2],
+      _id: `64b7f0c2a1b2c3d4e5f6${String(i).padStart(4, '0')}`,
+      name: `Spice Pack ${i + 1}`,
+    }));
+    api.on('GET', /^\/products$/, ({ query }) => {
+      const pageNo = Number(query.get('page') || 1);
+      const limit = Number(query.get('limit') || 20);
+      const items = query.get('search') ? all.slice((pageNo - 1) * limit, pageNo * limit) : [];
+      return {
+        status: 200,
+        json: { success: true, error: false, message: 'ok', result: data.paged(items, { page: pageNo, limit, total: query.get('search') ? all.length : 0 }) },
+      };
+    });
+    await asGuest(page);
+    await page.goto('/search');
+    await page.getByPlaceholder('Search items, categories...').fill('spice');
+    await expect(page.getByText('45 found')).toBeVisible();
+    await expect(page.getByText('Spice Pack 40', { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText('Spice Pack 41', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Load more \(5 left\)/ }).click();
+    await expect(page.getByText('Spice Pack 45', { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /Load more/ })).toHaveCount(0);
+  });
+
+  test('changing the search keyword never shows the previous results', async ({ page }) => {
+    await asGuest(page);
+    await page.goto('/search');
+    const input = page.getByPlaceholder('Search items, categories...');
+    await input.fill('rice');
+    await expect(page.getByText('Basmati Rice').filter({ visible: true }).first()).toBeVisible();
+    await input.fill('zzz-not-in-catalogue');
+    // Straight away, before the debounced request, the rice result must be gone
+    await expect(page.getByText('Basmati Rice').filter({ visible: true })).toHaveCount(0);
+    await expect(page.getByText('No items found')).toBeVisible();
+    await input.fill('   ');
+    await expect(page.getByText('No items found')).toHaveCount(0);
+  });
+
   test('product detail shows price and details', async ({ page }) => {
     await asGuest(page);
     await page.goto(`/product/${IDS.milk}`);

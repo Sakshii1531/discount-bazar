@@ -87,6 +87,12 @@ const deliverySchema = new mongoose.Schema(
 
 
 
+        /** false = suspended by an admin: no new offers or accepts. */
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
+
         isOnline: {
             type: Boolean,
             default: true,
@@ -113,6 +119,23 @@ const deliverySchema = new mongoose.Schema(
         },
 
         otpExpiry: {
+            type: Date,
+            select: false,
+        },
+
+        otpFailedAttempts: {
+            type: Number,
+            default: 0,
+            select: false,
+        },
+
+        otpLockedUntil: {
+            type: Date,
+            select: false,
+        },
+
+        /** Short lease that serializes withdrawal requests per rider. */
+        withdrawalLockedUntil: {
             type: Date,
             select: false,
         },

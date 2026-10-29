@@ -2,7 +2,6 @@ import express from "express";
 import Joi from "joi";
 import Supplier from "../models/supplier.js";
 import PosCustomer from "../models/posCustomer.js";
-import Expense from "../models/expense.js";
 import handleResponse from "../utils/helper.js";
 import { verifyToken, allowRoles, requireApprovedSeller } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -65,6 +64,7 @@ const paymentSchema = Joi.object({
   method,
   note: str.max(200).allow(""),
   date,
+  clientRef: str.max(64),
 });
 const expenseSchema = Joi.object({
   category: str.max(60),
@@ -115,7 +115,7 @@ router.post("/purchase-returns", validate(returnSchema), wrap(async (req) => ({ 
 /* expenses / cash */
 router.post("/expenses", validate(expenseSchema), wrap(async (req) => ({ status: 201, data: await svc.addExpense(sid(req), req.body) })));
 router.delete("/expenses/:id", wrap(async (req) => {
-  await Expense.deleteOne({ _id: req.params.id, seller: sid(req) });
+  await svc.deleteExpense(sid(req), req.params.id);
   return { message: "Expense deleted" };
 }));
 router.post("/cash-entries", validate(cashSchema), wrap(async (req) => ({ status: 201, data: await svc.addCashEntry(sid(req), req.body) })));
@@ -132,7 +132,11 @@ const dayKeySchema = Joi.object({
   countedClosingCash: Joi.number().min(0),
 });
 router.post("/cash-register/close", validate(dayKeySchema), wrap(async (req) => ({ message: "Day closed", data: await svc.closeDay(sid(req), req.body.dateKey, req.body.countedClosingCash) })));
-router.post("/cash-register/reopen", validate(dayKeySchema), wrap(async (req) => ({ message: "Day reopened", data: await svc.reopenDay(sid(req), req.body.dateKey) })));
+const reopenSchema = Joi.object({
+  dateKey: str.pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+  reason: str.min(3).max(200).required(),
+});
+router.post("/cash-register/reopen", validate(reopenSchema), wrap(async (req) => ({ message: "Day reopened", data: await svc.reopenDay(sid(req), req.body.dateKey, req.body.reason) })));
 
 /* store settings (timezone drives business-day boundaries) */
 router.get("/settings", wrap(async (req) => ({ data: { timezone: await svc.getTimezone(sid(req)) } })));

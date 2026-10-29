@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     IndianRupee,
     Clock,
@@ -98,7 +98,12 @@ const Withdrawals = () => {
         });
     }, []);
 
+    // One key per withdrawal: a double tap or a retry after a timeout re-sends
+    // the same key, so the server returns the first request instead of a second.
+    const requestKeyRef = useRef(null);
+
     const handleRequest = async () => {
+        if (loading) return;
         if (!amount || isNaN(amount) || Number(amount) <= 0) {
             return toast.error("Please enter a valid amount");
         }
@@ -106,11 +111,22 @@ const Withdrawals = () => {
             return toast.error("Insufficient balance");
         }
 
+        if (!requestKeyRef.current || requestKeyRef.current.amount !== Number(amount)) {
+            requestKeyRef.current = {
+                amount: Number(amount),
+                key: globalThis.crypto?.randomUUID?.() || `wdr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            };
+        }
+
         setLoading(true);
         try {
-            const res = await deliveryApi.requestWithdrawal({ amount: Number(amount) });
+            const res = await deliveryApi.requestWithdrawal(
+                { amount: Number(amount) },
+                requestKeyRef.current.key,
+            );
             if (res.data.success) {
                 toast.success("Withdrawal request submitted successfully!");
+                requestKeyRef.current = null;
                 setAmount("");
                 fetchData();
             } else {

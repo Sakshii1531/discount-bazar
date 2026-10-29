@@ -6,7 +6,9 @@ describe('getMinimumOrderStatus (cart / checkout minimum order)', () => {
   it.each([
     [20, 79],
     [50, 49],
+    [65, 34],
     [80, 19],
+    [95, 4],
   ])('a ₹%i cart needs ₹%i more', (subtotal, remaining) => {
     const status = getMinimumOrderStatus({ cart: [item(subtotal)], minOrderValue: 99 });
     expect(status).toEqual({ minOrderValue: 99, eligibleSubtotal: subtotal, remainingAmount: remaining, isMet: false });

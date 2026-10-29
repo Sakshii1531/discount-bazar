@@ -370,7 +370,12 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
       skippedBy: { $nin: [deliveryOid] },
       // A cancellation that commits first must make this accept miss.
       status: { $nin: ["cancelled", "delivered"] },
-      workflowStatus: { $nin: [WORKFLOW_STATUS.CANCELLED, WORKFLOW_STATUS.DELIVERED] },
+      // Only an order that is looking for a rider can be taken: not one the
+      // seller has yet to accept, nor an online order still awaiting payment.
+      $or: [
+        { workflowVersion: { $gte: 2 }, workflowStatus: WORKFLOW_STATUS.DELIVERY_SEARCH },
+        { workflowVersion: { $not: { $gte: 2 } }, status: { $in: ["confirmed", "packed"] } },
+      ],
     },
     {
       $set: {
@@ -408,6 +413,15 @@ export async function deliveryAcceptAtomic(deliveryId, orderId, idempotencyKey) 
     if ((o.skippedBy || []).some((id) => id.toString() === deliveryOid.toString())) {
       const err = new Error("You rejected this order earlier, so it cannot be accepted now.");
       err.statusCode = 409;
+      throw err;
+    }
+    if (
+      o.workflowVersion >= 2 &&
+      [WORKFLOW_STATUS.CREATED, WORKFLOW_STATUS.SELLER_PENDING, WORKFLOW_STATUS.SELLER_ACCEPTED].includes(o.workflowStatus)
+    ) {
+      const err = new Error("The store has not confirmed this order yet.");
+      err.statusCode = 409;
+      err.code = "ORDER_NOT_OFFERED";
       throw err;
     }
     const err = new Error("Order already assigned or not available");
@@ -1137,6 +1151,7 @@ async function resolveRiderLocation(deliveryId, bodyLat, bodyLng) {
 }
 
 export async function requestHandoffOtpAtomic(deliveryId, orderId, lat, lng) {
+  orderId = await requireCanonicalOrderId(orderId);
   const order = await Order.findOne({
     orderId,
     deliveryBoy: deliveryId,
@@ -1149,16 +1164,13 @@ export async function requestHandoffOtpAtomic(deliveryId, orderId, lat, lng) {
     throw err;
   }
 
-  // Accept either v2 workflow state OUT_FOR_DELIVERY *or* legacy v1
-  // status "out_for_delivery" — the legacy controller didn't gate on
-  // state at all, so this is the strictest backward-compatible guard.
-  const isV2Out =
-    order.workflowStatus === WORKFLOW_STATUS.OUT_FOR_DELIVERY ||
-    String(order.status || "").toLowerCase() === "out_for_delivery";
+  // The hand-over code exists only once the parcel is picked up: v2
+  // OUT_FOR_DELIVERY, or legacy v1 status "out_for_delivery".
+  const isV2Out = order.workflowStatus === WORKFLOW_STATUS.OUT_FOR_DELIVERY;
   const isV1Out =
     (order.workflowVersion || 1) < 2 &&
     String(order.status || "").toLowerCase() === "out_for_delivery";
-  if (!isV2Out && !isV1Out && order.workflowStatus !== WORKFLOW_STATUS.DELIVERY_ASSIGNED && order.workflowStatus !== WORKFLOW_STATUS.PICKUP_READY) {
+  if (!isV2Out && !isV1Out) {
     const err = new Error("Order not ready for OTP");
     err.statusCode = 409;
     err.code = "ORDER_NOT_READY";
@@ -1314,6 +1326,18 @@ export async function verifyHandoffOtpAndDeliver(deliveryId, orderId, code) {
     throw err;
   }
 
+  // Retry after a lost response: this rider already completed the hand-over
+  // with a valid code, so report that instead of a confusing 409.
+  if (order.otpValidatedAt && String(order.status).toLowerCase() === "delivered") {
+    return {
+      order,
+      orderId: order.orderId,
+      deliveredAt: (order.deliveredAt || order.otpValidatedAt).toISOString(),
+      warning: null,
+      duplicate: true,
+    };
+  }
+
   const isV2Out = order.workflowStatus === WORKFLOW_STATUS.OUT_FOR_DELIVERY;
   const isV1Out =
     (order.workflowVersion || 1) < 2 &&
@@ -1367,19 +1391,32 @@ export async function verifyHandoffOtpAndDeliver(deliveryId, orderId, code) {
 
   const match = OrderOtp.hashCode(String(code)) === otp.codeHash;
   if (!match) {
-    otp.attempts += 1;
-    await otp.save();
+    // Atomic and capped, so parallel wrong guesses cannot exceed maxAttempts.
+    const counted = await OrderOtp.findOneAndUpdate(
+      { _id: otp._id, consumedAt: null, attempts: { $lt: otp.maxAttempts } },
+      { $inc: { attempts: 1 } },
+      { new: true },
+    );
+    const used = counted ? counted.attempts : otp.maxAttempts;
     const err = new Error("Invalid OTP. Please try again.");
     err.statusCode = statusCodeForOtpError("OTP_MISMATCH");
     err.code = "OTP_MISMATCH";
-    err.attemptsRemaining = otp.maxAttempts - otp.attempts;
+    err.attemptsRemaining = Math.max(0, otp.maxAttempts - used);
     throw err;
   }
 
-  await OrderOtp.updateOne(
-    { _id: otp._id },
+  // One code completes one hand-over: a parallel submit of the same code loses here.
+  const consumed = await OrderOtp.updateOne(
+    { _id: otp._id, consumedAt: null },
     { $set: { consumedAt: new Date() } },
   );
+  if (!consumed.modifiedCount) {
+    const err = new Error("OTP has already been used. Please generate a new OTP.");
+    err.statusCode = statusCodeForOtpError("OTP_CONSUMED");
+    err.code = "OTP_CONSUMED";
+    err.attemptsRemaining = 0;
+    throw err;
+  }
 
   const now = new Date();
 

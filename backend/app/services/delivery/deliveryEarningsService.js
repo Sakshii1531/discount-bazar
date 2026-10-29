@@ -39,6 +39,70 @@ function toDeliveryBoyId(rawId) {
   return new mongoose.Types.ObjectId(String(rawId));
 }
 
+const EARNING_TYPES = ["Delivery Earning", "Incentive", "Bonus"];
+
+/**
+ * What a rider may withdraw: settled earnings (delivery fees, tips, incentives,
+ * bonuses) less withdrawals paid or still in flight. COD cash the rider holds is
+ * the platform's money and never counts. Sums every transaction, not a page of
+ * them, so the earnings screen and the withdrawal check always agree.
+ */
+export async function getRiderWithdrawableBalance(rawId) {
+  const deliveryBoyId = toDeliveryBoyId(rawId);
+  const [row] = await Transaction.aggregate([
+    { $match: { user: deliveryBoyId, userModel: "Delivery" } },
+    {
+      $group: {
+        _id: null,
+        totalEarnings: {
+          $sum: {
+            $cond: [
+              { $and: [{ $eq: ["$status", "Settled"] }, { $in: ["$type", EARNING_TYPES] }] },
+              "$amount",
+              0,
+            ],
+          },
+        },
+        settledWithdrawals: {
+          $sum: {
+            $cond: [
+              { $and: [{ $eq: ["$status", "Settled"] }, { $eq: ["$type", "Withdrawal"] }] },
+              { $abs: "$amount" },
+              0,
+            ],
+          },
+        },
+        pendingWithdrawals: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $in: ["$status", ["Pending", "Processing"]] },
+                  { $eq: ["$type", "Withdrawal"] },
+                ],
+              },
+              { $abs: "$amount" },
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ]);
+  const totalEarnings = roundCurrency(row?.totalEarnings || 0);
+  const settledWithdrawals = roundCurrency(row?.settledWithdrawals || 0);
+  const pendingWithdrawals = roundCurrency(row?.pendingWithdrawals || 0);
+  return {
+    totalEarnings,
+    settledWithdrawals,
+    pendingWithdrawals,
+    availableBalance: Math.max(
+      0,
+      roundCurrency(totalEarnings - settledWithdrawals - pendingWithdrawals),
+    ),
+  };
+}
+
 /**
  * Dashboard summary: total deliveries, today's earnings, incentives, cash in hand.
  * Cached for ~30s (`deliveryStats` TTL) to absorb dashboard polling.
@@ -174,32 +238,8 @@ async function computeDeliveryEarnings(deliveryBoyId) {
     .select("cashInHand")
     .lean();
 
-  const totalEarnings = transactions
-    .filter(
-      (t) =>
-        t.status === "Settled" &&
-        (t.type === "Delivery Earning" ||
-          t.type === "Incentive" ||
-          t.type === "Bonus"),
-    )
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const pendingWithdrawals = transactions
-    .filter(
-      (t) =>
-        t.type === "Withdrawal" &&
-        (t.status === "Pending" || t.status === "Processing"),
-    )
-    .reduce((acc, t) => acc + Math.abs(t.amount), 0);
-
-  const settledWithdrawals = transactions
-    .filter((t) => t.type === "Withdrawal" && t.status === "Settled")
-    .reduce((acc, t) => acc + Math.abs(t.amount), 0);
-
-  const availableBalance = Math.max(
-    0,
-    roundCurrency(totalEarnings - settledWithdrawals - pendingWithdrawals),
-  );
+  const { totalEarnings, pendingWithdrawals, settledWithdrawals, availableBalance } =
+    await getRiderWithdrawableBalance(deliveryBoyId);
 
   const tipsReceived = transactions
     .filter((t) => t.type === "Delivery Earning" && t.status === "Settled")

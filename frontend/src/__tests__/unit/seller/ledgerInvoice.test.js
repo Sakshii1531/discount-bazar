@@ -122,3 +122,17 @@ describe('downloadInvoicePdf', () => {
     }
   });
 });
+
+describe('voided ledger rows', () => {
+  it('do not count a voided payment (and its reversal) as paid against the bill', () => {
+    const voided = { ...payment, _id: 'p0', amount: 100, voided: true };
+    const reversal = { ...voided, _id: 'p0r', effect: 1, reverses: 'p0' };
+    const inv = buildLedgerInvoice({
+      kind: 'customers', entry: sale, entries: [sale, voided, reversal, payment], party: { name: 'Sakshi' }, business,
+    });
+    const plain = buildLedgerInvoice({
+      kind: 'customers', entry: sale, entries: [sale, payment], party: { name: 'Sakshi' }, business,
+    });
+    expect(inv).toEqual(plain);
+  });
+});

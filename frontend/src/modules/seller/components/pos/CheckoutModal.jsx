@@ -162,10 +162,18 @@ const CheckoutModal = ({
 
     const couponDiscount = appliedCoupon?.couponDiscount || 0;
     const manualDiscount = Math.max(Number(discount) || 0, 0);
-    const activeTaxTotal = customTax === "" ? Number(taxTotal) || 0 : Math.max(0, Number(customTax) || 0);
-    const baseTotal = isTaxInclusive ? round2(subtotal) : round2(subtotal + activeTaxTotal);
-    const discountValue = Math.min(round2(couponDiscount + manualDiscount), baseTotal);
-    const payable = round2(baseTotal - discountValue);
+    // A discount lowers the taxable value, so GST is on the discounted amount: the
+    // register's tax (worked out before any discount) is scaled down by the same share.
+    // A typed tax amount is the cashier's final figure and is used as is.
+    const discountValue = Math.min(round2(couponDiscount + manualDiscount), round2(subtotal));
+    const taxable = round2(subtotal - discountValue);
+    const taxShare = subtotal > 0 ? taxable / subtotal : 0;
+    const activeTaxTotal = customTax === ""
+        ? round2((Number(taxTotal) || 0) * taxShare)
+        : Math.max(0, Number(customTax) || 0);
+    const payable = isTaxInclusive ? taxable : round2(taxable + activeTaxTotal);
+    // Rate of the tax on its pre-tax base (inclusive prices already contain it).
+    const taxBase = isTaxInclusive ? taxable - activeTaxTotal : taxable;
 
     useEffect(() => {
         if (amountPaid && Number(amountPaid) > payable) {
@@ -208,7 +216,7 @@ const CheckoutModal = ({
             const res = await posApi.previewSale({
                 items,
                 couponCode: typedCoupon,
-                taxPercent: subtotal > 0 ? round2((activeTaxTotal / subtotal) * 100) : undefined,
+                taxPercent: taxBase > 0 ? round2((activeTaxTotal / taxBase) * 100) : undefined,
                 taxTotal: activeTaxTotal || undefined,
                 isTaxInclusive,
             });
@@ -223,7 +231,7 @@ const CheckoutModal = ({
     };
 
     const handleConfirm = () => {
-        const activeTaxPercent = subtotal > 0 ? round2((activeTaxTotal / subtotal) * 100) : Number(taxPercent) || 0;
+        const activeTaxPercent = taxBase > 0 ? round2((activeTaxTotal / taxBase) * 100) : Number(taxPercent) || 0;
         if (cashShortToCredit) {
             onConfirm({
                 posPaymentMethod: "CREDIT",
@@ -232,7 +240,7 @@ const CheckoutModal = ({
                         ? { name: walkInName.trim(), phone: walkInPhone.trim() }
                         : undefined,
                 couponCode: appliedCoupon?.code || undefined,
-                discount: manualDiscount ? Math.min(manualDiscount, baseTotal) : undefined,
+                discount: manualDiscount ? Math.min(manualDiscount, round2(subtotal)) : undefined,
                 posCustomerId,
                 amountPaid: round2(Math.min(Math.max(0, tendered), payable)),
                 taxPercent: activeTaxPercent,
@@ -249,7 +257,7 @@ const CheckoutModal = ({
                     ? { name: walkInName.trim(), phone: walkInPhone.trim() }
                     : undefined,
             couponCode: appliedCoupon?.code || undefined,
-            discount: manualDiscount ? Math.min(manualDiscount, baseTotal) : undefined,
+            discount: manualDiscount ? Math.min(manualDiscount, round2(subtotal)) : undefined,
             posCustomerId: posCustomerId || undefined,
             amountPaid: paymentMethod === "CREDIT" ? Math.min(Math.max(0, Number(amountPaid) || 0), payable) : undefined,
             cashTendered: paymentMethod === "CASH" && tendered != null ? tendered : undefined,

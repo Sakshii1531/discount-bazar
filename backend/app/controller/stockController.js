@@ -31,54 +31,73 @@ export const adjustStock = async (req, res) => {
         }
 
         const qtyChange = Math.abs(Number(quantity));
-        if (isNaN(qtyChange) || qtyChange <= 0) {
-            return handleResponse(res, 400, "Quantity must be a positive number");
+        if (!Number.isInteger(qtyChange) || qtyChange <= 0) {
+            return handleResponse(res, 400, "Quantity must be a positive whole number");
         }
 
-        const previousStock = Number(product.stock || 0);
+        const delta = type === 'Restock' ? qtyChange : -qtyChange;
+        const variants = Array.isArray(product.variants) ? product.variants : [];
         let targetVariant = null;
 
-        if (Array.isArray(product.variants) && product.variants.length > 0) {
-            if (variantSku) {
-                targetVariant = product.variants.find(
+        if (variants.length > 0) {
+            const wanted = String(variantSku || "").trim().toLowerCase();
+            targetVariant = wanted
+                ? variants.find(
                     (v) =>
-                        String(v?.sku || "").trim().toLowerCase() === String(variantSku).trim().toLowerCase() ||
-                        String(v?.name || "").trim().toLowerCase() === String(variantSku).trim().toLowerCase()
-                );
+                        String(v?.sku || "").trim().toLowerCase() === wanted ||
+                        String(v?.name || "").trim().toLowerCase() === wanted
+                )
+                : variants.length === 1
+                    ? variants[0]
+                    : null;
+            // Never guess: adjusting the first variant instead silently moved the wrong stock.
+            if (!targetVariant) {
+                return handleResponse(res, 400, wanted ? "Variant not found on this product" : "Choose the variant to adjust");
             }
+        }
 
-            // If not found by SKU and product only has 1 variant, default to that single variant
-            if (!targetVariant && product.variants.length === 1) {
-                targetVariant = product.variants[0];
-            }
+        // One atomic $inc against the live document. Saving values computed from an
+        // earlier read used to overwrite sales made in between, and a correction larger
+        // than the stock was clamped to 0 while history logged the full amount.
+        const filter = { _id: productId, sellerId };
+        let update = { $inc: { stock: delta } };
+        if (targetVariant) {
+            filter.variants = {
+                $elemMatch: { _id: targetVariant._id, ...(delta < 0 ? { stock: { $gte: qtyChange } } : {}) },
+            };
+            update = { $inc: { stock: delta, "variants.$.stock": delta } };
+        } else if (delta < 0) {
+            filter.stock = { $gte: qtyChange };
+        }
+        if (targetVariant && typeof targetVariant.stock !== "number") {
+            // $inc cannot start from null: an untracked variant counts from 0.
+            await Product.updateOne(
+                { _id: productId, variants: { $elemMatch: { _id: targetVariant._id, stock: { $not: { $type: "number" } } } } },
+                { $set: { "variants.$.stock": 0 } },
+            );
+        }
+        const updated = await Product.findOneAndUpdate(filter, update, { new: true });
+        if (!updated) {
+            const live = await Product.findById(productId).select("stock variants").lean();
+            const liveVariant = targetVariant
+                ? (live?.variants || []).find((v) => String(v._id) === String(targetVariant._id))
+                : null;
+            const available = Math.max(0, Number((targetVariant ? liveVariant?.stock : live?.stock) || 0));
+            return handleResponse(res, 409, `Cannot remove ${qtyChange} unit(s): only ${available} in stock`);
+        }
 
-            if (targetVariant) {
-                const prevVarStock = Number(targetVariant.stock || 0);
-                const nextVarStock = type === 'Restock'
-                    ? prevVarStock + qtyChange
-                    : Math.max(0, prevVarStock - qtyChange);
-                targetVariant.stock = nextVarStock;
-            } else {
-                // Default to first variant if multiple exist and none explicitly specified
-                targetVariant = product.variants[0];
-                const prevVarStock = Number(targetVariant.stock || 0);
-                targetVariant.stock = type === 'Restock'
-                    ? prevVarStock + qtyChange
-                    : Math.max(0, prevVarStock - qtyChange);
-            }
-
-            // Recalculate master stock as sum of all variant stocks
-            product.stock = product.variants.reduce(
+        // Self-heal: master stock is the sum of variant stocks (same as order placement).
+        if (updated.variants.length > 0) {
+            const variantStockSum = updated.variants.reduce(
                 (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
                 0
             );
-        } else {
-            // Product without variants
-            const finalStock = type === 'Restock' ? previousStock + qtyChange : Math.max(0, previousStock - qtyChange);
-            product.stock = finalStock;
+            if (updated.stock !== variantStockSum) {
+                updated.stock = variantStockSum;
+                await Product.updateOne({ _id: updated._id }, { $set: { stock: variantStockSum } });
+            }
         }
-
-        await product.save();
+        const previousStock = Number(updated.stock || 0) - delta;
 
         // Invalidate cache so customers immediately see updated stock
         try {
@@ -92,7 +111,7 @@ export const adjustStock = async (req, res) => {
             product: productId,
             seller: sellerId,
             type, // Restock, Correction
-            quantity: type === 'Restock' ? qtyChange : -qtyChange,
+            quantity: delta,
             note: note ? `${note}${variantLabel}` : `Manual ${type} adjustment${variantLabel}`
         });
 
@@ -104,9 +123,9 @@ export const adjustStock = async (req, res) => {
             await isLowStockAlertsEnabled()
         ) {
             const lowStockAlert = createLowStockAlertCandidate({
-                product,
+                product: updated,
                 previousStock,
-                currentStock: product.stock,
+                currentStock: updated.stock,
             });
             if (lowStockAlert) {
                 emitNotificationEvent(NOTIFICATION_EVENTS.LOW_STOCK_ALERT, lowStockAlert);
@@ -114,8 +133,8 @@ export const adjustStock = async (req, res) => {
         }
 
         return handleResponse(res, 200, "Stock adjusted successfully", {
-            newStock: product.stock,
-            variants: product.variants,
+            newStock: updated.stock,
+            variants: updated.variants,
             historyEntry
         });
 

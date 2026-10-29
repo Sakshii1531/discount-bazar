@@ -151,8 +151,10 @@ const ProductDetailPage = () => {
 
         try {
             setIsSubmittingReview(true);
-            const res = await customerApi.submitReview({
-                productId: id,
+            // Rates the delivered order item the server picked, so the review is
+            // listed and counted in the rating summary like order-page ratings
+            const res = await customerApi.submitProductRating({
+                orderItemId: product.pendingRatingOrderItemId,
                 rating: newReview.rating,
                 comment: newReview.comment
             });
@@ -160,14 +162,7 @@ const ProductDetailPage = () => {
                 showToast("Review submitted successfully", "success");
                 setNewReview({ rating: 5, comment: '' });
                 setLocalHasReviewed(true);
-                setReviews(prev => [{
-                    _id: 'temp-' + Date.now(),
-                    rating: newReview.rating,
-                    comment: newReview.comment,
-                    createdAt: new Date().toISOString(),
-                    userId: { name: 'You' },
-                    status: 'pending'
-                }, ...prev]);
+                fetchReviews();
             }
         } catch (error) {
             showToast(error.response?.data?.message || "Failed to submit review", "error");
@@ -736,11 +731,11 @@ const ProductDetailPage = () => {
                                 <h3 className="text-xl font-black text-slate-900 mb-1">Customer Reviews</h3>
                                 <p className="text-xs text-slate-500 font-medium mb-5">Share your feedback about this product</p>
                                 
-                                {product?.hasReviewed || localHasReviewed ? (
+                                {localHasReviewed || (product?.hasReviewed && !product?.pendingRatingOrderItemId) ? (
                                     <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
                                         <p className="text-xs font-bold text-emerald-700">Thank you! You have already reviewed this item.</p>
                                     </div>
-                                ) : product?.hasPurchased ? (
+                                ) : product?.pendingRatingOrderItemId ? (
                                     <form onSubmit={handleReviewSubmit} className="space-y-4">
                                         <div>
                                             <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-2">Rate this product</label>
@@ -781,7 +776,11 @@ const ProductDetailPage = () => {
                                     </form>
                                 ) : (
                                     <div className="p-4 rounded-xl bg-white border border-slate-200/80 text-center">
-                                        <p className="text-xs font-bold text-slate-500">Only verified purchasers of this item can leave a review.</p>
+                                        <p className="text-xs font-bold text-slate-500">
+                                            {product?.hasPurchased
+                                                ? 'Reviews can be added within 7 days of delivery.'
+                                                : 'Only verified purchasers of this item can leave a review.'}
+                                        </p>
                                     </div>
                                 )}
                             </div>

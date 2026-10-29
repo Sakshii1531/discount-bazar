@@ -185,8 +185,7 @@ export const markCodCollectedAfterDelivery = async (req, res) => {
 
     if (
       req.user?.role === "delivery" &&
-      order.deliveryBoy &&
-      String(order.deliveryBoy) !== String(req.user.id)
+      String(order.deliveryBoy || "") !== String(req.user.id)
     ) {
       return handleResponse(res, 403, "Only assigned delivery partner can mark COD collection");
     }
@@ -223,17 +222,25 @@ export const markOrderDeliveredAndSettle = async (req, res) => {
     if (!orderKey) {
       return handleResponse(res, 404, "Order not found");
     }
-    const order = await Order.findOne(orderKey).select("_id deliveryBoy seller").lean();
+    const order = await Order.findOne(orderKey)
+      .select("_id deliveryBoy seller status workflowStatus otpValidatedAt")
+      .lean();
     if (!order) {
       return handleResponse(res, 404, "Order not found");
     }
 
     if (
       req.user?.role === "delivery" &&
-      order.deliveryBoy &&
-      String(order.deliveryBoy) !== String(req.user.id)
+      String(order.deliveryBoy || "") !== String(req.user.id)
     ) {
       return handleResponse(res, 403, "Only assigned delivery partner can mark this order delivered");
+    }
+
+    // A rider completes a delivery only with the customer's OTP
+    // (POST /orders/workflow/:orderId/otp/verify). Here a rider may only
+    // re-run settlement for an order that OTP already completed.
+    if (req.user?.role === "delivery" && !(order.status === "delivered" && order.otpValidatedAt)) {
+      return handleResponse(res, 409, "Confirm the delivery with the customer's OTP first");
     }
     if (
       req.user?.role === "seller" &&
@@ -281,12 +288,10 @@ export const reconcileCodCashSubmission = async (req, res) => {
       return handleResponse(res, 404, "Order not found");
     }
 
-    if (
-      req.user?.role === "delivery" &&
-      order.deliveryBoy &&
-      String(order.deliveryBoy) !== String(req.user.id)
-    ) {
-      return handleResponse(res, 403, "Only assigned delivery partner can reconcile COD cash");
+    // Reconciling clears the rider's cash liability, so only an admin who has
+    // received the cash may record it.
+    if (req.user?.role !== "admin") {
+      return handleResponse(res, 403, "COD cash is reconciled by an admin");
     }
 
     const deliveryPartnerId =

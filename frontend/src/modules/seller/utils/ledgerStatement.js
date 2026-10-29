@@ -43,7 +43,8 @@ export function balanceLabel(kind, balance) {
 export function buildStatement({ kind, party, entries = [], balance = 0, business = {}, openingBalance = 0, range = null }) {
   const rows = entries.map((e) => ({
     date: fmtDate(e.date),
-    type: LEDGER_KIND_LABEL[e.kind] || e.kind || "",
+    // Voided pairs stay on the statement (they net to zero) so edits remain traceable.
+    type: `${LEDGER_KIND_LABEL[e.kind] || e.kind || ""}${e.voided ? (e.reverses ? " (reversal)" : " (voided)") : ""}`,
     billNo: e.refNo || "",
     details: e.kind === "PAYMENT" ? e.note || "Payment" : itemSummary(e.items) || e.note || "",
     method: e.method || "",

@@ -172,8 +172,10 @@ const LedgerItems = ({ items }) => {
 
 // Ledger rows whose bill can be corrected in place (stock + ledger reconcile on save).
 const editableBill = (e) =>
-    (e.kind === "SALE" && e.refModel === "Order" && e.refNo) ||
-    (e.kind === "PURCHASE" && e.refModel === "PurchaseBill" && e.refId);
+    !e.voided && (
+        (e.kind === "SALE" && e.refModel === "Order" && e.refNo) ||
+        (e.kind === "PURCHASE" && e.refModel === "PurchaseBill" && e.refId)
+    );
 
 const LedgerStatementTable = ({ entries = [], onEditBill, onViewInvoice }) => {
     const [open, setOpen] = useState(() => new Set());
@@ -229,11 +231,12 @@ const LedgerStatementTable = ({ entries = [], onEditBill, onViewInvoice }) => {
                             return (
                                 <React.Fragment key={id}>
                                     <tr
-                                        className={cn("transition-colors", count ? "cursor-pointer hover:bg-slate-50/60" : "", isOpen && "bg-slate-50/60")}
+                                        className={cn("transition-colors", count ? "cursor-pointer hover:bg-slate-50/60" : "", isOpen && "bg-slate-50/60", e.voided && "opacity-60")}
+                                        title={e.voided ? (e.reverses ? e.note : "Replaced when the bill was edited or cancelled") : undefined}
                                         onClick={count ? () => toggle(id) : undefined}
                                     >
                                         <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{fmtCell("date", e.date)}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{LEDGER_KIND_LABEL[e.kind] || e.kind}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{LEDGER_KIND_LABEL[e.kind] || e.kind}{e.voided && <span className="ml-1 text-[10px] font-bold uppercase text-slate-400">{e.reverses ? "reversal" : "voided"}</span>}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{e.refNo || "—"}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-medium">{e.method || "—"}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-slate-700 font-medium">{e.effect === 1 ? inr(e.amount) : "—"}</td>
@@ -2274,6 +2277,10 @@ const PartiesTab = () => {
     const [touched, setTouched] = useState({ name: false, phone: false });
     const [ledger, setLedger] = useState(null);
     const [pay, setPay] = useState({ amount: "", method: "CASH" });
+    const [paying, setPaying] = useState(false);
+    // One key per payment: a double click or a retry after a timeout reuses it,
+    // so the server records the money once. Cleared once the payment is saved.
+    const payRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [exporting, setExporting] = useState("");
     // Single bill opened from a ledger row as a printable / downloadable invoice
@@ -2420,14 +2427,30 @@ const PartiesTab = () => {
     };
 
     const pay1 = async () => {
+        if (paying) return;
+        const signature = `${ledger.party._id}|${Number(pay.amount)}|${pay.method}`;
+        if (!payRef.current || payRef.current.signature !== signature) {
+            const key = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            payRef.current = { signature, key };
+        }
+        setPaying(true);
         try {
-            await businessApi.recordPayment({ partyType, partyId: ledger.party._id, amount: Number(pay.amount), method: pay.method });
+            await businessApi.recordPayment({
+                partyType,
+                partyId: ledger.party._id,
+                amount: Number(pay.amount),
+                method: pay.method,
+                clientRef: payRef.current.key,
+            });
+            payRef.current = null;
             toast.success("Payment recorded");
             setPay({ amount: "", method: "CASH" });
             open(ledger.party, ledger.range);
             load();
         } catch (e) {
             toast.error(errMsg(e));
+        } finally {
+            setPaying(false);
         }
     };
 
@@ -2750,8 +2773,8 @@ const PartiesTab = () => {
                                     <select className={inputCls} value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })}>
                                         {["CASH", "UPI", "CARD", "OTHER"].map((m) => <option key={m}>{m}</option>)}
                                     </select>
-                                    <button className={btnCls} disabled={!Number(pay.amount)} onClick={pay1}>
-                                        Save Payment
+                                    <button className={btnCls} disabled={!Number(pay.amount) || paying} onClick={pay1}>
+                                        {paying ? "Saving..." : "Save Payment"}
                                     </button>
                                 </div>
                             </div>
@@ -2881,7 +2904,12 @@ const CashTab = () => {
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                         {book?.closed ? (
-                            <button className={ghostBtn} onClick={() => run(() => businessApi.reopenDay({ dateKey: date }), "Day reopened")}>
+                            <button className={ghostBtn} onClick={() => {
+                                const reason = window.prompt(`Why are you reopening ${date}? (saved in the day's history)`);
+                                if (reason == null) return;
+                                if (reason.trim().length < 3) return toast.error("Give a reason for reopening the day");
+                                run(() => businessApi.reopenDay({ dateKey: date, reason: reason.trim() }), "Day reopened");
+                            }}>
                                 <HiOutlineArrowPath className="h-4 w-4" /> Reopen Day
                             </button>
                         ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
 import { Search, Mic, ArrowLeft, X, TrendingUp, ChevronRight, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +34,14 @@ const formatProducts = (data) => {
     }));
 };
 
+const SEARCH_PAGE_SIZE = 40;
+
+// Total matches reported by the server (falls back to what was returned)
+const totalOf = (data, fallback) => {
+    const total = Number(data?.result?.total);
+    return Number.isFinite(total) ? total : fallback;
+};
+
 const SearchPage = () => {
     const navigate = useNavigate();
     const location = useRouterLocation();
@@ -46,6 +54,14 @@ const SearchPage = () => {
 
     const [query, setQuery] = useState(initialQuery);
     const [results, setResults] = useState([]);
+    // The trimmed term `results` belong to, so a previous keyword's products never show for a new one
+    const [resultsTerm, setResultsTerm] = useState('');
+    const [resultsTotal, setResultsTotal] = useState(0);
+    const [resultsPage, setResultsPage] = useState(1);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    // Keyword on screen right now, read when a "load more" page comes back
+    const latestTermRef = useRef(initialQuery.trim());
+    latestTermRef.current = query.trim();
     const [allProducts, setAllProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
@@ -189,6 +205,9 @@ const SearchPage = () => {
             Number.isFinite(currentLocation?.longitude);
         if (!term || !hasValidLocation) {
             setResults([]);
+            setResultsTotal(0);
+            setResultsTerm(term);
+            setIsSearching(false);
             return;
         }
         let cancelled = false;
@@ -196,13 +215,18 @@ const SearchPage = () => {
         customerApi
             .getProducts({
                 search: term,
-                limit: 100,
+                page: 1,
+                limit: SEARCH_PAGE_SIZE,
                 lat: currentLocation.latitude,
                 lng: currentLocation.longitude,
             })
             .then((response) => {
                 if (!cancelled && response.data.success) {
-                    setResults(formatProducts(response.data));
+                    const items = formatProducts(response.data);
+                    setResults(items);
+                    setResultsTotal(totalOf(response.data, items.length));
+                    setResultsPage(1);
+                    setResultsTerm(term);
                 }
             })
             .catch((error) => {
@@ -210,10 +234,14 @@ const SearchPage = () => {
                 console.error('Error searching products:', error);
                 // Fall back to filtering the products already loaded
                 const words = term.toLowerCase().split(/\s+/);
-                setResults(allProducts.filter((p) => {
+                const matches = allProducts.filter((p) => {
                     const haystack = `${p.name || ''} ${p.brand || ''} ${p.categoryId?.name || ''}`.toLowerCase();
                     return words.every((w) => haystack.includes(w));
-                }));
+                });
+                setResults(matches);
+                setResultsTotal(matches.length);
+                setResultsPage(1);
+                setResultsTerm(term);
             })
             .finally(() => {
                 if (!cancelled) setIsSearching(false);
@@ -240,10 +268,45 @@ const SearchPage = () => {
             .slice(0, 10);
     }, [allProducts]);
 
+    const handleLoadMore = async () => {
+        const term = resultsTerm;
+        if (isLoadingMore || !term) return;
+        setIsLoadingMore(true);
+        try {
+            const response = await customerApi.getProducts({
+                search: term,
+                page: resultsPage + 1,
+                limit: SEARCH_PAGE_SIZE,
+                lat: currentLocation.latitude,
+                lng: currentLocation.longitude,
+            });
+            if (response.data.success) {
+                // Ignore a page that arrives after the keyword changed
+                if (latestTermRef.current !== term) return;
+                const more = formatProducts(response.data);
+                setResults((prev) => {
+                    const seen = new Set(prev.map((p) => p.id));
+                    return [...prev, ...more.filter((p) => !seen.has(p.id))];
+                });
+                setResultsPage(resultsPage + 1);
+            }
+        } catch (error) {
+            console.error('Error loading more search results:', error);
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
+
     const handleClear = () => {
         setQuery('');
         setResults([]);
+        setResultsTotal(0);
+        setResultsTerm('');
     };
+
+    const trimmedQuery = query.trim();
+    const visibleResults = resultsTerm === trimmedQuery ? results : [];
+    const isPending = resultsTerm !== trimmedQuery || isSearching;
 
     return (
         <div className="min-h-screen bg-white font-outfit">
@@ -308,25 +371,39 @@ const SearchPage = () => {
 
                 <div className="p-5 space-y-10 pb-24">
                 {/* Search Results List */}
-                {query ? (
+                {trimmedQuery ? (
                     <section>
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-black text-slate-800 tracking-tight">
                                 Search Results
                             </h2>
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{results.length} found</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{isPending ? '' : `${Math.max(resultsTotal, visibleResults.length)} found`}</span>
                         </div>
 
-                        {results.length === 0 && (isSearching || query.trim() !== debouncedQuery.trim()) ? (
+                        {isPending ? (
                             <div className="py-16 text-center text-slate-400 font-bold">Searching...</div>
-                        ) : results.length > 0 ? (
+                        ) : visibleResults.length > 0 ? (
+                            <>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-3 md:gap-x-4 gap-y-6 md:gap-y-10">
-                                {results.map((product) => (
+                                {visibleResults.map((product) => (
                                     <div key={product.id} onClick={() => saveSearch(query)} className="flex justify-center">
                                         <ProductCard product={product} compact={isMobile} />
                                     </div>
                                 ))}
                             </div>
+                            {visibleResults.length < resultsTotal && (
+                                <div className="mt-8 flex justify-center">
+                                    <button
+                                        type="button"
+                                        onClick={handleLoadMore}
+                                        disabled={isLoadingMore}
+                                        className="px-6 py-2.5 rounded-full bg-slate-900 text-white text-xs font-black uppercase tracking-wider disabled:opacity-60 active:scale-95 transition-all"
+                                    >
+                                        {isLoadingMore ? 'Loading...' : `Load more (${resultsTotal - visibleResults.length} left)`}
+                                    </button>
+                                </div>
+                            )}
+                            </>
                         ) : (
                             <div className="py-16 flex flex-col items-center text-center">
                                 <div className="w-48 h-48 md:w-64 md:h-64 mb-6">
@@ -337,7 +414,7 @@ const SearchPage = () => {
                                     )}
                                 </div>
                                 <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2">No items found</h3>
-                                <p className="text-slate-500 font-medium max-w-xs">We couldn't find anything for "{query}". Try different keywords!</p>
+                                <p className="text-slate-500 font-medium max-w-xs">We couldn't find anything for "{trimmedQuery}". Try different keywords!</p>
                             </div>
                         )}
                     </section>

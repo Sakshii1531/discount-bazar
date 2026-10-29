@@ -244,14 +244,18 @@ const ProductDetailSheet = () => {
         }
     };
 
+    const pendingRatingOrderItemId = extendedProduct?.pendingRatingOrderItemId || selectedProduct?.pendingRatingOrderItemId || null;
+
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
         if (!newReview.comment.trim()) return;
 
         try {
             setIsSubmittingReview(true);
-            const res = await customerApi.submitReview({
-                productId: selectedProduct.id,
+            // Rates the delivered order item the server picked, so the review is
+            // listed and counted in the rating summary like order-page ratings
+            const res = await customerApi.submitProductRating({
+                orderItemId: pendingRatingOrderItemId,
                 rating: newReview.rating,
                 comment: newReview.comment
             });
@@ -259,14 +263,7 @@ const ProductDetailSheet = () => {
                 showToast("Review submitted successfully", "success");
                 setNewReview({ rating: 5, comment: '' });
                 setLocalHasReviewed(true);
-                setReviews(prev => [{
-                    _id: 'temp-' + Date.now(),
-                    rating: newReview.rating,
-                    comment: newReview.comment,
-                    createdAt: new Date().toISOString(),
-                    userId: { name: 'You' },
-                    status: 'pending'
-                }, ...prev]);
+                fetchReviews(selectedProduct.id, selectedStarFilter);
             }
         } catch (error) {
             showToast(error.response?.data?.message || "Failed to submit review", "error");
@@ -1208,14 +1205,14 @@ const ProductDetailSheet = () => {
                                             </div>
 
                                             {/* Review Form */}
-                                            {(selectedProduct?.hasReviewed || extendedProduct?.hasReviewed || localHasReviewed) ? (
+                                            {(localHasReviewed || ((selectedProduct?.hasReviewed || extendedProduct?.hasReviewed) && !pendingRatingOrderItemId)) ? (
                                                 <div className="bg-brand-50 p-5 rounded-3xl border border-brand-100 mb-6 text-center">
                                                     <p className="text-[12px] font-bold text-primary uppercase tracking-wide">You have already reviewed this product. Thank you!</p>
                                                 </div>
-                                            ) : (selectedProduct?.hasPurchased || extendedProduct?.hasPurchased) ? (
+                                            ) : pendingRatingOrderItemId ? (
                                                 <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-6">
                                                     <h4 className="font-black text-slate-800 text-sm mb-1">Rate this product</h4>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-4">Reviews are moderated</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-4">Verified purchase</p>
                                                     <form onSubmit={handleReviewSubmit} className="space-y-4">
                                                         <div className="flex gap-2">
                                                             {[1, 2, 3, 4, 5].map((s) => (

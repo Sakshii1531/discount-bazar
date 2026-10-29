@@ -89,6 +89,8 @@ export const getSellerEarnings = async (req, res) => {
                 $match: {
                     seller: sellerOid,
                     status: { $ne: 'cancelled' },
+                    // Unpaid online orders (still CREATED) are not revenue.
+                    workflowStatus: { $ne: 'CREATED' },
                 },
             },
             {
@@ -116,6 +118,7 @@ export const getSellerEarnings = async (req, res) => {
                 $match: {
                     seller: sellerOid,
                     status: { $ne: 'cancelled' },
+                    workflowStatus: { $ne: 'CREATED' },
                     createdAt: { $gte: sixMonthsAgo }
                 }
             },

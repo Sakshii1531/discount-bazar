@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
 import Product from "../models/product.js";
 import Brand, { toBrandNameKey } from "../models/brand.js";
-import Order from "../models/order.js";
-import Review from "../models/review.js";
+import { getProductReviewState } from "./productRatingController.js";
 import { handleResponse } from "../utils/helper.js";
 import { slugify } from "../utils/slugify.js";
 import getPagination from "../utils/pagination.js";
@@ -37,6 +36,7 @@ import {
   resolveProductApprovalStatus,
 } from "../services/productModerationService.js";
 import { buildSearchRegex, escapeRegex } from "../utils/regex.js";
+import { buildProductSearchFilter } from "../services/productSearchService.js";
 import { computePurchaseGst } from "../utils/money.js";
 import { parseAndValidateReturnPolicy } from "../validation/returnPolicyValidation.js";
 import { decorateProductsWithDelivery, quoteCartDelivery } from "../services/deliveryQuoteService.js";
@@ -474,22 +474,15 @@ export const getProducts = async (req, res) => {
     const enforceRadius = isCustomerVisibilityRequest(req);
 
     const query = {};
+    // Regex search term, applied once the other filters are known (see below)
+    let searchTerm = "";
     if (search) {
       const term = String(search).trim();
       if (term) {
         if (isProductTextSearchEnabled() && term.length >= 3) {
           query.$text = { $search: term };
         } else {
-          // P3-5: substring search is preserved (so customer-facing UX
-          // doesn't shift) but the term is now regex-escaped to avoid
-          // injection and runtime errors on `(`, `*`, etc.
-          // Every word must appear (in any order) in the name, brand or tags,
-          // so "red chilli" matches "Aarafh Red Chilli Powder" and "Chilli Red".
-          const words = term.split(/\s+/).filter(Boolean).slice(0, 8);
-          query.$and = words.map((word) => {
-            const safe = buildSearchRegex(word, { anchored: false });
-            return { $or: [{ name: safe }, { brand: safe }, { tags: safe }] };
-          });
+          searchTerm = term;
         }
       }
     }
@@ -593,20 +586,32 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    let finalQuery = { ...query };
-    if (enforceRadius) {
-      finalQuery.status = "active";
-      finalQuery = { $and: [finalQuery, getCustomerVisibleFilter()] };
-    } else {
-      if (status && status !== "all") {
-        finalQuery.status = status;
-      }
-      if (approvalStatus && String(approvalStatus).trim().toLowerCase() !== "all") {
-        const moderationFilter = buildApprovalStatusFilter(approvalStatus);
-        if (Object.keys(moderationFilter).length > 0) {
-          finalQuery = { $and: [finalQuery, moderationFilter] };
+    const toFinalQuery = (searchFilter) => {
+      let finalQuery = searchFilter ? { $and: [{ ...query }, searchFilter] } : { ...query };
+      if (enforceRadius) {
+        finalQuery.status = "active";
+        finalQuery = { $and: [finalQuery, getCustomerVisibleFilter()] };
+      } else {
+        if (status && status !== "all") {
+          finalQuery.status = status;
+        }
+        if (approvalStatus && String(approvalStatus).trim().toLowerCase() !== "all") {
+          const moderationFilter = buildApprovalStatusFilter(approvalStatus);
+          if (Object.keys(moderationFilter).length > 0) {
+            finalQuery = { $and: [finalQuery, moderationFilter] };
+          }
         }
       }
+      return finalQuery;
+    };
+
+    // Every search word (regex-escaped) must appear in the name, brand or tags;
+    // doubled letters are optional and Hindi grocery names find English ones
+    // and back. Category names ("spices") are only matched when no product
+    // matches by name, so "milk" isn't buried under the rest of its category.
+    let finalQuery = toFinalQuery(searchTerm ? await buildProductSearchFilter(searchTerm) : null);
+    if (searchTerm && !(await Product.exists(finalQuery))) {
+      finalQuery = toFinalQuery(await buildProductSearchFilter(searchTerm, { matchCategories: true }));
     }
 
     const { page, limit, skip } = getPagination(req, {
@@ -1140,6 +1145,43 @@ export const createProduct = async (req, res) => {
 /* ===============================
    UPDATE PRODUCT
 ================================ */
+/**
+ * Seller product edits never change stock (Stock Management does). Copies the
+ * saved stock of each variant (matched by _id or SKU) onto the edit; newly
+ * added variants keep the opening stock the seller entered. Master stock is
+ * the sum of variant stocks.
+ */
+function keepSavedStock(productData, saved) {
+  if (!Array.isArray(productData.variants) || productData.variants.length === 0) {
+    productData.stock = Number(saved.stock || 0);
+    return;
+  }
+  const savedVariants = Array.isArray(saved.variants) && saved.variants.length > 0
+    ? saved.variants
+    : // Legacy single-variant product: its stock lives on the product itself
+      [{ sku: saved.sku, stock: saved.stock }];
+  const sameSku = (a, b) =>
+    a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+  productData.variants = productData.variants.map((variant) => {
+    const existingVariant = savedVariants.find(
+      (ev) =>
+        (variant._id && ev._id && String(ev._id) === String(variant._id)) ||
+        sameSku(variant.sku, ev.sku)
+    );
+    return {
+      ...variant,
+      stock: existingVariant
+        ? Number(existingVariant.stock || 0)
+        : Math.max(0, Number(variant.stock) || 0),
+    };
+  });
+  productData.stock = productData.variants.reduce(
+    (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
+    0
+  );
+}
+
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1253,34 +1295,14 @@ export const updateProduct = async (req, res) => {
       // Sellers cannot change inventory stock via product edit; stock is managed via Stock Management
       // Newly added variants (no match by _id/SKU) take the opening stock the seller entered.
       if (role === "seller") {
-        const savedVariants = Array.isArray(product.variants) && product.variants.length > 0
-          ? product.variants
-          : // Legacy single-variant product: its stock lives on the product itself
-            [{ sku: product.sku, stock: product.stock }];
-        const sameSku = (a, b) =>
-          a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
-
-        productData.variants = productData.variants.map((variant) => {
-          const existingVariant = savedVariants.find(
-            (ev) =>
-              (variant._id && ev._id && String(ev._id) === String(variant._id)) ||
-              sameSku(variant.sku, ev.sku)
-          );
-
-          return {
-            ...variant,
-            stock: existingVariant
-              ? Number(existingVariant.stock || 0)
-              : Math.max(0, Number(variant.stock) || 0),
-          };
-        });
+        keepSavedStock(productData, product);
+      } else {
+        // Master stock is always the sum of all variant stocks
+        productData.stock = productData.variants.reduce(
+          (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
+          0
+        );
       }
-
-      // Master stock is always the sum of all variant stocks
-      productData.stock = productData.variants.reduce(
-        (sum, v) => sum + Math.max(0, Number(v.stock) || 0),
-        0
-      );
 
       // Backfill top-level attributes from first variant for backwards compatibility
       const firstVar = productData.variants[0];
@@ -1289,7 +1311,7 @@ export const updateProduct = async (req, res) => {
       if (firstVar.barcode !== undefined) productData.barcode = firstVar.barcode;
       if (firstVar.purchaseCost !== undefined) productData.purchaseCost = firstVar.purchaseCost;
     } else if (role === "seller") {
-      productData.stock = Number(product.stock || 0);
+      keepSavedStock(productData, product);
     }
 
     if (productData.returnPolicy !== undefined) {
@@ -1354,11 +1376,26 @@ export const updateProduct = async (req, res) => {
     } catch (e) {
       return handleResponse(res, e.statusCode || 400, e.message);
     }
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      { $set: productData },
-      { new: true, runValidators: true },
-    );
+    // Sellers cannot change stock here, but the update writes the stock read at
+    // the start of the request. Guard on updatedAt so a sale, cancellation or
+    // stock adjustment that lands meanwhile is merged in instead of overwritten.
+    let updatedProduct = null;
+    let current = product;
+    for (let attempt = 0; attempt < 3 && current; attempt++) {
+      if (role === "seller" && attempt > 0) keepSavedStock(productData, current);
+      updatedProduct = await Product.findOneAndUpdate(
+        role === "seller" ? { _id: id, updatedAt: current.updatedAt ?? null } : { _id: id },
+        { $set: productData },
+        { new: true, runValidators: true },
+      );
+      if (updatedProduct || role !== "seller") break;
+      current = await Product.findOne(query);
+    }
+    if (!updatedProduct) {
+      return current
+        ? handleResponse(res, 409, "Stock for this product changed while saving. Please try again.")
+        : handleResponse(res, 404, "Product not found or unauthorized");
+    }
     
     if (isPendingApproval && updatedProduct) {
       try {
@@ -1527,22 +1564,12 @@ export const getProductById = async (req, res) => {
     const payload = await decorateProductsWithDelivery(normalizeProductDocumentModeration(product));
     
     if (req.user) {
-        const userId = req.user.id;
-        const purchase = await Order.findOne({
-            customer: userId,
-            "items.product": id,
-            $or: [
-                { orderStatus: { $regex: /^delivered$/i } },
-                { status: { $regex: /^delivered$/i } }
-            ]
-        });
-        payload.hasPurchased = !!purchase;
-
-        const existingReview = await Review.findOne({
-            userId,
-            productId: id
-        });
-        payload.hasReviewed = !!existingReview;
+        // Reviews on the product page are order-item ratings (the same ones the
+        // page lists and the rating summary counts), one per delivered order.
+        const reviewState = await getProductReviewState(req.user.id, product._id);
+        payload.hasPurchased = reviewState.hasPurchased;
+        payload.hasReviewed = reviewState.hasReviewed;
+        payload.pendingRatingOrderItemId = reviewState.pendingOrderItemId;
     }
 
     return handleResponse(

@@ -396,6 +396,7 @@ export const updateDeliveryPartner = async (req, res) => {
       address,
       isOnline,
       isVerified,
+      isActive,
     } = req.body;
 
     const updateData = {};
@@ -424,6 +425,11 @@ export const updateDeliveryPartner = async (req, res) => {
 
     if (typeof isOnline === "boolean") updateData.isOnline = isOnline;
     if (typeof isVerified === "boolean") updateData.isVerified = isVerified;
+    // Suspending also takes the rider offline so no new offer reaches them.
+    if (typeof isActive === "boolean") {
+      updateData.isActive = isActive;
+      if (!isActive) updateData.isOnline = false;
+    }
 
     const rider = await Delivery.findByIdAndUpdate(
       id,

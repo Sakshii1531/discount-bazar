@@ -2,19 +2,13 @@ import Delivery from "../models/delivery.js";
 import Seller from "../models/seller.js";
 import { distanceMeters } from "../utils/geoUtils.js";
 
-/** When true, only verified riders receive broadcasts (stricter). Default: do not require. */
-const requireVerifiedForBroadcast = () =>
-  process.env.DELIVERY_BROADCAST_REQUIRE_VERIFIED === "true";
 
 const HAVERSINE_FALLBACK_LIMIT = () =>
   parseInt(process.env.DELIVERY_BROADCAST_HAVERSINE_LIMIT || "2000", 10);
 
+/** Only riders who could accept the offer receive it: approved, not suspended, online. */
 function buildDeliveryFilter() {
-  const q = { isOnline: true };
-  if (requireVerifiedForBroadcast()) {
-    q.isVerified = true;
-  }
-  return q;
+  return { isOnline: true, isVerified: true, isActive: { $ne: false } };
 }
 
 function filterByHaversine(candidates, lat, lng, maxDistanceM) {

@@ -1,6 +1,7 @@
 import Product from "../models/product.js";
 import StockHistory from "../models/stockHistory.js";
 import { createLowStockAlertCandidate } from "./lowStockAlertService.js";
+import { restoreReservedInventory } from "./cancellation/cancellationInventoryService.js";
 
 const ONLINE_RESERVATION_MS = () =>
   parseInt(process.env.ONLINE_STOCK_RESERVATION_MS || "900000", 10);
@@ -173,51 +174,23 @@ export async function reserveStockForItems({
   return { lowStockAlerts, stockUpdates };
 }
 
+/**
+ * Give back everything the order took. Exactly once: the release is claimed
+ * on the order atomically, so two cancellations racing each other (customer
+ * cancel vs seller timeout, a retried job) cannot both restock. Variants
+ * without their own stock counter only get master stock back.
+ */
 export async function releaseReservedStockForOrder(order, { session = null, reason = "Reservation released" } = {}) {
   if (!order || !Array.isArray(order.items) || order.items.length === 0) {
     return false;
   }
-
-  const reservation = order.stockReservation || {};
-  if (reservation.status === "RELEASED") {
+  if ((order.stockReservation || {}).status === "RELEASED") {
     return false;
   }
 
-  for (const item of order.items) {
-    const variantSku = String(item.variantSku || item.variantSlot || "").trim();
-
-    if (variantSku) {
-      await Product.updateOne(
-        { _id: item.product, "variants.sku": variantSku },
-        {
-          $inc: {
-            stock: item.quantity,
-            "variants.$.stock": item.quantity,
-          },
-        },
-        session ? { session } : {},
-      );
-    } else {
-      await Product.updateOne(
-        { _id: item.product },
-        { $inc: { stock: item.quantity } },
-        session ? { session } : {},
-      );
-    }
-
-    await StockHistory.create(
-      [
-        {
-          product: item.product,
-          seller: order.seller,
-          type: "Release",
-          quantity: item.quantity,
-          note: `Order #${order.orderId} ${reason}${variantSku ? ` [variant: ${variantSku}]` : ""}`,
-          order: order._id,
-        },
-      ],
-      session ? { session } : {},
-    );
+  const { restored } = await restoreReservedInventory(order, { session, reason });
+  if (!restored) {
+    return false;
   }
 
   order.stockReservation = {

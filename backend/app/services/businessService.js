@@ -128,9 +128,11 @@ export async function partyLedger(sellerId, partyType, partyId, { from, to } = {
     running = roundCurrency(running + e.amount * e.effect);
     // Payments share the bill's ref but carry no goods of their own.
     const ref = `${e.refModel}:${e.refId}`;
-    const items = e.kind !== "PAYMENT" && e.refId ? itemsByRef.get(ref) || [] : [];
+    // Voided rows describe an earlier version of the bill, so they carry no current items/invoice.
+    const withBill = e.kind !== "PAYMENT" && e.refId && !e.voided;
+    const items = withBill ? itemsByRef.get(ref) || [] : [];
     // Bill-level figures (discount / tax / whether prices include GST) for the printable invoice.
-    const bill = e.kind !== "PAYMENT" && e.refId ? billByRef.get(ref) : undefined;
+    const bill = withBill ? billByRef.get(ref) : undefined;
     return { ...e, items, ...(bill ? { bill } : {}), balance: running };
   });
   return {
@@ -217,14 +219,36 @@ async function ledgerBillItems(sellerId, entries) {
   return { itemsByRef: map, billByRef };
 }
 
-export async function recordPayment(sellerId, { partyType, partyId, amount, method = "CASH", note = "", date }) {
+/**
+ * Record money received from a customer or paid to a supplier. With a
+ * `clientRef`, a repeated submission returns the first entry. A customer
+ * cannot pay more than their outstanding udhaar.
+ */
+export async function recordPayment(sellerId, { partyType, partyId, amount, method = "CASH", note = "", date, clientRef }) {
   const Model = partyType === "SUPPLIER" ? Supplier : PosCustomer;
   if (!(await Model.exists({ _id: partyId, seller: sellerId }))) throw err(404, "Party not found");
+  const ref = clientRef ? String(clientRef).trim() : "";
+  const findDuplicate = () => (ref ? PartyLedgerEntry.findOne({ seller: sellerId, clientRef: ref }).lean() : null);
+  const duplicate = await findDuplicate();
+  if (duplicate) return duplicate;
+
   await assertDayOpen(sellerId, date || new Date());
-  return PartyLedgerEntry.create({
-    seller: sellerId, partyType, party: partyId, kind: "PAYMENT", effect: -1,
-    amount, method, note, date: date || new Date(),
-  });
+  if (partyType === "CUSTOMER") {
+    const due = await partyNet(sellerId, "CUSTOMER", partyId);
+    if (roundCurrency(amount) > due + 0.001) {
+      throw err(409, due > 0 ? `Only ₹${due} is due from this customer` : "This customer has no udhaar due");
+    }
+  }
+  try {
+    return await PartyLedgerEntry.create({
+      seller: sellerId, partyType, party: partyId, kind: "PAYMENT", effect: -1,
+      amount, method, note, date: date || new Date(), ...(ref && { clientRef: ref }),
+    });
+  } catch (e) {
+    // Two copies of the same submission raced past the lookup above.
+    if (e?.code === 11000 && ref) return findDuplicate();
+    throw e;
+  }
 }
 
 /* ---------------- purchase bills ---------------- */
@@ -318,8 +342,27 @@ async function writeBillLedger(bill, session) {
   if (rows.length) await PartyLedgerEntry.create(rows, { session, ordered: true });
 }
 
-const clearBillLedger = (bill, session) =>
-  PartyLedgerEntry.deleteMany({ seller: bill.seller, refModel: "PurchaseBill", refId: bill._id }, { session });
+/**
+ * Reverse a bill's live ledger entries instead of deleting them: each one is
+ * voided and gets a voided mirror entry with the opposite effect, dated like
+ * the original so period statements stay consistent.
+ */
+export async function reverseLedgerEntries({ seller, refModel, refId }, reason, session) {
+  const live = await PartyLedgerEntry.find({ seller, refModel, refId, voided: { $ne: true } }).session(session).lean();
+  if (!live.length) return;
+  await PartyLedgerEntry.updateMany({ _id: { $in: live.map((e) => e._id) } }, { $set: { voided: true } }, { session });
+  await PartyLedgerEntry.create(
+    live.map((e) => ({
+      seller: e.seller, partyType: e.partyType, party: e.party, kind: e.kind, effect: -e.effect,
+      amount: e.amount, method: e.method, refModel: e.refModel, refId: e.refId, refNo: e.refNo,
+      date: e.date, note: `Reversed (${reason})`, voided: true, reverses: e._id,
+    })),
+    { session, ordered: true },
+  );
+}
+
+const clearBillLedger = (bill, reason, session) =>
+  reverseLedgerEntries({ seller: bill.seller, refModel: "PurchaseBill", refId: bill._id }, reason, session);
 
 // Latest purchase cost becomes the product's cost price (used for P&L snapshots at sale time).
 // The bill line may be entered incl. or excl. GST; the product's purchaseCost follows the
@@ -419,7 +462,7 @@ export async function updatePurchaseBill(sellerId, id, p) {
       await applyQtyMap(neg, -1, args);
       await applyQtyMap(pos, 1, args);
       await applyCostUpdate(items, sellerId, session);
-      await clearBillLedger(bill, session);
+      await clearBillLedger(bill, "bill edited", session);
     }
     bill.supplier = supplierId;
     if (p.billNo) bill.billNo = p.billNo;
@@ -451,7 +494,7 @@ export async function cancelPurchaseBill(sellerId, id) {
     const emits = [];
     if (bill.status === "CONFIRMED") {
       await applyQtyMap(qtyMap(bill.items), -1, { sellerId, type: "Correction", note: `Purchase bill ${bill.billNo} cancelled`, session, emits });
-      await clearBillLedger(bill, session);
+      await clearBillLedger(bill, "bill cancelled", session);
     }
     bill.status = "CANCELLED";
     await bill.save({ session });
@@ -543,17 +586,51 @@ export async function setOpeningCash(sellerId, dateKey, openingCash, countedClos
   );
 }
 
-/** Close the business day: records counted cash and locks the day against edits. */
+/**
+ * Close the business day: records counted cash and locks the day against edits.
+ * Closing an already-closed day is refused (it used to overwrite the counted
+ * cash of the finalized closing); reopen it first.
+ */
 export async function closeDay(sellerId, dateKey, countedClosingCash) {
-  const $set = { closed: true, closedAt: new Date() };
+  const now = new Date();
+  const $set = { closed: true, closedAt: now };
   if (countedClosingCash !== undefined) $set.countedClosingCash = countedClosingCash;
-  return CashDay.findOneAndUpdate({ seller: sellerId, dateKey }, { $set, $setOnInsert: { openingCash: 0 } }, { upsert: true, new: true });
+  const entry = { action: "CLOSED", at: now, countedClosingCash: countedClosingCash ?? null };
+  try {
+    return await CashDay.findOneAndUpdate(
+      { seller: sellerId, dateKey, closed: { $ne: true } },
+      { $set, $push: { history: entry }, $setOnInsert: { openingCash: 0 } },
+      { upsert: true, new: true },
+    );
+  } catch (e) {
+    // The upsert collides with the unique (seller, dateKey) index when the day is already closed.
+    if (e?.code === 11000) throw err(409, `Business day ${dateKey} is already closed`);
+    throw e;
+  }
 }
 
-export async function reopenDay(sellerId, dateKey) {
-  const doc = await CashDay.findOneAndUpdate({ seller: sellerId, dateKey }, { $set: { closed: false, closedAt: null } }, { new: true });
-  if (!doc) throw err(404, "Day not found");
+export async function reopenDay(sellerId, dateKey, reason) {
+  const why = String(reason || "").trim();
+  if (why.length < 3) throw err(400, "Give a reason for reopening the day");
+  const doc = await CashDay.findOneAndUpdate(
+    { seller: sellerId, dateKey, closed: true },
+    { $set: { closed: false, closedAt: null }, $push: { history: { action: "REOPENED", at: new Date(), reason: why } } },
+    { new: true },
+  );
+  if (!doc) {
+    if (await CashDay.exists({ seller: sellerId, dateKey })) throw err(409, `Business day ${dateKey} is not closed`);
+    throw err(404, "Day not found");
+  }
   return doc;
+}
+
+/** Delete an expense. A closed day's expenses are part of its finalized cash closing. */
+export async function deleteExpense(sellerId, id) {
+  if (!mongoose.Types.ObjectId.isValid(String(id))) throw err(404, "Expense not found");
+  const expense = await Expense.findOne({ _id: id, seller: sellerId }).select("date").lean();
+  if (!expense) throw err(404, "Expense not found");
+  await assertDayOpen(sellerId, expense.date);
+  await Expense.deleteOne({ _id: id, seller: sellerId });
 }
 
 export async function getTimezone(sellerId) {

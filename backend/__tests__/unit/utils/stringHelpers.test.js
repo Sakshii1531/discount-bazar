@@ -1,6 +1,6 @@
 import { slugify } from "../../../app/utils/slugify.js";
 import { normalizePhoneNumber, isValidE164Phone, maskPhone } from "../../../app/utils/phone.js";
-import { escapeRegex, buildSearchRegex } from "../../../app/utils/regex.js";
+import { escapeRegex, buildSearchRegex, buildLenientWordRegex } from "../../../app/utils/regex.js";
 import {
   normalizeMobile,
   toIndianNumber,
@@ -85,6 +85,17 @@ describe("utils/regex", () => {
     expect(buildSearchRegex("milk", { anchored: false, caseInsensitive: false })).toEqual({
       $regex: "milk",
     });
+  });
+
+  it("lenient word regex treats doubled letters as optional", () => {
+    const toRe = (word) => new RegExp(buildLenientWordRegex(word).$regex, "i");
+    expect(buildLenientWordRegex("chilli")).toEqual({ $regex: "c+h+i+l+i+", $options: "i" });
+    expect(toRe("chili").test("Aarafh Red Chilli Powder")).toBe(true);
+    expect(toRe("CHILLI").test("Kashmiri chili")).toBe(true);
+    expect(toRe("ginger").test("Ginger Powder")).toBe(true);
+    expect(toRe("chilli").test("Chips")).toBe(false);
+    expect(toRe("500g").test("5000g pack")).toBe(false);
+    expect(buildLenientWordRegex("a.(b").$regex).toBe("a+\\.\\(b+");
   });
 });
 

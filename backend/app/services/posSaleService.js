@@ -30,6 +30,7 @@ import { assertDayOpen } from "./businessTime.js";
 import PosCustomer from "../models/posCustomer.js";
 import PartyLedgerEntry from "../models/partyLedgerEntry.js";
 import { resolvePosPayment } from "./posPayment.js";
+import { computePosTotals } from "./posTax.js";
 import {
   MAX_TRANSACTION_ATTEMPTS,
   asRetryLaterError,
@@ -166,7 +167,7 @@ function buildPosBreakdown({
   categoryById,
   discountTotal = 0,
   taxPercent = 0,
-  taxTotal = 0,
+  taxTotal,
   isTaxInclusive = true,
 }) {
   let productSubtotal = 0;
@@ -197,42 +198,21 @@ function buildPosBreakdown({
     };
   });
 
-  // Calculate taxTotal:
-  // When isTaxInclusive = true, prices already contain GST. Back-calculate tax from prices.
-  // When isTaxInclusive = false, tax is added on top of productSubtotal.
-  let computedTax = 0;
-  if (isTaxInclusive) {
-    if (taxTotal > 0) {
-      computedTax = roundCurrency(taxTotal);
-    } else if (taxPercent > 0) {
-      const base = (productSubtotal * 100) / (100 + taxPercent);
-      computedTax = roundCurrency(productSubtotal - base);
-    } else {
-      computedTax = roundCurrency(
-        items.reduce((sum, item) => {
-          const rate = Number(item.gstPercent || 0);
-          if (rate <= 0) return sum;
-          const lineTotal = item.price * item.quantity;
-          const base = (lineTotal * 100) / (100 + rate);
-          return sum + (lineTotal - base);
-        }, 0),
-      );
-    }
-  } else {
-    computedTax = taxTotal > 0
-      ? roundCurrency(taxTotal)
-      : taxPercent > 0
-        ? roundCurrency((productSubtotal * taxPercent) / 100)
-        : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
-  }
-
-  // Coupon discount (when Settings.posCouponsEnabled is on) reduces what the
-  // walk-in customer pays and what the seller is paid out — the platform
-  // does not absorb it (mirrors regular checkout's per-seller discount split).
-  const normalizedDiscount = Math.min(roundCurrency(discountTotal || 0), productSubtotal);
-  const grandTotal = isTaxInclusive
-    ? roundCurrency(Math.max(0, productSubtotal - normalizedDiscount))
-    : roundCurrency(Math.max(0, productSubtotal + computedTax - normalizedDiscount));
+  // GST is on the discounted amount (see posTax.js). Coupon discount (when
+  // Settings.posCouponsEnabled is on) reduces what the walk-in customer pays and
+  // what the seller is paid out — the platform does not absorb it (mirrors
+  // regular checkout's per-seller discount split).
+  const totals = computePosTotals({
+    items,
+    subtotal: productSubtotal,
+    discount: discountTotal,
+    isTaxInclusive,
+    taxPercent,
+    taxTotal,
+  });
+  const normalizedDiscount = totals.discountTotal;
+  const computedTax = totals.taxTotal;
+  const grandTotal = totals.grandTotal;
 
   sellerPayoutTotal = isTaxInclusive
     ? roundCurrency(Math.max(sellerPayoutTotal - normalizedDiscount, 0))
@@ -359,37 +339,15 @@ export async function previewPosSale({ sellerId, payload }) {
   }
 
   const isTaxInclusive = payload.isTaxInclusive !== false;
-  const discountTotal = Math.min(roundCurrency(couponDiscount + Number(payload.discount || 0)), subtotal);
-  
-  let computedTax = 0;
-  if (isTaxInclusive) {
-    if (payload.taxTotal > 0) {
-      computedTax = roundCurrency(payload.taxTotal);
-    } else if (payload.taxPercent > 0) {
-      const base = (subtotal * 100) / (100 + payload.taxPercent);
-      computedTax = roundCurrency(subtotal - base);
-    } else {
-      computedTax = roundCurrency(
-        items.reduce((sum, item) => {
-          const rate = Number(item.gstPercent || 0);
-          if (rate <= 0) return sum;
-          const lineTotal = item.price * item.quantity;
-          const base = (lineTotal * 100) / (100 + rate);
-          return sum + (lineTotal - base);
-        }, 0),
-      );
-    }
-  } else {
-    computedTax = payload.taxTotal > 0
-      ? roundCurrency(payload.taxTotal)
-      : payload.taxPercent > 0
-        ? roundCurrency((subtotal * payload.taxPercent) / 100)
-        : roundCurrency(items.reduce((sum, item) => sum + (item.gstPercent ? (item.price * item.quantity * item.gstPercent) / 100 : 0), 0));
-  }
-
-  const grandTotal = isTaxInclusive
-    ? roundCurrency(Math.max(0, subtotal - discountTotal))
-    : roundCurrency(Math.max(0, subtotal + computedTax - discountTotal));
+  const totals = computePosTotals({
+    items,
+    subtotal,
+    discount: couponDiscount + Number(payload.discount || 0),
+    isTaxInclusive,
+    taxPercent: payload.taxPercent,
+    taxTotal: payload.taxTotal > 0 ? payload.taxTotal : undefined,
+  });
+  const { taxTotal: computedTax, discountTotal, grandTotal } = totals;
 
   return {
     subtotal,
@@ -532,7 +490,7 @@ export async function createPosSale({ sellerId, payload, idempotencyKey, attempt
       categoryById,
       discountTotal: (discountResult?.discountAmount || 0) + Number(payload.discount || 0),
       taxPercent: Number(payload.taxPercent || 0),
-      taxTotal: Number(payload.taxTotal || 0),
+      taxTotal: payload.taxTotal > 0 ? Number(payload.taxTotal) : undefined,
       isTaxInclusive,
     });
 

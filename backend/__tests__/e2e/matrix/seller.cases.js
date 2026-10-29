@@ -395,7 +395,7 @@ export default [
     body: (ctx) => ({ supplierId: ctx.supplierId, billNo: "NS-1", items: [{ productId: String(ctx.bread._id), quantity: 4, cost: 25 }], amountPaid: 60, paymentMethod: "CASH" }),
     check: async (res, ctx) => {
       expect(String(res.body.result.supplier)).toBe(String(ctx.supplierId));
-      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId }).lean();
+      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId, voided: { $ne: true } }).lean();
       expect(rows.map((r) => r.kind).sort()).toEqual(["PAYMENT", "PURCHASE"]);
     },
   },
@@ -407,7 +407,7 @@ export default [
     body: (ctx) => ({ supplierId: null, billNo: "NS-1", items: [{ productId: String(ctx.bread._id), quantity: 4, cost: 25 }], amountPaid: 60, paymentMethod: "CASH" }),
     check: async (res, ctx) => {
       expect(res.body.result.supplier).toBeNull();
-      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId }).lean();
+      const rows = await PartyLedgerEntry.find({ refId: ctx.noSupplierBillId, voided: { $ne: true } }).lean();
       expect(rows.map((r) => r.kind)).toEqual(["PAYMENT"]);
     },
   },
@@ -480,7 +480,8 @@ export default [
     body: () => ({ dateKey: today(), countedClosingCash: 3000 }),
     check: (res) => expect(JSON.stringify(res.body.result)).toMatch(/"closed":true/),
   },
-  { route: "POST /api/seller/business/cash-register/reopen", as: "seller", body: () => ({ dateKey: today() }) },
+  { route: "POST /api/seller/business/cash-register/reopen", name: "a reason is required", as: "seller", body: () => ({ dateKey: today() }), status: 400 },
+  { route: "POST /api/seller/business/cash-register/reopen", as: "seller", body: () => ({ dateKey: today(), reason: "Recount the drawer" }) },
   { route: "GET /api/seller/business/dashboard", as: "seller", check: (res) => expect(res.body.result).toEqual(expect.objectContaining({ salesCount: expect.any(Number), stockUnits: expect.any(Number) })) },
   { route: "GET /api/seller/business/accounts/:view", as: "seller", params: { view: "payments" }, check: (res) => expect(JSON.stringify(res.body.result)).toContain("UPI") },
   { route: "GET /api/seller/business/accounts/:view", name: "received", as: "seller", params: { view: "received" } },
