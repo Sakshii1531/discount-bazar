@@ -50,6 +50,8 @@ const PurchaseProductSearch = ({
     inputClassName = "",
 }) => {
     const [query, setQuery] = useState("");
+    // True once the user types into the box; until then it keeps showing the selected product
+    const [typing, setTyping] = useState(false);
     const [open, setOpen] = useState(false);
     const [activeIdx, setActiveIdx] = useState(0);
     const [remote, setRemote] = useState([]);
@@ -119,6 +121,7 @@ const PurchaseProductSearch = ({
             if (wrapRef.current && !wrapRef.current.contains(e.target)) {
                 setOpen(false);
                 setQuery("");
+                setTyping(false);
             }
         };
         document.addEventListener("mousedown", onDown);
@@ -128,6 +131,7 @@ const PurchaseProductSearch = ({
     const pick = (product, variantSku = "") => {
         onSelect(product, variantSku);
         setQuery("");
+        setTyping(false);
         setOpen(false);
         setNotFound("");
     };
@@ -168,10 +172,11 @@ const PurchaseProductSearch = ({
         } else if (e.key === "Escape") {
             setOpen(false);
             setQuery("");
+            setTyping(false);
         }
     };
 
-    const showingSelected = !open && !query && selectedProduct;
+    const showingSelected = !typing && selectedProduct;
 
     return (
         <div ref={wrapRef} className="relative w-full min-w-0">
@@ -180,9 +185,14 @@ const PurchaseProductSearch = ({
                 type="text"
                 className={cn(inputClassName, "pl-9 pr-8")}
                 value={showingSelected ? displaySelectedText : query}
-                placeholder={selectedProduct ? displaySelectedText : "Search name or scan barcode"}
-                onFocus={() => setOpen(true)}
+                placeholder="Search name or scan barcode"
+                onFocus={(e) => {
+                    setOpen(true);
+                    // Keep the name visible but selected, so typing replaces it
+                    if (selectedProduct) e.target.select();
+                }}
                 onChange={(e) => {
+                    setTyping(true);
                     setQuery(e.target.value);
                     setOpen(true);
                     setNotFound("");
@@ -190,16 +200,17 @@ const PurchaseProductSearch = ({
                 onKeyDown={onKeyDown}
                 title="Search product by name / SKU or scan barcode"
             />
-            {(selectedProduct || query) && (
+            {(selectedProduct || typing) && (
                 <button
                     type="button"
                     onClick={() => {
                         setQuery("");
                         setNotFound("");
-                        if (!query && selectedProduct) onClear?.();
+                        setTyping(false);
+                        if (!typing && selectedProduct) onClear?.();
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    title={query ? "Clear search" : "Clear product"}
+                    title={typing ? "Clear search" : "Clear product"}
                 >
                     <HiOutlineXMark className="h-4 w-4" />
                 </button>

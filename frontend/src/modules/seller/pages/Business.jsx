@@ -7,6 +7,7 @@ import { posApi } from "../services/posApi";
 import { sellerApi } from "../services/sellerApi";
 import PurchaseProductSearch from "../components/business/PurchaseProductSearch";
 import PurchaseProductEditModal from "../components/business/PurchaseProductEditModal";
+import PartyEditModal from "../components/business/PartyEditModal";
 import { formatPriceInteger } from "@shared/utils/currency";
 import { useAuth } from "@core/context/AuthContext";
 import SearchableSelect from "@shared/components/ui/SearchableSelect";
@@ -52,7 +53,7 @@ import {
 } from "react-icons/hi2";
 
 const REPORTS = [
-    ["sales", "Sales"], ["purchases", "Purchases"], ["purchase-returns", "Purchase Returns"],
+    ["all-bills", "All Bills"], ["sales", "Sales"], ["purchases", "Purchases"], ["purchase-returns", "Purchase Returns"],
     ["sale-returns", "Sale Returns"], ["stock", "Stock"], ["customer-ledger", "Customer Ledger"],
     ["supplier-ledger", "Supplier Ledger"], ["day-book", "Day Book"], ["cash-register", "Cash Register"],
     ["expenses", "Expenses"], ["pnl", "Profit & Loss"], ["low-stock", "Low Stock"],
@@ -814,6 +815,13 @@ const DashboardTab = ({ onNavigateTab }) => {
 /* ---------- Purchases ---------- */
 const emptyLine = { productId: "", variantSku: "", quantity: 1, cost: "", gstPercent: 0, purchaseGstType: "EXCLUSIVE" };
 
+// A catalog fetch is capped and active-only, so it must not drop products already picked from
+// search or fetched by id for a bill line — fresh copies win, the rest are kept.
+const mergeProducts = (fresh, prev) => {
+    const ids = new Set(fresh.map((p) => p._id));
+    return [...fresh, ...prev.filter((p) => !ids.has(p._id))];
+};
+
 // Product cost is stored in the product's own incl./excl. GST terms; re-express it in the
 // line's terms (same pre-GST base) so a prefilled cost prices correctly on the bill.
 const toLineCost = (cost, product, line) => {
@@ -848,6 +856,7 @@ const PurchasesTab = () => {
     const [targetLineIndex, setTargetLineIndex] = useState(null);
     const [quickBusy, setQuickBusy] = useState(false);
     const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+    const [editSupplier, setEditSupplier] = useState(null);
     const [supplierForm, setSupplierForm] = useState({ name: "", phone: "" });
     const [supplierBusy, setSupplierBusy] = useState(false);
     const hasSupplier = Boolean(form.supplierId);
@@ -935,90 +944,102 @@ const PurchasesTab = () => {
             } catch { /* history API unavailable */ }
         }
 
+        // Put the saved rows back straight away instead of after the catalog loads, so the
+        // bill doesn't flash empty; the line names fill in by id if the catalog is slow.
+        if (draftLines && !isAlreadyProcessed) setLines(draftLines);
+
+        const applyCreatedProduct = (prod) => {
+            setLines((currentLines) => {
+                let baseLines = draftLines && draftLines.length > 0 ? draftLines : currentLines;
+                let idx;
+                if (targetIdx !== undefined && targetIdx !== null && targetIdx < baseLines.length) {
+                    idx = targetIdx;
+                } else {
+                    // "Add New Product" (no target row): fill an empty row if there is one,
+                    // otherwise append a new row so existing items are not overwritten.
+                    const emptyIdx = baseLines.findIndex((l) => !l.productId);
+                    if (emptyIdx >= 0) {
+                        idx = emptyIdx;
+                    } else {
+                        baseLines = [...baseLines, { ...emptyLine }];
+                        idx = baseLines.length - 1;
+                    }
+                }
+
+                if (Array.isArray(inwardItems) && inwardItems.length > 0) {
+                    const newLines = [...baseLines];
+                    newLines[idx] = {
+                        ...newLines[idx],
+                        productId: createdId,
+                        variantSku: inwardItems[0].variantSku || "",
+                        quantity: inwardItems[0].quantity || 1,
+                        cost: inwardItems[0].cost !== "" && inwardItems[0].cost !== undefined ? inwardItems[0].cost : "",
+                        gstPercent: inwardItems[0].gstPercent !== "" && inwardItems[0].gstPercent !== undefined ? inwardItems[0].gstPercent : 0,
+                        purchaseGstType: inwardItems[0].purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
+                    };
+                    if (inwardItems.length > 1) {
+                        const extraLines = inwardItems.slice(1).map((item) => ({
+                            productId: createdId,
+                            variantSku: item.variantSku || "",
+                            quantity: item.quantity || 1,
+                            cost: item.cost !== "" && item.cost !== undefined ? item.cost : "",
+                            gstPercent: item.gstPercent !== "" && item.gstPercent !== undefined ? item.gstPercent : 0,
+                            purchaseGstType: item.purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
+                        }));
+                        newLines.splice(idx + 1, 0, ...extraLines);
+                    }
+                    return newLines;
+                }
+
+                const firstVar = prod?.variants?.[0];
+                const selectedVariantSku = firstVar?.sku || "";
+                const autoCost = firstVar?.purchaseCost ?? prod?.purchaseCost ?? "";
+                const autoGst = prod?.gstPercent ?? 0;
+
+                return baseLines.map((line, i) => {
+                    if (i !== idx) return line;
+                    return {
+                        ...line,
+                        productId: createdId,
+                        variantSku: selectedVariantSku,
+                        cost: autoCost !== "" && autoCost !== undefined ? autoCost : line.cost,
+                        gstPercent: autoGst !== "" && autoGst !== undefined ? autoGst : line.gstPercent,
+                        purchaseGstType: prod?.purchaseGstType || "EXCLUSIVE",
+                        quantity: line.quantity || 1,
+                    };
+                });
+            });
+        };
+
+        // The Add Product page hands back the created product, so fill its row now.
+        const applyCreated = createdId && !isAlreadyProcessed;
+        if (applyCreated && createdProd) {
+            productsRef.current = mergeProducts([createdProd], productsRef.current);
+            setProducts((prev) => mergeProducts([createdProd], prev));
+            applyCreatedProduct(createdProd);
+        }
+
         posApi.getCatalog({}).then((r) => {
             const list = unwrap(r) || [];
-            let updatedList = list;
-            if (createdProd && !list.some((x) => x._id === createdProd._id)) {
-                updatedList = [createdProd, ...list];
-            }
-            setProducts(updatedList);
-
-            if (createdId && !isAlreadyProcessed) {
-                const prod = updatedList.find((x) => x._id === createdId) || createdProd;
-                setLines((currentLines) => {
-                    let baseLines = draftLines && draftLines.length > 0 ? draftLines : currentLines;
-                    let idx;
-                    if (targetIdx !== undefined && targetIdx !== null && targetIdx < baseLines.length) {
-                        idx = targetIdx;
-                    } else {
-                        // "Add New Product" (no target row): fill an empty row if there is one,
-                        // otherwise append a new row so existing items are not overwritten.
-                        const emptyIdx = baseLines.findIndex((l) => !l.productId);
-                        if (emptyIdx >= 0) {
-                            idx = emptyIdx;
-                        } else {
-                            baseLines = [...baseLines, { ...emptyLine }];
-                            idx = baseLines.length - 1;
-                        }
-                    }
-
-                    if (Array.isArray(inwardItems) && inwardItems.length > 0) {
-                        const newLines = [...baseLines];
-                        newLines[idx] = {
-                            ...newLines[idx],
-                            productId: createdId,
-                            variantSku: inwardItems[0].variantSku || "",
-                            quantity: inwardItems[0].quantity || 1,
-                            cost: inwardItems[0].cost !== "" && inwardItems[0].cost !== undefined ? inwardItems[0].cost : "",
-                            gstPercent: inwardItems[0].gstPercent !== "" && inwardItems[0].gstPercent !== undefined ? inwardItems[0].gstPercent : 0,
-                            purchaseGstType: inwardItems[0].purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
-                        };
-                        if (inwardItems.length > 1) {
-                            const extraLines = inwardItems.slice(1).map((item) => ({
-                                productId: createdId,
-                                variantSku: item.variantSku || "",
-                                quantity: item.quantity || 1,
-                                cost: item.cost !== "" && item.cost !== undefined ? item.cost : "",
-                                gstPercent: item.gstPercent !== "" && item.gstPercent !== undefined ? item.gstPercent : 0,
-                                purchaseGstType: item.purchaseGstType || prod?.purchaseGstType || "EXCLUSIVE",
-                            }));
-                            newLines.splice(idx + 1, 0, ...extraLines);
-                        }
-                        return newLines;
-                    }
-
-                    const firstVar = prod?.variants?.[0];
-                    const selectedVariantSku = firstVar?.sku || "";
-                    const autoCost = firstVar?.purchaseCost ?? prod?.purchaseCost ?? "";
-                    const autoGst = prod?.gstPercent ?? 0;
-
-                    return baseLines.map((line, i) => {
-                        if (i !== idx) return line;
-                        return {
-                            ...line,
-                            productId: createdId,
-                            variantSku: selectedVariantSku,
-                            cost: autoCost !== "" && autoCost !== undefined ? autoCost : line.cost,
-                            gstPercent: autoGst !== "" && autoGst !== undefined ? autoGst : line.gstPercent,
-                            purchaseGstType: prod?.purchaseGstType || "EXCLUSIVE",
-                            quantity: line.quantity || 1,
-                        };
-                    });
-                });
-            } else if (draftLines && draftLines.length > 0 && !isAlreadyProcessed) {
-                setLines(draftLines);
-            }
-        }).catch(() => {
-            if (draftLines && draftLines.length > 0 && !isAlreadyProcessed) {
-                setLines(draftLines);
-            }
-        });
+            setProducts((prev) => mergeProducts(list, prev));
+            if (applyCreated && !createdProd) applyCreatedProduct(list.find((x) => x._id === createdId));
+        }).catch(() => { /* lines keep their names via the by-id lookup below */ });
 
         sellerApi.getCategoryTree().then((r) => {
             const cats = r.data?.results || r.data?.result || [];
             setDbCategories(cats);
         }).catch(() => {});
     }, [load, location.state]);
+
+    // Keep the bill in progress through a page refresh (restored by the effect above);
+    // cleared once the bill is saved or cancelled.
+    useEffect(() => {
+        const hasContent = editingId || form.billNo || form.supplierId || lines.some((l) => l.productId);
+        try {
+            if (hasContent) sessionStorage.setItem("seller_purchases_draft", JSON.stringify({ form, lines, editingId }));
+            else sessionStorage.removeItem("seller_purchases_draft");
+        } catch { /* storage unavailable or full: draft is not saved */ }
+    }, [form, lines, editingId]);
 
     const openAddSupplier = () => {
         setSupplierForm({ name: "", phone: "" });
@@ -1123,7 +1144,8 @@ const PurchasesTab = () => {
             // Refresh catalog
             const catRes = await posApi.getCatalog({});
             const updated = unwrap(catRes) || [];
-            setProducts(updated);
+            productsRef.current = mergeProducts(updated, productsRef.current);
+            setProducts((prev) => mergeProducts(updated, prev));
 
             const createdId = created?._id || created?.id || updated.find((p) => p.name === trimmedName)?._id;
 
@@ -1203,7 +1225,7 @@ const PurchasesTab = () => {
         const before = productsRef.current.find((x) => x._id === id);
         let list = productsRef.current;
         try {
-            list = unwrap(await posApi.getCatalog({})) || list;
+            list = mergeProducts(unwrap(await posApi.getCatalog({})) || [], list);
         } catch { /* keep the current list; merged below */ }
         let after = list.find((x) => x._id === id);
         if (!after) {
@@ -1247,6 +1269,36 @@ const PurchasesTab = () => {
         }
         setLine(i, { productId: product._id, ...(variantSku ? { variantSku } : {}) });
     };
+
+    // Bill lines can reference products outside the loaded catalog (it is capped and
+    // active-only), e.g. when editing an older bill. Fetch those by id so their names show.
+    const fetchingIdsRef = useRef(new Set());
+    const goneIdsRef = useRef(new Set());
+    useEffect(() => {
+        const have = new Set(products.map((p) => p._id));
+        const missing = [...new Set(lines.map((l) => l.productId).filter(Boolean))].filter(
+            (id) => !have.has(id) && !fetchingIdsRef.current.has(id) && !goneIdsRef.current.has(id)
+        );
+        if (missing.length === 0) return;
+        missing.forEach((id) => fetchingIdsRef.current.add(id));
+        posApi
+            .getCatalog({ ids: missing.join(",") })
+            .then((r) => {
+                const found = unwrap(r) || [];
+                const foundIds = new Set(found.map((p) => p._id));
+                missing.forEach((id) => { if (!foundIds.has(id)) goneIdsRef.current.add(id); });
+                setProducts((prev) => {
+                    const prevIds = new Set(prev.map((p) => p._id));
+                    const add = found.filter((p) => !prevIds.has(p._id));
+                    if (add.length === 0) return prev;
+                    const next = [...prev, ...add];
+                    productsRef.current = next;
+                    return next;
+                });
+            })
+            .catch(() => { /* retried on the next lines/products change */ })
+            .finally(() => missing.forEach((id) => fetchingIdsRef.current.delete(id)));
+    }, [lines, products]);
 
     const payload = (confirm) => ({
         // Supplier is optional; null saves the bill without one.
@@ -1426,6 +1478,17 @@ const PurchasesTab = () => {
                                 <HiOutlineUserPlus className="h-3.5 w-3.5" />
                                 <span className="hidden xl:inline text-xs">New</span>
                             </button>
+                            {form.supplierId && suppliers.some((s) => s._id === form.supplierId) && (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditSupplier(suppliers.find((s) => s._id === form.supplierId))}
+                                    className="shrink-0 px-2.5 py-2.5 rounded-xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 active:scale-95 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                    title="Edit supplier details"
+                                    aria-label="Edit supplier details"
+                                >
+                                    <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                                </button>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -2188,6 +2251,19 @@ const PurchasesTab = () => {
                 </div>
             )}
 
+            {editSupplier && (
+                <PartyEditModal
+                    kind="suppliers"
+                    party={editSupplier}
+                    onClose={() => setEditSupplier(null)}
+                    onSaved={() => {
+                        setEditSupplier(null);
+                        // Refresh the picker and the history list, which show supplier details
+                        load();
+                    }}
+                />
+            )}
+
             {isSupplierModalOpen && (
                 <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
@@ -2276,6 +2352,7 @@ const PartiesTab = () => {
     const [form, setForm] = useState({ name: "", phone: "" });
     const [touched, setTouched] = useState({ name: false, phone: false });
     const [ledger, setLedger] = useState(null);
+    const [editParty, setEditParty] = useState(null);
     const [pay, setPay] = useState({ amount: "", method: "CASH" });
     const [paying, setPaying] = useState(false);
     // One key per payment: a double click or a retry after a timeout reuses it,
@@ -2457,8 +2534,16 @@ const PartiesTab = () => {
     const filteredRows = useMemo(() => {
         const q = searchTerm.trim().toLowerCase();
         if (!q) return rows;
-        return rows.filter((r) => (r.name || "").toLowerCase().includes(q) || (r.phone || "").includes(q));
+        return rows.filter((r) => (r.name || "").toLowerCase().includes(q) || (r.phone || "").includes(q) || (r.email || "").includes(q));
     }, [rows, searchTerm]);
+
+    const onPartySaved = (saved) => {
+        setEditParty(null);
+        setRows((rs) => rs.map((r) => (r._id === saved._id ? { ...r, ...saved, balance: r.balance } : r)));
+        // An open statement shows the party's details in its header and exports
+        setLedger((l) => (l && l.party._id === saved._id ? { ...l, party: { ...l.party, ...saved } } : l));
+        load();
+    };
 
     return (
         <div className="space-y-5">
@@ -2669,6 +2754,7 @@ const PartiesTab = () => {
                                                 ) : (
                                                     <span className="text-slate-400">None</span>
                                                 )}
+                                                {p.email && <span className="block text-[11px] text-slate-400 mt-0.5 truncate max-w-[200px]">{p.email}</span>}
                                             </td>
                                             <td className="px-4 py-3">
                                                 {balance === 0 ? (
@@ -2686,7 +2772,16 @@ const PartiesTab = () => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditParty(p)}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                                                    title={`Edit ${kind === "suppliers" ? "supplier" : "customer"} details`}
+                                                >
+                                                    <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                                                    <span>Edit</span>
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => open(p)}
@@ -2705,6 +2800,10 @@ const PartiesTab = () => {
                 )}
             </div>
 
+            {editParty && (
+                <PartyEditModal kind={kind} party={editParty} onClose={() => setEditParty(null)} onSaved={onPartySaved} />
+            )}
+
             {/* Ledger Statement Modal Card */}
             {ledger && (
                 <div
@@ -2721,10 +2820,15 @@ const PartiesTab = () => {
                                 </div>
                                 <p className="text-xs text-slate-500">
                                     {ledger.party.phone ? `Phone: ${ledger.party.phone}` : "No phone provided"}
+                                    {ledger.party.email ? ` · ${ledger.party.email}` : ""}
+                                    {ledger.party.gstin ? ` · GSTIN: ${ledger.party.gstin}` : ""}
                                 </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-1.5" role="group" aria-label="Export statement">
+                                    <button type="button" className={ghostBtn} onClick={() => setEditParty(ledger.party)}>
+                                        <HiOutlinePencilSquare className="h-3.5 w-3.5" /> Edit
+                                    </button>
                                     <button type="button" className={ghostBtn} disabled={!!exporting} onClick={() => exportStatement("print")}>
                                         <HiOutlinePrinter className="h-3.5 w-3.5" /> Print
                                     </button>
@@ -2952,39 +3056,108 @@ const CashTab = () => {
 };
 
 /* ---------- Reports ---------- */
+// What each report counts, shown under the filters so missing bills aren't a surprise.
+const REPORT_NOTES = {
+    "all-bills": "Every bill in one list, newest first: counter sales, delivered online orders, purchase bills and returns. Draft and cancelled purchase bills are listed but not added to the totals.",
+    sales: "All counter (POS) bills, plus online orders once they are delivered. Pending or cancelled online orders are not counted.",
+    purchases: "Confirmed purchase bills only, by bill date. Draft bills are not counted.",
+    "purchase-returns": "Returns to suppliers, by return date.",
+    "sale-returns": "Returns against counter (POS) bills, by return date.",
+    expenses: "Expenses by the date they were recorded.",
+    pnl: "Sales (counter bills + delivered online orders) minus returns, cost of goods sold and expenses.",
+    "day-book": "One row per day, up to the latest 62 days of the range.",
+    "cash-register": "One row per day, up to the latest 62 days of the range.",
+};
+// These show the current position, so the date range doesn't apply.
+const UNDATED_REPORTS = new Set(["stock", "customer-ledger", "supplier-ledger", "low-stock", "expiry"]);
+// One row per day: "All time" would mean thousands of days.
+const DAILY_REPORTS = new Set(["day-book", "cash-register"]);
+
 const ReportsTab = () => {
-    const [type, setType] = useState("sales");
-    const [from, setFrom] = useState(today());
-    const [to, setTo] = useState(today());
+    const [type, setType] = useState("all-bills");
+    // Opens on this month: today only hid every earlier bill.
+    const [range, setRange] = useState(() => ({ from: monthStart(), to: today(), all: false }));
     const [data, setData] = useState(null);
+
+    const undated = UNDATED_REPORTS.has(type);
+    const allowAll = !DAILY_REPORTS.has(type);
+    const all = range.all && allowAll;
+    const from = range.all && !allowAll ? monthStart() : range.from;
+    const to = range.to;
 
     useEffect(() => {
         // Ignore a response for a report the seller has already moved away from.
         let active = true;
         // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the old report while the new one loads
         setData(null);
-        businessApi.report(type, { from, to })
+        businessApi.report(type, all ? { all: true, to } : { from, to })
             .then((r) => { if (active) setData(unwrap(r)); })
             .catch((e) => { if (active) toast.error(errMsg(e)); });
         return () => { active = false; };
-    }, [type, from, to]);
+    }, [type, from, to, all]);
 
     const rows = useMemo(() => (data?.rows || []).map((r) => (r.digitalSales ? { ...r, ...r.digitalSales, digitalSales: undefined } : r)), [data]);
 
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+    // Back to the first page whenever a new report / range loads
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => setPage(1), [data, pageSize]);
+    const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+    const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
+
+    const presets = [
+        { key: "today", label: "Today", value: { from: today(), to: today(), all: false } },
+        { key: "month", label: "This Month", value: { from: monthStart(), to: today(), all: false } },
+        ...(allowAll ? [{ key: "all", label: "All Time", value: { from: "", to: today(), all: true } }] : []),
+    ];
+    const isActive = (v) => (v.all ? all : !all && from === v.from && to === v.to);
+    const note = undated ? "Shows the current position; the date range doesn't apply." : REPORT_NOTES[type];
+
     return (
         <div className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-2xl border border-slate-200">
-                <select className={`${inputCls} max-w-[200px]`} value={type} onChange={(e) => setType(e.target.value)}>
-                    {REPORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-                <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
-                    <span>From:</span>
-                    <input type="date" className={`${inputCls} max-w-[150px]`} value={from} onChange={(e) => setFrom(e.target.value)} />
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                    <select className={`${inputCls} max-w-[200px]`} value={type} onChange={(e) => setType(e.target.value)}>
+                        {REPORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                    {!undated && (
+                        <>
+                            <div className="flex items-center gap-1" role="group" aria-label="Date range">
+                                {presets.map((p) => (
+                                    <button
+                                        key={p.key}
+                                        type="button"
+                                        onClick={() => setRange(p.value)}
+                                        className={cn(ghostBtn, isActive(p.value) && "border-primary bg-primary/10 text-primary hover:bg-primary/10")}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
+                                <span>From:</span>
+                                <input
+                                    type="date"
+                                    className={`${inputCls} max-w-[150px]`}
+                                    value={all ? "" : from}
+                                    max={to}
+                                    onChange={(e) => e.target.value && setRange({ from: e.target.value, to, all: false })}
+                                />
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
+                                <span>To:</span>
+                                <input
+                                    type="date"
+                                    className={`${inputCls} max-w-[150px]`}
+                                    value={to}
+                                    onChange={(e) => e.target.value && setRange((r) => ({ ...r, from, to: e.target.value }))}
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-slate-500 font-bold">
-                    <span>To:</span>
-                    <input type="date" className={`${inputCls} max-w-[150px]`} value={to} onChange={(e) => setTo(e.target.value)} />
-                </div>
+                {note && <p className="text-[11px] text-slate-500 font-medium px-1">{note}</p>}
             </div>
             {data?.totals && (
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -2995,7 +3168,35 @@ const ReportsTab = () => {
                     ))}
                 </div>
             )}
-            {data ? <Table rows={rows} /> : <div className="py-8 text-center text-sm text-slate-400">Loading report data…</div>}
+            {data ? (
+                <>
+                    <Table rows={pageRows} />
+                    {rows.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 font-bold">
+                            <span>
+                                Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1">
+                                    <span>Rows:</span>
+                                    <select
+                                        className="px-2 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700"
+                                        value={pageSize}
+                                        onChange={(e) => setPageSize(Number(e.target.value))}
+                                    >
+                                        {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                                    </select>
+                                </label>
+                                <button type="button" className={ghostBtn} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+                                <span>Page {page} of {totalPages}</span>
+                                <button type="button" className={ghostBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <div className="py-8 text-center text-sm text-slate-400">Loading report data…</div>
+            )}
         </div>
     );
 };

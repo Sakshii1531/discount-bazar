@@ -21,7 +21,18 @@ import {
 export const getPosCatalog = async (req, res) => {
   try {
     const sellerId = req.user.id;
-    const { search, categoryId } = req.query;
+    const { search, categoryId, ids } = req.query;
+    const fields = "name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants purchaseCost purchaseGstType";
+
+    // Specific products by id (e.g. the lines of a purchase bill being edited), whatever
+    // their status or stock — they may fall outside the capped, active-only list below.
+    if (ids !== undefined) {
+      const idList = String(ids).split(",").map((id) => id.trim()).filter((id) => /^[a-f\d]{24}$/i.test(id));
+      const products = idList.length
+        ? await Product.find({ sellerId, _id: { $in: idList } }).select(fields).populate("categoryId", "name").lean()
+        : [];
+      return handleResponse(res, 200, "POS catalog fetched", products);
+    }
 
     const conditions = [{ sellerId }, { status: "active" }];
 
@@ -42,7 +53,7 @@ export const getPosCatalog = async (req, res) => {
     const LIMIT = 500;
     const find = (extra, limit) =>
       Product.find({ $and: [...conditions, extra] })
-        .select("name sku barcode gstPercent mrp size colour mainImage price salePrice stock lowStockAlert categoryId subcategoryId headerId variants purchaseCost purchaseGstType")
+        .select(fields)
         .populate("categoryId", "name")
         .sort({ name: 1 })
         .limit(limit)

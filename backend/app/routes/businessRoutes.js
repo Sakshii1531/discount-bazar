@@ -27,10 +27,12 @@ const method = str.valid("CASH", "CARD", "UPI", "OTHER");
 const date = Joi.date().iso();
 
 const partySchema = Joi.object({
-  name: str.max(120).required(),
-  phone: str.max(20).allow(""),
+  name: str.min(2).max(120).required().messages({ "string.min": "Name must be at least 2 characters" }),
+  phone: str.pattern(/^\+?\d{10,13}$/).allow("").messages({ "string.pattern.base": "Enter a valid 10-digit mobile number" }),
+  email: str.lowercase().max(120).email({ tlds: { allow: false } }).allow("").messages({ "string.email": "Enter a valid email address" }),
   address: str.max(300).allow(""),
-  gstin: str.max(20).allow(""),
+  // 15-character GSTIN: state code, PAN, entity no., "Z", checksum
+  gstin: str.uppercase().pattern(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/).allow("").messages({ "string.pattern.base": "Enter a valid 15-character GST number" }),
 });
 const lineItems = Joi.array().min(1).items(Joi.object({
   productId: id.required(),

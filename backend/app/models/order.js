@@ -686,13 +686,9 @@ orderSchema.index({ "stockReservation.status": 1, "stockReservation.expiresAt": 
 orderSchema.index({ seller: 1, orderSource: 1, createdAt: -1 });
 orderSchema.index({ checkoutGroupId: 1, createdAt: -1 });
 orderSchema.index({ checkoutGroupId: 1, checkoutGroupIndex: 1 });
-orderSchema.index(
-  { "placement.idempotencyKeyExpiry": 1 },
-  { 
-    expireAfterSeconds: 0,
-    partialFilterExpression: { "placement.idempotencyKeyExpiry": { $type: "date" } }
-  }
-);
+// No TTL index on placement.idempotencyKeyExpiry: a TTL index deletes the whole
+// document, which erased every bill/order 24h after it was placed. The expiry only
+// bounds how long a retry with the same key returns the same order.
 
 orderSchema.pre('save', function(next) {
   if (!this.orderStatus) {

@@ -17,9 +17,11 @@ const oid = (id) => new mongoose.Types.ObjectId(String(id));
 import { dayStart, dayEnd, todayKey, getSellerTz } from "./businessTime.js";
 export { todayKey };
 
+// `all=true` covers everything up to `to` (default today); otherwise a missing `from` means today.
 export function parseRange(query = {}, tz) {
-  const fromKey = query.from || todayKey(tz);
-  const toKey = query.to || fromKey;
+  const all = String(query.all || "").toLowerCase() === "true" || query.all === "1";
+  const fromKey = all ? "1970-01-01" : query.from || todayKey(tz);
+  const toKey = query.to || (all ? todayKey(tz) : fromKey);
   return { fromKey, toKey, from: dayStart(fromKey, tz), to: dayEnd(toKey, tz), tz };
 }
 
@@ -78,6 +80,79 @@ async function salesReport(sellerId, { from, to }) {
       total: r2(rows.reduce((s, x) => s + x.total, 0)),
       gst: r2(rows.reduce((s, x) => s + x.gst, 0)),
       discount: r2(rows.reduce((s, x) => s + x.discount, 0)),
+    },
+  };
+}
+
+/**
+ * Every bill in the range in one list, newest first: counter sales and delivered online
+ * orders (the same ones the sales report counts), purchase bills of any status, and sale /
+ * purchase returns. Draft and cancelled purchase bills are listed but not added to totals.
+ */
+async function allBillsReport(sellerId, { from, to }) {
+  const [orders, purchases, saleReturns, purchaseReturns] = await Promise.all([
+    Order.find(sellerSales(sellerId, from, to))
+      .select("orderId createdAt orderSource posPaymentMethod paymentMode paymentBreakdown.grandTotal posCustomer walkInCustomer address.name workflowStatus")
+      .populate("posCustomer", "name").lean(),
+    PurchaseBill.find({ seller: sellerId, billDate: { $gte: from, $lte: to } })
+      .select("billNo billDate status total amountPaid supplier").populate("supplier", "name").lean(),
+    PosReturn.find({ seller: sellerId, createdAt: { $gte: from, $lte: to } })
+      .select("orderId createdAt refundMethod refundTotal").lean(),
+    PurchaseReturn.find({ seller: sellerId, date: { $gte: from, $lte: to } })
+      .select("returnNo date total supplier").populate("supplier", "name").lean(),
+  ]);
+  const titleCase = (s) => String(s || "").toLowerCase().replace(/(^|_)(\w)/g, (_, sep, c) => `${sep ? " " : ""}${c.toUpperCase()}`);
+  const rows = [
+    ...orders.map((o) => {
+      const pos = o.orderSource === "POS";
+      return {
+        type: pos ? "Sale (POS)" : "Online Order",
+        billNo: o.orderId,
+        date: o.createdAt,
+        party: pos ? o.posCustomer?.name || o.walkInCustomer?.name || "Walk-in Customer" : o.address?.name || "Customer",
+        payment: pos ? tenderLabel(o.posPaymentMethod) : o.paymentMode,
+        status: pos ? "Completed" : "Delivered",
+        amount: r2(o.paymentBreakdown?.grandTotal || 0),
+      };
+    }),
+    ...purchases.map((d) => ({
+      type: "Purchase",
+      billNo: d.billNo,
+      date: d.billDate,
+      party: d.supplier?.name || "No supplier",
+      payment: d.status === "CONFIRMED" ? (d.amountPaid >= d.total ? "Paid" : `Due ${r2(d.total - d.amountPaid)}`) : "",
+      status: titleCase(d.status),
+      amount: r2(d.total || 0),
+    })),
+    ...saleReturns.map((d) => ({
+      type: "Sale Return",
+      billNo: d.orderId,
+      date: d.createdAt,
+      party: "Customer",
+      payment: d.refundMethod ? `Refund: ${tenderLabel(d.refundMethod)}` : "",
+      status: "Returned",
+      amount: r2(d.refundTotal || 0),
+    })),
+    ...purchaseReturns.map((d) => ({
+      type: "Purchase Return",
+      billNo: d.returnNo,
+      date: d.date,
+      party: d.supplier?.name || "No supplier",
+      payment: "",
+      status: "Returned",
+      amount: r2(d.total || 0),
+    })),
+  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const sum = (pred) => r2(rows.filter(pred).reduce((s, x) => s + x.amount, 0));
+  return {
+    rows,
+    totals: {
+      count: rows.length,
+      sales: sum((x) => x.type === "Sale (POS)" || x.type === "Online Order"),
+      saleReturns: sum((x) => x.type === "Sale Return"),
+      purchases: sum((x) => x.type === "Purchase" && x.status === "Confirmed"),
+      purchaseReturns: sum((x) => x.type === "Purchase Return"),
     },
   };
 }
@@ -340,11 +415,17 @@ export async function dayBook(sellerId, key, tz) {
   };
 }
 
+const DAY_BOOK_MAX_DAYS = 62;
+
 async function dayBookReport(sellerId, { fromKey, toKey, tz }) {
   const rows = [];
   const cur = new Date(`${fromKey}T00:00:00Z`);
   const end = new Date(`${toKey}T00:00:00Z`);
-  for (let i = 0; cur <= end && i < 62; i += 1, cur.setUTCDate(cur.getUTCDate() + 1)) {
+  // A longer range (e.g. all time) shows its latest days rather than the oldest ones.
+  const earliest = new Date(end);
+  earliest.setUTCDate(earliest.getUTCDate() - (DAY_BOOK_MAX_DAYS - 1));
+  if (cur < earliest) cur.setTime(earliest.getTime());
+  for (let i = 0; cur <= end && i < DAY_BOOK_MAX_DAYS; i += 1, cur.setUTCDate(cur.getUTCDate() + 1)) {
     rows.push(await dayBook(sellerId, cur.toISOString().slice(0, 10), tz));
   }
   return { rows, totals: { days: rows.length } };
@@ -375,6 +456,7 @@ export async function dashboard(sellerId) {
 }
 
 const REPORTS = {
+  "all-bills": allBillsReport,
   sales: salesReport,
   purchases: purchaseReport,
   "purchase-returns": purchaseReturnReport,

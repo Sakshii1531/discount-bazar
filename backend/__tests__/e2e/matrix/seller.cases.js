@@ -292,6 +292,23 @@ export default [
     },
   },
   { route: "PUT /api/seller/business/customers/:id", as: "seller", params: (ctx) => ({ id: ctx.posCustomerId }), body: { name: "Sharma Ji (Shop 4)" } },
+  {
+    route: "PUT /api/seller/business/suppliers/:id",
+    name: "edits all details",
+    as: "seller",
+    params: (ctx) => ({ id: ctx.supplierId }),
+    body: { name: "Amul Distributors Pvt", phone: "9000011111", email: "Accounts@Amul.in", address: "Indore", gstin: "23abcde1234f1z5" },
+    check: (res) => {
+      expect(res.body.result.email).toBe("accounts@amul.in");
+      expect(res.body.result.gstin).toBe("23ABCDE1234F1Z5");
+    },
+  },
+  { route: "PUT /api/seller/business/suppliers/:id", name: "rejects a bad email", as: "seller", params: (ctx) => ({ id: ctx.supplierId }), body: { name: "Amul Distributors Pvt", email: "not-an-email" }, status: 400 },
+  { route: "PUT /api/seller/business/suppliers/:id", name: "rejects a bad GSTIN", as: "seller", params: (ctx) => ({ id: ctx.supplierId }), body: { name: "Amul Distributors Pvt", gstin: "12345" }, status: 400 },
+  { route: "POST /api/seller/business/suppliers", name: "rejects a duplicate mobile", as: "seller", body: { name: "Other Supplier", phone: "+919000011111" }, status: 409 },
+  { route: "POST /api/seller/business/suppliers", name: "rejects a duplicate email", as: "seller", body: { name: "Other Supplier", email: "accounts@amul.in" }, status: 409 },
+  { route: "PUT /api/seller/business/customers/:id", name: "edits email and GSTIN", as: "seller", params: (ctx) => ({ id: ctx.posCustomerId }), body: { name: "Sharma Ji (Shop 4)", phone: "9000022222", email: "sharma@example.com", gstin: "23ABCDE1234F1Z5" }, check: (res) => expect(res.body.result.email).toBe("sharma@example.com") },
+  { route: "POST /api/seller/business/customers", name: "rejects a duplicate mobile", as: "seller", body: { name: "Another Sharma", phone: "9000022222" }, status: 409 },
   { route: "GET /api/seller/business/customers", as: "seller", check: (res) => expect(listOf(res).map((c) => c.name)).toContain("Sharma Ji (Shop 4)") },
 
   // ── Purchases ─────────────────────────────────────────────────────────────
@@ -502,6 +519,51 @@ export default [
     "expiry",
   ].map((type) => ({ route: "GET /api/seller/business/reports/:type", name: type, as: "seller", params: { type } })),
   { route: "GET /api/seller/business/reports/:type", name: "unknown report", as: "seller", params: { type: "bogus" }, status: 404 },
+  {
+    route: "GET /api/seller/business/reports/:type",
+    name: "all bills lists sales and purchases together, newest first",
+    as: "seller",
+    params: { type: "all-bills" },
+    query: { all: "true" },
+    check: (res) => {
+      const { rows, totals } = res.body.result;
+      const types = new Set(rows.map((r) => r.type));
+      expect(types.has("Purchase")).toBe(true);
+      expect(types.has("Sale (POS)")).toBe(true);
+      expect(rows.map((r) => r.billNo)).toContain("NS-1");
+      expect(totals.count).toBe(rows.length);
+      const times = rows.map((r) => new Date(r.date).getTime());
+      expect(times).toEqual([...times].sort((a, b) => b - a));
+    },
+  },
+  {
+    route: "GET /api/seller/business/reports/:type",
+    name: "all-time range includes old bills",
+    as: "seller",
+    params: { type: "purchases" },
+    query: { all: "true" },
+    check: (res) => expect((res.body.result.rows || []).map((r) => r.billNo)).toContain("NS-1"),
+  },
+  {
+    route: "GET /api/seller/business/reports/:type",
+    name: "a range before every bill is empty",
+    as: "seller",
+    params: { type: "purchases" },
+    query: { from: "2001-01-01", to: "2001-01-31" },
+    check: (res) => expect(res.body.result.rows).toEqual([]),
+  },
+  {
+    route: "GET /api/seller/business/reports/:type",
+    name: "all-time day book shows the latest 62 days",
+    as: "seller",
+    params: { type: "day-book" },
+    query: { all: "true", to: "2026-03-31" },
+    check: (res) => {
+      const rows = res.body.result.rows;
+      expect(rows).toHaveLength(62);
+      expect(JSON.stringify(rows[rows.length - 1])).toContain("2026-03-31");
+    },
+  },
   { route: "GET /api/seller/business/dashboard", name: "customers are denied", as: "customer", status: 403 },
   { route: "DELETE /api/seller/business/expenses/:id", name: "malformed id", as: "seller", params: { id: "not-an-id" }, status: [400, 404] },
   {

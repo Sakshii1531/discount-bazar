@@ -451,6 +451,33 @@ function buildAdminRejectedModerationUpdate(adminId, note = "") {
 /* ===============================
    GET ALL PRODUCTS (Public/Admin)
 ================================ */
+// The price a customer sees: the sale price when the product is discounted, otherwise the MRP.
+const EFFECTIVE_PRICE = {
+  $cond: [{ $and: [{ $gt: ["$salePrice", 0] }, { $lt: ["$salePrice", "$price"] }] }, "$salePrice", "$price"],
+};
+const PRICE_SORT_DIR = { "price-asc": 1, "price-desc": -1 };
+
+/**
+ * One page of `buildQuery(filter)`. Price sorts order by the effective price, which find()
+ * can't sort on, so the page's ids are picked by aggregation first and that order is kept.
+ */
+async function findSortedPage(filter, sort, sortQuery, skip, limit, buildQuery) {
+  const dir = PRICE_SORT_DIR[String(sort || "").toLowerCase()];
+  if (!dir) return buildQuery(filter).sort(sortQuery).skip(skip).limit(limit).lean();
+  const rows = await Product.aggregate([
+    { $match: Product.find(filter).cast(Product) },
+    { $addFields: { effectivePriceForSort: EFFECTIVE_PRICE } },
+    { $sort: { effectivePriceForSort: dir, createdAt: -1, _id: 1 } },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: { _id: 1 } },
+  ]);
+  if (!rows.length) return [];
+  const docs = await buildQuery({ _id: { $in: rows.map((r) => r._id) } }).lean();
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  return rows.map((r) => byId.get(String(r._id))).filter(Boolean);
+}
+
 export const getProducts = async (req, res) => {
   try {
     const {
@@ -636,15 +663,12 @@ export const getProducts = async (req, res) => {
     const inStockQuery = { $and: [finalQuery, { stock: { $gt: 0 } }] };
     const outOfStockQuery = { $and: [finalQuery, { $or: [{ stock: { $lte: 0 } }, { stock: null }] }] };
     const findPage = (q, pageSkip, pageLimit) =>
-      Product.find(q)
-        .select(
+      findSortedPage(q, sort, sortQuery, pageSkip, pageLimit, (filter) =>
+        Product.find(filter).select(
           "name slug description sku price salePrice stock brand brandId weight mainImage galleryImages headerId categoryId subcategoryId sellerId status approvalStatus approvalRequestedAt approvalReviewedAt approvalReviewedBy approvalNote lastSubmittedByRole isFeatured variants productDeliveryFee productDeliveryTimeMinutes ratingAverage ratingCount createdAt",
-        )
+        ),
         // No .populate() — names resolved via cache-backed entityNameCache
-        .sort(sortQuery)
-        .skip(pageSkip)
-        .limit(pageLimit)
-        .lean();
+      );
     const fetchStockOrderedPage = async () => {
       const inStockCount = await Product.countDocuments(inStockQuery);
       const inStockItems = skip < inStockCount ? await findPage(inStockQuery, skip, limit) : [];

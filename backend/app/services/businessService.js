@@ -70,15 +70,37 @@ export { applyStock };
 const flushEmits = (emits) => setImmediate(() => emits.forEach((e) => emitProductStockUpdate(e)));
 
 /* ---------------- parties ---------------- */
+const phoneKey = (phone) => String(phone || "").replace(/\D/g, "").slice(-10);
+
+// One mobile number / email per supplier (or customer) of a seller. Only checked when the
+// value changes, so records saved before this check can still be edited.
+async function assertUniqueParty(Model, sellerId, id, fields, current) {
+  const label = Model === Supplier ? "supplier" : "customer";
+  const others = { seller: sellerId, ...(id && { _id: { $ne: id } }) };
+  const key = phoneKey(fields.phone);
+  if (key.length === 10 && key !== phoneKey(current?.phone)) {
+    const clash = await Model.findOne({ ...others, phone: new RegExp(`${key}$`) }).select("name").lean();
+    if (clash) throw err(409, `This mobile number is already used by ${label} "${clash.name}"`);
+  }
+  if (fields.email && fields.email !== (current?.email || "")) {
+    const clash = await Model.findOne({ ...others, email: fields.email }).select("name").lean();
+    if (clash) throw err(409, `This email is already used by ${label} "${clash.name}"`);
+  }
+}
+
+// Bills, sales and ledger entries reference the party by id (POS bills also keep the name
+// printed at sale time), so editing a party never rewrites past records.
 export async function saveParty(Model, sellerId, id, data) {
-  const fields = { name: data.name, phone: data.phone, address: data.address };
-  if (Model === Supplier) fields.gstin = data.gstin;
+  const fields = { name: data.name, phone: data.phone, email: data.email, address: data.address, gstin: data.gstin };
   Object.keys(fields).forEach((k) => fields[k] === undefined && delete fields[k]);
   if (id) {
-    const doc = await Model.findOneAndUpdate({ _id: id, seller: sellerId }, fields, { new: true });
-    if (!doc) throw err(404, "Not found");
-    return doc;
+    if (!mongoose.Types.ObjectId.isValid(String(id))) throw err(404, "Not found");
+    const current = await Model.findOne({ _id: id, seller: sellerId }).lean();
+    if (!current) throw err(404, "Not found");
+    await assertUniqueParty(Model, sellerId, id, fields, current);
+    return Model.findOneAndUpdate({ _id: id, seller: sellerId }, fields, { new: true });
   }
+  await assertUniqueParty(Model, sellerId, null, fields, null);
   return Model.create({ seller: sellerId, ...fields });
 }
 
