@@ -164,16 +164,16 @@ const OrderProgressTracker = ({
                 <Clock size={20} className="text-amber-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider leading-tight">
+                <p className="text-[13px] font-bold text-amber-700 uppercase tracking-wider leading-tight">
                   Estimated Time
                 </p>
                 <p className="text-base sm:text-lg font-black text-amber-900 leading-tight mt-0.5">{estimatedArrivalText}</p>
               </div>
             </div>
             <div className="text-right flex flex-col items-end justify-center shrink-0">
-              <p className="text-[11px] text-amber-600 font-semibold leading-tight">Arriving in</p>
+              <p className="text-[13px] text-amber-600 font-semibold leading-tight">Arriving in</p>
               <p className="text-xl font-black text-amber-900 leading-tight my-0.5">{arrivingInText}</p>
-              <div className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200 whitespace-nowrap mt-0.5">
+              <div className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-[12px] font-bold text-amber-700 ring-1 ring-amber-200 whitespace-nowrap mt-0.5">
                 Total distance: {totalDistanceText}
               </div>
             </div>

@@ -5,6 +5,7 @@ import { useToast } from "@shared/components/ui/Toast";
 
 import { useCart } from "../../../context/CartContext";
 import { formatAmount } from "@shared/utils/currency";
+import { getCartItemVariantLabel } from "../../../utils/variantLabel";
 
 /**
  * CheckoutCartSummary
@@ -53,13 +54,13 @@ const CheckoutCartSummary = React.memo(function CheckoutCartSummary({
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="font-bold text-slate-800 mb-1">{item.name}</h4>
-              {(item.variantName || item.variantSku) && (
+              {getCartItemVariantLabel(item) && (
                 <p className="text-xs text-slate-500 mb-1">
-                  Variant: {item.variantName || item.variantSku}
+                  {getCartItemVariantLabel(item)}
                 </p>
               )}
               {isItemOut && (
-                <p className="text-[10px] font-black text-rose-600 uppercase tracking-wider bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md inline-block mb-1">
+                <p className="text-[12px] font-black text-rose-600 uppercase tracking-wider bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md inline-block mb-1">
                   Out of Stock
                 </p>
               )}
@@ -123,7 +124,7 @@ const CheckoutCartSummary = React.memo(function CheckoutCartSummary({
                 <div className="text-right leading-tight">
                   <p className="text-base font-black text-slate-800">₹{total}</p>
                   {hasDiscount && (
-                    <p className="text-[11px] font-bold text-slate-400 line-through">
+                    <p className="text-[13px] font-bold text-slate-400 line-through">
                       ₹{totalMrp}
                     </p>
                   )}

@@ -7,8 +7,6 @@ import { customerApi } from '../../services/customerApi';
 import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_CATEGORY_IMAGE = "https://cdn.grofers.com/cdn-cgi/image/f=auto,fit=scale-down,q=70,metadata=none,w=270/layout-engine/2022-11/Slice-1_9.png";
-
 const COLORS = [
     "#F4EFE6", "#EEF4EA", "#EAF2F8", "#F5EAF2",
     "#F9EBEA", "#E8F8F5", "#FEF9E7", "#EBF5FB"
@@ -45,7 +43,7 @@ const CategoriesMegaMenu = ({
                             const categories = (header.children || []).map((cat, cIdx) => ({
                                 id: cat._id,
                                 name: cat.name,
-                                image: cat.image || DEFAULT_CATEGORY_IMAGE,
+                                image: cat.image,
                                 color: COLORS[(idx + cIdx) % COLORS.length]
                             }));
                             return {
@@ -258,17 +256,21 @@ const CategoriesMegaMenu = ({
                                                     className="w-14 h-14 rounded-2xl flex items-center justify-center p-2 mb-2 shadow-sm transition-transform group-hover:scale-105"
                                                     style={{ backgroundColor: cat.color }}
                                                 >
-                                                    <img
-                                                        src={applyCloudinaryTransform(cat.image, "f_auto,q_auto,w_100")}
-                                                        alt={cat.name}
-                                                        className="w-full h-full object-contain"
-                                                        loading="lazy"
-                                                    />
+                                                    {cat.image ? (
+                                                        <img
+                                                            src={applyCloudinaryTransform(cat.image, "f_auto,q_auto,w_100")}
+                                                            alt={cat.name}
+                                                            className="w-full h-full object-contain"
+                                                            loading="lazy"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-lg font-black text-slate-400">{String(cat.name || "?").trim().charAt(0).toUpperCase()}</span>
+                                                    )}
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-primary transition-colors">
+                                                <span className="text-xs font-bold text-slate-800 leading-snug break-words group-hover:text-primary transition-colors">
                                                     {cat.name}
                                                 </span>
-                                                <span className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                                                <span className="text-[12px] text-slate-400 mt-0.5 line-clamp-1">
                                                     in {cat.groupTitle}
                                                 </span>
                                             </button>
@@ -298,7 +300,7 @@ const CategoriesMegaMenu = ({
                                             >
                                                 <span className="truncate">{group.title}</span>
                                                 <span className={cn(
-                                                    "text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ml-1 transition-colors",
+                                                    "text-[12px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ml-1 transition-colors",
                                                     isSelected 
                                                         ? "bg-primary/10 text-primary" 
                                                         : "bg-slate-200/60 text-slate-500 group-hover:bg-slate-200"
@@ -318,7 +320,7 @@ const CategoriesMegaMenu = ({
                                                 <h3 className="text-sm md:text-base font-black text-slate-900">
                                                     {activeGroup.title}
                                                 </h3>
-                                                <span className="text-[11px] font-medium text-slate-400">
+                                                <span className="text-[13px] font-medium text-slate-400">
                                                     {activeGroup.categories.length} items
                                                 </span>
                                             </div>
@@ -335,14 +337,18 @@ const CategoriesMegaMenu = ({
                                                             className="w-16 h-16 rounded-2xl flex items-center justify-center p-2 mb-2 shadow-inner transition-transform duration-300 group-hover:scale-105"
                                                             style={{ backgroundColor: cat.color }}
                                                         >
-                                                            <img
-                                                                src={applyCloudinaryTransform(cat.image, "f_auto,q_auto,w_120")}
-                                                                alt={cat.name}
-                                                                className="w-full h-full object-contain drop-shadow-sm"
-                                                                loading="lazy"
-                                                            />
+                                                            {cat.image ? (
+                                                                <img
+                                                                    src={applyCloudinaryTransform(cat.image, "f_auto,q_auto,w_120")}
+                                                                    alt={cat.name}
+                                                                    className="w-full h-full object-contain drop-shadow-sm"
+                                                                    loading="lazy"
+                                                                />
+                                                            ) : (
+                                                                <span className="text-lg font-black text-slate-400">{String(cat.name || "?").trim().charAt(0).toUpperCase()}</span>
+                                                            )}
                                                         </div>
-                                                        <span className="text-xs font-bold text-slate-800 leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                                                        <span className="text-xs font-bold text-slate-800 leading-snug break-words group-hover:text-primary transition-colors">
                                                             {cat.name}
                                                         </span>
                                                     </button>

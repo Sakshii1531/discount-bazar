@@ -84,8 +84,8 @@ function CategoryNavColumn({
       style={{
         borderBottomColor: isActive ? "transparent" : categoryAccent,
       }}
-      className="relative z-[2] flex min-w-[54px] shrink-0 cursor-pointer flex-col items-center gap-0.5 border-b-2 px-1.5 pb-0.5 pt-0.5 snap-start md:min-w-[68px] md:px-2">
-      <div className="relative z-10 flex h-9 w-9 items-center justify-center md:h-11 md:w-11">
+      className="relative z-[2] flex w-[68px] shrink-0 cursor-pointer flex-col items-center gap-0.5 border-b-2 px-1 pb-0.5 pt-0.5 snap-start md:w-[88px] md:px-1.5">
+      <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center md:h-10 md:w-10">
         {typeof cat.icon === "function" ||
         (typeof cat.icon === "object" && cat.icon.$$typeof) ? (
           <cat.icon
@@ -106,12 +106,13 @@ function CategoryNavColumn({
           />
         )}
       </div>
-      <div className="relative mt-px w-full">
+      <div className="relative mt-px flex w-full flex-1 items-start">
         <span
           ref={labelRef}
+          title={cat.name}
           className={cn(
-            "relative z-10 mx-auto block max-w-[76px] truncate px-1 pb-0.5 text-center text-[8px] uppercase tracking-tight md:max-w-[92px] md:text-[10px]",
-            isActive ? "font-black text-black" : "font-bold text-black",
+            "relative z-10 mx-auto block w-full px-0.5 pb-1 text-center text-[11px] leading-tight tracking-tight line-clamp-2 break-words md:text-[12px]",
+            isActive ? "font-bold text-black" : "font-medium text-black",
           )}
           style={{
             color: "#000000",
@@ -527,7 +528,7 @@ const MainLocationHeader = ({
                 <div className="flex items-center gap-1.5 opacity-70">
                   <AccessTimeIcon sx={{ fontSize: 13, color: headerFontColor }} />
                   <span 
-                    className="text-[11px] font-bold uppercase tracking-wider leading-none"
+                    className="text-[13px] font-bold uppercase tracking-wider leading-none"
                     style={{ color: headerFontColor }}
                   >
                     {currentLocation.time}
@@ -543,7 +544,7 @@ const MainLocationHeader = ({
                   className="flex items-center gap-1 text-slate-900 hover:text-slate-700 cursor-pointer group active:scale-95 transition-all border-0 bg-transparent p-0 text-left">
                   <LocationOnIcon sx={{ fontSize: 14, color: "inherit" }} />
                   <div 
-                    className="text-[13px] font-bold leading-tight max-w-[250px] lg:max-w-[320px] truncate"
+                    className="text-[15px] font-bold leading-tight max-w-[250px] lg:max-w-[320px] truncate"
                     style={{ color: headerFontColor }}
                   >
                     {isFetchingLocation
@@ -578,7 +579,7 @@ const MainLocationHeader = ({
                   type="text"
                   placeholder={searchPlaceholder || "Search Products..."}
                   readOnly
-                  className="flex-1 bg-transparent border-none outline-none pl-2 text-slate-800 font-semibold placeholder:text-black text-[15px] cursor-pointer"
+                  className="flex-1 bg-transparent border-none outline-none pl-2 text-slate-800 font-semibold placeholder:text-black text-[17px] cursor-pointer"
                 />
                 <div className="flex items-center gap-2 border-l border-slate-100 pl-3">
                   <button
@@ -624,7 +625,7 @@ const MainLocationHeader = ({
               >
                 <ShoppingCartOutlinedIcon sx={{ fontSize: 24 }} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-brand-900 text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-brand-800 shadow-sm transition-transform group-hover:-translate-y-0.5">
+                  <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-brand-900 text-[11px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-brand-800 shadow-sm transition-transform group-hover:-translate-y-0.5">
                     {cartCount}
                   </span>
                 )}
@@ -648,7 +649,7 @@ const MainLocationHeader = ({
               className="relative z-10 mb-4">
               <div className="mb-1">
                 <span 
-                  className="inline-flex items-center rounded-full border border-black/10 bg-white/18 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm"
+                  className="inline-flex items-center rounded-full border border-black/10 bg-white/18 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wider backdrop-blur-sm"
                   style={{ color: headerFontColor }}
                 >
                   {appName}
@@ -675,7 +676,7 @@ const MainLocationHeader = ({
                     className="flex items-center gap-1 text-slate-800 cursor-pointer group active:scale-95 transition-transform border-0 bg-transparent p-0 text-left">
                     <LocationOnIcon sx={{ fontSize: 14, color: headerFontColor }} />
                     <div 
-                      className="text-[10px] font-medium leading-tight max-w-[280px] truncate"
+                      className="text-[12px] font-medium leading-tight max-w-[280px] truncate"
                       style={{ color: headerFontColor }}
                     >
                       {isFetchingLocation
@@ -703,7 +704,7 @@ const MainLocationHeader = ({
                 type="text"
                 placeholder={searchPlaceholder || "Search Products..."}
                 readOnly
-                className="flex-1 bg-transparent border-none outline-none pl-2 text-slate-800 font-semibold placeholder:text-black text-[14px] cursor-pointer"
+                className="flex-1 bg-transparent border-none outline-none pl-2 text-slate-800 font-semibold placeholder:text-black text-[16px] cursor-pointer"
               />
               <div className="flex items-center gap-2 border-l border-slate-100 pl-2.5">
                 <button
@@ -806,7 +807,7 @@ const MainLocationHeader = ({
                     mass: 0.6,
                   },
                 }}
-                className="relative flex items-end justify-start gap-0 overflow-x-auto no-scrollbar scroll-smooth -mx-2 px-2 md:mx-0 md:px-2 md:pr-24 z-10 snap-x pt-0.5 min-h-[68px] md:min-h-[76px] pb-0.5">
+                className="relative flex items-stretch justify-start gap-0 overflow-x-auto no-scrollbar scroll-smooth -mx-2 px-2 md:mx-0 md:px-2 md:pr-24 z-10 snap-x pt-0.5 min-h-[68px] md:min-h-[76px] pb-0.5">
                 {displayCategories.map((cat) => {
                   const isActive = isCategoryActive(cat);
                   return (

@@ -12,6 +12,7 @@ import { applyCloudinaryTransform } from '@/core/utils/imageUtils';
 import { useSettings } from '@core/context/SettingsContext';
 import Lottie from 'lottie-react';
 import { getDisplayPricing, getUnitPriceLabel } from "../utils/productPricing";
+import { getVariantLabel } from "../utils/variantLabel";
 import { brandPath, productPath } from "../utils/catalogLinks";
 import ProductRecommendations from "../components/shared/ProductRecommendations";
 import BrandAvatar from "../components/shared/BrandAvatar";
@@ -314,7 +315,7 @@ const ProductDetailPage = () => {
     const isWishlisted = isInWishlist(product.id);
     const effectivePrice = pricing.sellingPrice;
     const discountPercentage = pricing.discountPercent;
-    const packLabel = selectedVariant?.name || product.weight || '';
+    const packLabel = getVariantLabel(selectedVariant, product) || product.weight || '';
     const unitPriceLabel = getUnitPriceLabel(effectivePrice, packLabel);
     const ratingAverage = ratingSummary.count > 0 ? Number(ratingSummary.average) : Number(product.ratingAverage) || 0;
     const ratingCount = ratingSummary.count > 0 ? ratingSummary.count : Number(product.ratingCount) || 0;
@@ -409,7 +410,7 @@ const ProductDetailPage = () => {
                         >
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (
-                                <span className="h-5 min-w-[20px] px-1 bg-primary text-primary-foreground text-[10px] font-black rounded-full flex items-center justify-center">
+                                <span className="h-5 min-w-[20px] px-1 bg-primary text-primary-foreground text-[12px] font-black rounded-full flex items-center justify-center">
                                     {cartCount}
                                 </span>
                             )}
@@ -526,7 +527,7 @@ const ProductDetailPage = () => {
                                         <BrandAvatar name={brandName} className="h-8 w-8 text-sm flex-shrink-0" />
                                         <span className="min-w-0">
                                             <span className="block text-sm font-black text-slate-800 truncate">{brandName}</span>
-                                            <span className="block text-[10px] font-bold text-primary">View all products</span>
+                                            <span className="block text-[12px] font-bold text-primary">View all products</span>
                                         </span>
                                         <ChevronRight size={16} className="text-slate-400 flex-shrink-0" />
                                     </Link>
@@ -535,7 +536,7 @@ const ProductDetailPage = () => {
                                 {/* Variants */}
                                 {variants.length > 0 && (
                                     <div className="mb-5">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Select Variant</h4>
+                                        <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Select Variant</h4>
                                         <div className="flex gap-2 flex-wrap">
                                             {variants.map((v, idx) => {
                                                 const key = String(v?.sku || v?.name || '').trim();
@@ -556,8 +557,8 @@ const ProductDetailPage = () => {
                                                                     : "border-slate-200 bg-white hover:border-slate-300"
                                                         )}
                                                     >
-                                                        <span className="block text-xs font-black text-slate-800">{v.name}</span>
-                                                        <span className="block text-[11px] font-bold text-slate-500">
+                                                        <span className="block text-xs font-black text-slate-800">{getVariantLabel(v, product) || `Option ${idx + 1}`}</span>
+                                                        <span className="block text-[13px] font-bold text-slate-500">
                                                             {out ? 'Out of stock' : `₹${vp.sellingPrice}`}
                                                         </span>
                                                     </button>
@@ -587,7 +588,7 @@ const ProductDetailPage = () => {
                                     {unitPriceLabel && (
                                         <p className="text-xs font-bold text-slate-500 mb-0.5" data-testid="product-unit-price">({unitPriceLabel})</p>
                                     )}
-                                    <p className="text-[11px] font-semibold text-slate-400">
+                                    <p className="text-[13px] font-semibold text-slate-400">
                                         {taxRate > 0
                                             ? `Taxes (${taxRate}%) are added at checkout`
                                             : 'Inclusive of all applicable taxes'}
@@ -608,24 +609,24 @@ const ProductDetailPage = () => {
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
                                     {packLabel && (
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pack Size</p>
+                                            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pack Size</p>
                                             <p className="text-xs sm:text-sm font-black text-slate-800 truncate">{packLabel}</p>
                                         </div>
                                     )}
                                     {product.deliveryTime && (
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p>
+                                            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p>
                                             <p className="text-xs sm:text-sm font-black text-slate-800 truncate" data-testid="product-delivery-time">{product.deliveryTime}</p>
                                         </div>
                                     )}
                                     {brandName && (
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Brand</p>
+                                            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Brand</p>
                                             <p className="text-xs sm:text-sm font-black text-slate-800 truncate">{brandName}</p>
                                         </div>
                                     )}
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Returns</p>
+                                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Returns</p>
                                         <p className={cn("text-xs sm:text-sm font-black truncate", product.returnPolicy?.isReturnable ? "text-emerald-600" : "text-rose-500")}>
                                             {product.returnPolicy?.isReturnable
                                                 ? `${product.returnPolicy.returnWindowDays}-day return`
@@ -695,19 +696,19 @@ const ProductDetailPage = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             {product.shelfLife && (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Shelf Life</p>
+                                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-1">Shelf Life</p>
                                     <p className="text-sm font-black text-slate-800">{product.shelfLife}</p>
                                 </div>
                             )}
                             {product.countryOfOrigin && (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Country of Origin</p>
+                                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-1">Country of Origin</p>
                                     <p className="text-sm font-black text-slate-800">{product.countryOfOrigin}</p>
                                 </div>
                             )}
                             {product.fssaiLicense && (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">FSSAI License</p>
+                                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-1">FSSAI License</p>
                                     <p className="text-sm font-black text-slate-800 break-all">{product.fssaiLicense}</p>
                                 </div>
                             )}
@@ -738,7 +739,7 @@ const ProductDetailPage = () => {
                                 ) : product?.pendingRatingOrderItemId ? (
                                     <form onSubmit={handleReviewSubmit} className="space-y-4">
                                         <div>
-                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-2">Rate this product</label>
+                                            <label className="text-[13px] font-black text-slate-400 uppercase tracking-wider block mb-2">Rate this product</label>
                                             <div className="flex gap-1.5">
                                                 {[1, 2, 3, 4, 5].map((star) => (
                                                     <button
@@ -757,7 +758,7 @@ const ProductDetailPage = () => {
                                         </div>
 
                                         <div>
-                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-2">Your Comments</label>
+                                            <label className="text-[13px] font-black text-slate-400 uppercase tracking-wider block mb-2">Your Comments</label>
                                             <textarea
                                                 value={newReview.comment}
                                                 onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
@@ -803,7 +804,7 @@ const ProductDetailPage = () => {
                                                 />
                                             ))}
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">
                                             {ratingSummary.count} Ratings
                                         </p>
                                     </div>
@@ -814,14 +815,14 @@ const ProductDetailPage = () => {
                                             const percent = ratingSummary.count > 0 ? Math.round((count / ratingSummary.count) * 100) : 0;
                                             return (
                                                 <div key={star} className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                                                    <span className="w-5 text-right text-[11px] shrink-0">{star}★</span>
+                                                    <span className="w-5 text-right text-[13px] shrink-0">{star}★</span>
                                                     <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                                                         <div
                                                             className="h-full bg-amber-400 rounded-full transition-all duration-300"
                                                             style={{ width: `${percent}%` }}
                                                         />
                                                     </div>
-                                                    <span className="w-8 text-right text-[10px] text-slate-400 shrink-0">{percent}%</span>
+                                                    <span className="w-8 text-right text-[12px] text-slate-400 shrink-0">{percent}%</span>
                                                 </div>
                                             );
                                         })}
@@ -857,7 +858,7 @@ const ProductDetailPage = () => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-slate-400">
+                                                <span className="text-[12px] font-bold text-slate-400">
                                                     {new Date(review.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </span>
                                             </div>
@@ -884,7 +885,7 @@ const ProductDetailPage = () => {
             {/* Mobile Floating Sticky Bottom CTA */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Price</span>
+                    <span className="text-[12px] font-bold text-slate-400 uppercase">Price</span>
                     <div className="flex items-baseline gap-1.5">
                         <span className="text-xl font-black text-slate-900">₹{effectivePrice}</span>
                         {discountPercentage > 0 && (

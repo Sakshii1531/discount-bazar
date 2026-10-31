@@ -10,7 +10,7 @@
 import mongoose from 'mongoose';
 import { getProcessRole, isComponentEnabled, validateProcessRole } from './processRole.js';
 import { isRedisEnabled, getRedisClient, waitForRedis } from '../config/redis.js';
-import { createAllIndexes } from '../services/databaseIndexManager.js';
+import { createAllIndexes, dropTtlIndexesOnPermanentRecords } from '../services/databaseIndexManager.js';
 import { startSearchIndexWorker } from '../services/searchSyncService.js';
 // Side-effect import: registers every Mongoose model so the boot-time
 // `assertAllModelsRegistered()` check below works regardless of which
@@ -260,7 +260,13 @@ async function startup() {
       throw error;
     }
 
-    // Step 6: Create database indexes
+    // Step 6: Create database indexes. Stale TTL indexes on bills/ledgers are
+    // dropped first — they delete history (see dropTtlIndexesOnPermanentRecords).
+    try {
+      await dropTtlIndexesOnPermanentRecords();
+    } catch (error) {
+      console.error('[Startup] Warning: Failed to drop TTL indexes on permanent records:', error.message);
+    }
     try {
       await createAllIndexes();
     } catch (error) {

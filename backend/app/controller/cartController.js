@@ -4,7 +4,7 @@ import handleResponse from "../utils/helper.js";
 import { getCustomerVisibleFilter } from "../services/productModerationService.js";
 
 const CART_POPULATE_FIELDS =
-  "name slug price salePrice mainImage stock status headerId categoryId subcategoryId sellerId variants";
+  "name slug price salePrice mainImage stock status headerId categoryId subcategoryId sellerId variants weight";
 
 export const CUSTOMER_VISIBLE_PRODUCT_MATCH = {
   status: "active",

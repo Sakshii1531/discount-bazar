@@ -423,7 +423,7 @@ const SearchPage = () => {
                         {/* 1. Recently Searched Item Section */}
                         {pastSearches.length > 0 && (
                             <section>
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Recently Searched</h3>
+                                <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Recently Searched</h3>
                                 <div className="flex gap-2 overflow-x-auto no-scrollbar">
                                     {pastSearches.map((term) => (
                                         <div

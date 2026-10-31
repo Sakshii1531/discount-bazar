@@ -49,6 +49,7 @@ import { getOrderSocket, joinOrderRoom, leaveOrderRoom, onOrderStatusUpdate, onC
 import { getLegacyStatusFromOrder } from "@/shared/utils/orderStatus";
 import { createSocketTokenReader } from "@core/utils/authStorage";
 import { STORAGE_KEYS } from "@core/utils/storage";
+import { getVariantLabel } from "../utils/variantLabel";
 
 const coordsToLatLng = (coords) => {
   if (!Array.isArray(coords) || coords.length < 2) return null;
@@ -1080,7 +1081,7 @@ const OrderDetailPage = () => {
                   )}
                 </div>
                 {order.deliveryBoy && (
-                  <div className="absolute -bottom-1 -right-1 bg-white text-primary text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-md">
+                  <div className="absolute -bottom-1 -right-1 bg-white text-primary text-[11px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-md">
                     {order.deliveryBoy.ratingAverage && order.deliveryBoy.ratingAverage > 0
                       ? `${order.deliveryBoy.ratingAverage.toFixed(1)} ★`
                       : "New ★"}
@@ -1117,7 +1118,7 @@ const OrderDetailPage = () => {
                 {existingRating ? (
                   <div className="p-3 bg-white/15 rounded-2xl backdrop-blur-sm border border-white/25">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-white/80">Your Delivery Rating</span>
+                      <span className="text-[12px] font-black uppercase tracking-wider text-white/80">Your Delivery Rating</span>
                       <div className="flex items-center gap-1 text-xs font-black text-amber-300">
                         <span>{existingRating.rating}</span>
                         <Star size={14} className="fill-amber-300 text-amber-300" />
@@ -1126,7 +1127,7 @@ const OrderDetailPage = () => {
                     {existingRating.feedbackTags?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {existingRating.feedbackTags.map((tag) => (
-                          <span key={tag} className="px-2.5 py-0.5 bg-white/20 text-white rounded-full text-[9px] font-bold">
+                          <span key={tag} className="px-2.5 py-0.5 bg-white/20 text-white rounded-full text-[11px] font-bold">
                             {tag.replace(/_/g, " ")}
                           </span>
                         ))}
@@ -1145,7 +1146,7 @@ const OrderDetailPage = () => {
                     Rate Delivery Partner
                   </button>
                 ) : ratingEligibility?.reason === "RATING_WINDOW_EXPIRED" ? (
-                  <p className="text-[10px] text-white/70 font-semibold text-center py-1">
+                  <p className="text-[12px] text-white/70 font-semibold text-center py-1">
                     Rating period expired (7 days post-delivery)
                   </p>
                 ) : null}
@@ -1168,12 +1169,12 @@ const OrderDetailPage = () => {
                 </div>
                 <div>
                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide">Product Ratings</h4>
-                  <p className="text-[11px] text-slate-500 font-medium">Rate the quality & freshness of your items</p>
+                  <p className="text-[13px] text-slate-500 font-medium">Rate the quality & freshness of your items</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowProductRatingModal(true)}
-                className="w-fit px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                className="w-fit px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[13px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
               >
                 Rate Products
               </button>
@@ -1227,7 +1228,7 @@ const OrderDetailPage = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-xs font-bold text-brand-600 uppercase tracking-wider">Delivery Address</p>
-                <span className="bg-brand-50 text-brand-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                <span className="bg-brand-50 text-brand-700 text-[12px] px-2 py-0.5 rounded-full font-bold">
                   {order.address.type}
                 </span>
               </div>
@@ -1281,9 +1282,11 @@ const OrderDetailPage = () => {
                 ? item.product.variants.find(v => String(v.sku || '').trim() === rawSku || String(v._id || '').trim() === rawSku)
                 : null;
 
+              const matchedVariantLabel = matchedVariant ? getVariantLabel(matchedVariant, item.product) : '';
+
               const candidateName =
                 (item.variantName && !isRawSku(item.variantName) ? item.variantName : null) ||
-                matchedVariant?.name ||
+                matchedVariantLabel ||
                 item.unit ||
                 item.product?.unit ||
                 item.weight ||
@@ -1295,7 +1298,7 @@ const OrderDetailPage = () => {
                 (typeof item.variant === 'string' && !isRawSku(item.variant) ? item.variant : item.variant?.name || item.variant?.title) ||
                 (typeof item.selectedVariant === 'string' && !isRawSku(item.selectedVariant) ? item.selectedVariant : item.selectedVariant?.name || item.selectedVariant?.title);
 
-              const variantName = candidateName && !isRawSku(candidateName) ? candidateName : (matchedVariant?.name || item.product?.unit || null);
+              const variantName = matchedVariantLabel || (candidateName && !isRawSku(candidateName) ? candidateName : (item.product?.unit || null));
 
               return (
                 <div
@@ -1334,12 +1337,12 @@ const OrderDetailPage = () => {
                   {isDelivered && (
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs font-bold">
                       {itemReturnStatus !== "none" ? (
-                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px]">
+                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full uppercase tracking-wider text-[12px]">
                           Return {itemReturnStatus}
                         </span>
                       ) : returnEligible ? (
                         <div className="flex items-center justify-between w-full">
-                          <span className="text-emerald-600 font-bold text-[11px]">
+                          <span className="text-emerald-600 font-bold text-[13px]">
                             ✓ Return within {remainingDays} day{remainingDays > 1 ? "s" : ""}
                           </span>
                           <button
@@ -1352,11 +1355,11 @@ const OrderDetailPage = () => {
                           </button>
                         </div>
                       ) : !returnPolicy.isReturnable ? (
-                        <span className="text-slate-400 font-semibold text-[11px]">
+                        <span className="text-slate-400 font-semibold text-[13px]">
                           ❌ Non Returnable
                         </span>
                       ) : (
-                        <span className="text-rose-500 font-semibold text-[11px]">
+                        <span className="text-rose-500 font-semibold text-[13px]">
                           Return Window Closed
                         </span>
                       )}
@@ -1466,7 +1469,7 @@ const OrderDetailPage = () => {
                     )}
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">
                       Payment
                     </p>
                     <p className="text-sm font-bold text-slate-900">

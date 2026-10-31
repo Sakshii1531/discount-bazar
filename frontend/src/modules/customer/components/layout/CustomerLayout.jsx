@@ -7,6 +7,7 @@ import ProductDetailSheet from '../shared/ProductDetailSheet';
 import SellerConflictDialog from '../shared/SellerConflictDialog';
 import MobileFooterMessage from './MobileFooterMessage';
 import { useProductDetail } from '../../context/ProductDetailContext';
+import { useCustomerTypography } from '../../hooks/useCustomerTypography';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@core/context/AuthContext';
@@ -18,6 +19,7 @@ const CustomerLayout = ({ children, showHeader: showHeaderProp, fullHeight = fal
     const location = useLocation();
     const { isOpen: isProductDetailOpen } = useProductDetail();
     const { user, token } = useAuth();
+    useCustomerTypography();
 
     // Listen for Return OTPs (Real-time Alert for Customer)
     useEffect(() => {

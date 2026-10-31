@@ -41,7 +41,7 @@ const CheckoutPaymentSelector = React.memo(function CheckoutPaymentSelector({
                 <h3 className="font-black text-slate-800 text-sm tracking-tight uppercase">
                   Use Wallet Balance
                 </h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider">
                   Available: {formatCurrencyInteger(walletBalance)}
                 </p>
               </div>
@@ -63,10 +63,10 @@ const CheckoutPaymentSelector = React.memo(function CheckoutPaymentSelector({
               animate={{ height: "auto", opacity: 1 }}
               className="pt-2 border-t border-slate-50 mt-2">
               <div className="flex justify-between items-center bg-brand-50/50 p-2 rounded-xl">
-                <span className="text-[11px] font-bold text-slate-600 uppercase">
+                <span className="text-[13px] font-bold text-slate-600 uppercase">
                   Amount to be used
                 </span>
-                <span className="text-[13px] font-black text-primary">
+                <span className="text-[15px] font-black text-primary">
                   {formatCurrencyInteger(walletAmountToUse)}
                 </span>
               </div>

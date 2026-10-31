@@ -503,7 +503,7 @@ const LiveTrackingMap = memo(({
             <Clock size={20} strokeWidth={2.5} />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            <p className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">
               Arriving in
             </p>
             <h2 className="text-xl font-black text-gray-900 leading-none">
@@ -513,7 +513,7 @@ const LiveTrackingMap = memo(({
         </motion.div>
         <button
           type="button"
-          className="bg-white/90 backdrop-blur-md rounded-full px-3 py-2 shadow-lg border border-white/50 cursor-pointer hover:bg-white transition-colors flex items-center gap-1.5 text-[10px] font-bold text-slate-700"
+          className="bg-white/90 backdrop-blur-md rounded-full px-3 py-2 shadow-lg border border-white/50 cursor-pointer hover:bg-white transition-colors flex items-center gap-1.5 text-[12px] font-bold text-slate-700"
           onClick={() => {
             if (typeof onOpenInMaps === "function") {
               onOpenInMaps({ riderLocation, destinationLocation });
@@ -547,13 +547,13 @@ const LiveTrackingMap = memo(({
                     </div>
                   )}
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground text-[7px] font-bold px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                <div className="absolute -bottom-0.5 -right-0.5 bg-primary text-primary-foreground text-[9px] font-bold px-1 py-0.5 rounded-full flex items-center gap-0.5">
                   4.8 <Star size={5} fill="white" />
                 </div>
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 text-xs truncate">{riderName}</h3>
-                <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                <p className="text-[12px] text-gray-500 flex items-center gap-1">
                   <Shield size={8} />
                   Vaccinated
                 </p>
@@ -593,7 +593,7 @@ const LiveTrackingMap = memo(({
 
       {/* Route cache indicator */}
       {routePolyline && (
-        <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur px-2 py-1 rounded-md text-[10px] text-slate-600 font-bold border border-slate-200 shadow-sm">
+        <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur px-2 py-1 rounded-md text-[12px] text-slate-600 font-bold border border-slate-200 shadow-sm">
           Route cached • Reduced API cost
         </div>
       )}

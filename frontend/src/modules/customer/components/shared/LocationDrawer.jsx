@@ -385,7 +385,7 @@ const LocationDrawer = ({ isOpen, onClose }) => {
                   className="w-full bg-white border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-semibold placeholder:text-[#1A1A1A]/40 shadow-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                 />
               </div>
-              <p className="text-[11px] font-semibold text-slate-400 px-1">
+              <p className="text-[13px] font-semibold text-slate-400 px-1">
                 Type at least 4 characters
               </p>
             </div>
@@ -413,7 +413,7 @@ const LocationDrawer = ({ isOpen, onClose }) => {
                           className="text-primary mt-0.5 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <p className="text-[13px] font-bold text-slate-800 truncate">
+                          <p className="text-[15px] font-bold text-slate-800 truncate">
                             {prediction.structured_formatting?.main_text ||
                               prediction.description}
                           </p>
@@ -456,12 +456,12 @@ const LocationDrawer = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div className="flex-1 flex items-center gap-2 min-w-0">
-                  <h3 className="font-bold text-primary text-[14px] whitespace-nowrap">
+                  <h3 className="font-bold text-primary text-[16px] whitespace-nowrap">
                     {isFetchingLocation
                       ? "Detecting..."
                       : "Use current location"}
                   </h3>
-                  <p className="text-[12px] text-slate-400 font-medium truncate opacity-60">
+                  <p className="text-[14px] text-slate-400 font-medium truncate opacity-60">
                     ({currentLocation.name})
                   </p>
                 </div>
@@ -479,7 +479,7 @@ const LocationDrawer = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-primary text-[15px]">
+                  <h3 className="font-bold text-primary text-[17px]">
                     Add new address
                   </h3>
                 </div>
@@ -488,7 +488,7 @@ const LocationDrawer = ({ isOpen, onClose }) => {
 
               {/* Saved Addresses Section */}
               <div className="mt-4 px-2">
-                <h4 className="text-[13px] font-bold text-slate-500 uppercase tracking-wider mb-4">
+                <h4 className="text-[15px] font-bold text-slate-500 uppercase tracking-wider mb-4">
                   Your saved addresses
                 </h4>
 
@@ -521,15 +521,15 @@ const LocationDrawer = ({ isOpen, onClose }) => {
                             </h3>
                             {(addr.address === currentLocation.name ||
                               addr.isCurrent) && (
-                              <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-tight border border-teal-100">
+                              <span className="text-[12px] bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-tight border border-teal-100">
                                 You are here
                               </span>
                             )}
                           </div>
-                          <p className="text-[13px] text-slate-500 font-medium leading-relaxed mb-3">
+                          <p className="text-[15px] text-slate-500 font-medium leading-relaxed mb-3">
                             {addr.address}
                           </p>
-                          <p className="text-[12px] text-slate-400 font-bold">
+                          <p className="text-[14px] text-slate-400 font-bold">
                             Phone number: {addr.phone}
                           </p>
                         </div>

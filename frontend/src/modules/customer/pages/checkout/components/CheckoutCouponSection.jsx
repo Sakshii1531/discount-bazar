@@ -77,7 +77,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
             See All
           </button>
         </div>
-        <p className="-mt-1 mb-3 text-[11px] font-semibold text-slate-500" data-testid="one-coupon-note">
+        <p className="-mt-1 mb-3 text-[13px] font-semibold text-slate-500" data-testid="one-coupon-note">
           Only one coupon can be used per order
           {selectedCoupon ? " — applying another replaces the current one." : "."}
         </p>
@@ -107,7 +107,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                       {coupon.code}
                     </span>
                     {isApplied && (
-                      <span className="text-[10px] font-black text-green-600 uppercase tracking-wide">
+                      <span className="text-[12px] font-black text-green-600 uppercase tracking-wide">
                         ✓ Applied
                       </span>
                     )}
@@ -115,13 +115,13 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                   <p className="text-sm font-black text-slate-800 leading-tight">
                     {couponHeadline(coupon)}
                     {couponConditions(coupon).map((line) => (
-                      <span key={line} className="block text-[10px] font-medium text-slate-500" data-testid="coupon-condition">
+                      <span key={line} className="block text-[12px] font-medium text-slate-500" data-testid="coupon-condition">
                         {line}
                       </span>
                     ))}
                   </p>
                   {coupon.description && (
-                    <p className="text-[10px] text-slate-500 leading-snug line-clamp-2">
+                    <p className="text-[12px] text-slate-500 leading-snug line-clamp-2">
                       {coupon.description}
                     </p>
                   )}
@@ -182,7 +182,7 @@ const CheckoutCouponSection = React.memo(function CheckoutCouponSection({
                     {couponConditions(coupon).length > 0 && (
                       <ul className="mb-2 space-y-0.5">
                         {couponConditions(coupon).map((line) => (
-                          <li key={line} className="text-[11px] font-semibold text-slate-600">• {line}</li>
+                          <li key={line} className="text-[13px] font-semibold text-slate-600">• {line}</li>
                         ))}
                       </ul>
                     )}

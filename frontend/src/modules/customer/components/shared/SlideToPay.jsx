@@ -90,7 +90,7 @@ const SlideToPay = ({
                 className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
                 style={{ opacity: textOpacity }}
             >
-                <span className="text-white font-black text-sm md:text-[13px] tracking-[0.25em] uppercase flex items-center gap-2">
+                <span className="text-white font-black text-sm md:text-[15px] tracking-[0.25em] uppercase flex items-center gap-2">
                     {text} <span className="text-white/40">|</span> <span className="text-brand-50 font-extrabold">{formatCurrencyInteger(amount || 0)}</span>
                 </span>
 

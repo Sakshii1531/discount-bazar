@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "../shared/ProductCard";
+import CategoryTile, { CATEGORY_TILE_GRID, categoryTileTint } from "../shared/CategoryTile";
 import { cn } from "@/lib/utils";
 import ExperienceBannerCarousel from "./ExperienceBannerCarousel";
 import BrandShowcaseSection from "./BrandShowcaseSection";
@@ -120,44 +121,29 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
               className="-mx-2 md:-mx-4 lg:-mx-6 px-2 md:px-4 lg:px-6"
             >
               {heading && (
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-black text-[#1A1A1A]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-black text-[#1A1A1A]">
                     {heading}
                   </h3>
-                  <span className="text-[11px] font-semibold text-slate-400">
+                  <span className="text-[13px] font-semibold text-slate-400">
                     {allItems.length} categories
                   </span>
                 </div>
               )}
-              <div className="rounded-3xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] border border-slate-100 px-3.5 py-3">
-                <div className="grid grid-cols-4 gap-3">
-                  {visibleItems.map((cat) => (
-                    <button
-                      key={cat._id}
-                      className="group flex flex-col items-center gap-1.5 focus:outline-none"
-                      onClick={() => {
-                        // Remember the header & section so back navigation can restore context
-                        rememberExperienceReturn(section.headerId, section._id);
-                        navigate(`/category/${cat._id}`);
-                      }}
-                    >
-                      <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-slate-100/80 flex items-center justify-center overflow-hidden p-1 transition-all duration-200 group-hover:border-primary/40 group-hover:bg-white group-hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)]">
-                        {cat.image ? (
-                          <img
-                            src={cat.image}
-                            alt={cat.name}
-                            className="w-full h-full object-contain object-center mix-blend-multiply"
-                          />
-                        ) : (
-                          <div className="h-6 w-6 rounded-full bg-slate-100" />
-                        )}
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-700 text-center leading-snug line-clamp-2 group-hover:text-primary">
-                        {cat.name}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              <div className={CATEGORY_TILE_GRID}>
+                {visibleItems.map((cat, idx) => (
+                  <CategoryTile
+                    key={cat._id}
+                    name={cat.name}
+                    image={cat.image}
+                    tint={categoryTileTint(idx)}
+                    onClick={() => {
+                      // Remember the header & section so back navigation can restore context
+                      rememberExperienceReturn(section.headerId, section._id);
+                      navigate(`/category/${cat._id}`);
+                    }}
+                  />
+                ))}
               </div>
               <LazyLoadTrigger
                 enabled={hasMore}
@@ -189,57 +175,42 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
               className="-mx-2 md:-mx-4 lg:-mx-6 px-2 md:px-4 lg:px-6"
             >
               {heading && (
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-black text-[#1A1A1A]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-black text-[#1A1A1A]">
                     {heading}
                   </h3>
-                  <span className="text-[11px] font-semibold text-slate-400">
+                  <span className="text-[13px] font-semibold text-slate-400">
                     {allItems.length} picks
                   </span>
                 </div>
               )}
-              <div className="rounded-3xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] border border-slate-100 px-3.5 py-3">
-                <div className="grid grid-cols-4 gap-3">
-                  {visibleItems.map((cat) => (
-                    <button
-                      key={cat._id}
-                      className="group flex flex-col items-center gap-1.5 focus:outline-none"
-                      onClick={() => {
-                        rememberExperienceReturn(section.headerId, section._id);
-                        const parentId =
-                          cat.parentId?._id ||
-                          cat.parentId ||
-                          cat.categoryId?._id ||
-                          cat.categoryId ||
-                          null;
+              <div className={CATEGORY_TILE_GRID}>
+                {visibleItems.map((cat, idx) => (
+                  <CategoryTile
+                    key={cat._id}
+                    name={cat.name}
+                    image={cat.image}
+                    tint={categoryTileTint(idx)}
+                    onClick={() => {
+                      rememberExperienceReturn(section.headerId, section._id);
+                      const parentId =
+                        cat.parentId?._id ||
+                        cat.parentId ||
+                        cat.categoryId?._id ||
+                        cat.categoryId ||
+                        null;
 
-                        if (parentId) {
-                          navigate(`/category/${parentId}`, {
-                            state: { activeSubcategoryId: cat._id },
-                          });
-                        } else {
-                          // Fallback to previous behavior if we can't resolve parent
-                          navigate(`/category/${cat._id}`);
-                        }
-                      }}
-                    >
-                      <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-slate-100/80 flex items-center justify-center overflow-hidden p-1 transition-all duration-200 group-hover:border-primary/40 group-hover:bg-white group-hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)]">
-                        {cat.image ? (
-                          <img
-                            src={cat.image}
-                            alt={cat.name}
-                            className="w-full h-full object-contain object-center mix-blend-multiply"
-                          />
-                        ) : (
-                          <div className="h-6 w-6 rounded-full bg-slate-100" />
-                        )}
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-700 text-center leading-snug line-clamp-2 group-hover:text-primary">
-                        {cat.name}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      if (parentId) {
+                        navigate(`/category/${parentId}`, {
+                          state: { activeSubcategoryId: cat._id },
+                        });
+                      } else {
+                        // Fallback to previous behavior if we can't resolve parent
+                        navigate(`/category/${cat._id}`);
+                      }
+                    }}
+                  />
+                ))}
               </div>
               <LazyLoadTrigger
                 enabled={hasMore}
@@ -305,7 +276,7 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
                       {heading}
                     </h3>
                   )}
-                  <span className="text-[11px] font-semibold text-slate-400">
+                  <span className="text-[13px] font-semibold text-slate-400">
                     {allProducts.length} items
                   </span>
                 </div>
@@ -360,7 +331,7 @@ const SectionRenderer = ({ sections = [], productsById = {}, categoriesById = {}
                     {heading}
                   </h3>
                 )}
-                <span className="text-[11px] font-semibold text-slate-400">
+                <span className="text-[13px] font-semibold text-slate-400">
                   {cappedItems.length} items
                 </span>
               </div>

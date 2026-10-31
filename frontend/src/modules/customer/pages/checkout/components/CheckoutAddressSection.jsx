@@ -130,7 +130,7 @@ const CheckoutAddressSection = React.memo(function CheckoutAddressSection({
                 <h4 className="text-sm font-bold text-slate-800 mb-1">
                   Enter receiver details
                 </h4>
-                <p className="text-[10px] text-slate-400 mb-3 font-medium">
+                <p className="text-[12px] text-slate-400 mb-3 font-medium">
                   We&apos;ll contact receiver to get the exact delivery address
                 </p>
                 <div className="space-y-3">
@@ -220,10 +220,10 @@ const CheckoutAddressSection = React.memo(function CheckoutAddressSection({
           <Check size={16} className="text-white stroke-[3]" />
         </div>
         <div className="flex-1">
-          <p className="text-[13px] font-semibold text-brand-900">
+          <p className="text-[15px] font-semibold text-brand-900">
             Delivery address confirmed
           </p>
-          <p className="text-[11px] font-medium text-brand-800/80">
+          <p className="text-[13px] font-medium text-brand-800/80">
             We&apos;ll deliver to the address you&apos;ve entered above.
           </p>
         </div>

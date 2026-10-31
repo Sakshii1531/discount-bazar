@@ -163,7 +163,7 @@ const OrdersPage = () => {
                                         <h3 className="font-semibold text-slate-900 text-sm tracking-tight leading-snug truncate">
                                             Order #{order.orderId}
                                         </h3>
-                                        <p className="mt-0.5 text-[11px] text-slate-500 font-medium leading-tight truncate">
+                                        <p className="mt-0.5 text-[13px] text-slate-500 font-medium leading-tight truncate">
                                             {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}{' '}
                                             <span className="mx-1 text-slate-400">•</span>
                                             {new Date(order.createdAt).toLocaleTimeString('en-IN', {
@@ -175,7 +175,7 @@ const OrdersPage = () => {
                                 </div>
                                 <div className="flex flex-col items-end justify-center gap-1 shrink-0 text-right">
                                     <span
-                                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.12em] ${
                                             legacy === 'delivered'
                                                 ? 'bg-brand-50 text-brand-700 border-brand-100'
                                                 : legacy === 'cancelled'
@@ -197,7 +197,7 @@ const OrdersPage = () => {
                                         </span>
                                         <span>{getOrderStatusLabel(order).toUpperCase()}</span>
                                     </span>
-                                    <span className="inline-flex items-center text-[10px] font-medium text-slate-400">
+                                    <span className="inline-flex items-center text-[12px] font-medium text-slate-400">
                                         <span className="h-1 w-1 rounded-full bg-slate-300 mr-1" />
                                         Tap to view details
                                     </span>
@@ -205,7 +205,7 @@ const OrdersPage = () => {
                             </div>
 
                             <div className="border-t border-slate-100 pt-2.5 mt-2.5">
-                                <div className="text-[11px] text-slate-500 font-medium truncate h-4 leading-4 mb-2.5">
+                                <div className="text-[13px] text-slate-500 font-medium truncate h-4 leading-4 mb-2.5">
                                     {order.items?.length > 0 ? order.items.map((i) => i.name).join(', ') : '\u00A0'}
                                 </div>
                                 <div className="flex justify-between items-center gap-1.5 h-7">
@@ -215,7 +215,7 @@ const OrdersPage = () => {
                                             id={`buy-again-btn-${order.orderId}`}
                                             onClick={(e) => handleReorder(e, order)}
                                             disabled={Boolean(reorderingMap[order._id || order.orderId])}
-                                            className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-full text-[10.5px] font-bold flex items-center gap-1 transition-colors shadow-xs disabled:opacity-60 cursor-pointer shrink-0"
+                                            className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-full text-[12.5px] font-bold flex items-center gap-1 transition-colors shadow-xs disabled:opacity-60 cursor-pointer shrink-0"
                                         >
                                             {reorderingMap[order._id || order.orderId] ? (
                                                 <Loader2 size={12} className="animate-spin text-emerald-600" />
@@ -233,7 +233,7 @@ const OrdersPage = () => {
                                                     setSelectedRatingOrderId(order._id || order.orderId);
                                                     setIsRatingModalOpen(true);
                                                 }}
-                                                className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-full text-[10.5px] font-bold flex items-center gap-1 transition-colors shadow-xs shrink-0"
+                                                className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-full text-[12.5px] font-bold flex items-center gap-1 transition-colors shadow-xs shrink-0"
                                             >
                                                 ⭐ Rate Products
                                             </button>
@@ -247,19 +247,19 @@ const OrdersPage = () => {
                                                     e.stopPropagation();
                                                     navigate(`/orders/${order.orderId}?cancel=1`);
                                                 }}
-                                                className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-full text-[10.5px] font-bold transition-colors shadow-xs shrink-0"
+                                                className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-full text-[12.5px] font-bold transition-colors shadow-xs shrink-0"
                                             >
                                                 {order.cancellationEligibility.canSelfCancel ? 'Cancel Order' : 'Request Cancel'}
                                             </button>
                                         )}
                                         {['REQUESTED', 'UNDER_REVIEW'].includes(order.cancellation?.status) && (
-                                            <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[10.5px] font-bold shrink-0">
+                                            <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[12.5px] font-bold shrink-0">
                                                 Cancel requested
                                             </span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                        <span className="text-[10px] font-medium text-slate-400">Total</span>
+                                        <span className="text-[12px] font-medium text-slate-400">Total</span>
                                         <span className="text-xs font-semibold text-slate-900">
                                             {formatCurrencyInteger(order.pricing?.total || order.total || 0)}
                                         </span>

@@ -112,7 +112,7 @@ const WalletPage = () => {
 
             <div className="max-w-2xl mx-auto px-4 pt-1 relative z-20 space-y-4">
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
-                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Available Balance</p>
+                    <p className="text-[13px] font-semibold text-slate-500 uppercase tracking-wide">Available Balance</p>
                     <h2 className="text-3xl font-semibold text-slate-900 mt-1">
                         {loading ? '...' : formatCurrencyInteger(balance || 0)}
                     </h2>
@@ -146,9 +146,9 @@ const WalletPage = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-semibold text-slate-800 text-sm">{tx.title}</h4>
-                                            <p className="text-[11px] text-slate-500">{formatDate(tx.date)}</p>
+                                            <p className="text-[13px] text-slate-500">{formatDate(tx.date)}</p>
                                             {tx.orderId && (
-                                                <p className="text-[10px] text-slate-500">#{tx.orderId}</p>
+                                                <p className="text-[12px] text-slate-500">#{tx.orderId}</p>
                                             )}
                                         </div>
                                     </div>

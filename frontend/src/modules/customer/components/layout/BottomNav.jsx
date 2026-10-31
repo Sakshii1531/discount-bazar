@@ -110,7 +110,7 @@ const BottomNav = () => {
                             </div>
                             <span
                                 className={cn(
-                                    "text-[10px] tracking-tight leading-none transition-colors",
+                                    "text-[12px] tracking-tight leading-none transition-colors",
                                     isActive ? "font-black text-emerald-800" : "font-semibold text-slate-500"
                                 )}
                             >

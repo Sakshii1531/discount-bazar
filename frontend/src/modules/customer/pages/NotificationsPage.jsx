@@ -109,7 +109,7 @@ const NotificationsPage = () => {
                                     <h3 className={`font-semibold ${notification.isRead ? "text-slate-700" : "text-slate-900"}`}>
                                         {notification.title}
                                     </h3>
-                                    <span className="text-[10px] text-slate-400 whitespace-nowrap pt-1">
+                                    <span className="text-[12px] text-slate-400 whitespace-nowrap pt-1">
                                         {timeAgo(notification.createdAt)}
                                     </span>
                                 </div>

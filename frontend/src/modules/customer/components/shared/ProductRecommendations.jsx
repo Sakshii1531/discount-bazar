@@ -18,7 +18,7 @@ const EMPTY = {
 };
 
 const SectionTitle = ({ children }) => (
-  <h3 className="text-[15px] sm:text-base font-black text-slate-900 tracking-tight mb-3 px-0.5">{children}</h3>
+  <h3 className="text-[17px] sm:text-base font-black text-slate-900 tracking-tight mb-3 px-0.5">{children}</h3>
 );
 
 const ProductRow = ({ title, items, onProductClick }) => {
@@ -163,10 +163,10 @@ const ProductRecommendations = ({ productId, onProductClick, onBrandClick, class
                 onClick={() => openBrand(brand.name)}
                 className="group w-[88px] sm:w-[100px] flex-shrink-0 flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-2.5 hover:border-primary/40 hover:shadow-sm transition-all">
                 <BrandAvatar name={brand.name} className="h-12 w-12 text-lg" />
-                <span className="w-full text-[11px] font-bold text-slate-700 text-center leading-tight line-clamp-2 break-words">
+                <span className="w-full text-[13px] font-bold text-slate-700 text-center leading-tight line-clamp-2 break-words">
                   {brand.name}
                 </span>
-                <span className="text-[9px] font-semibold text-slate-400 flex items-center">
+                <span className="text-[11px] font-semibold text-slate-400 flex items-center">
                   {brand.productCount} {brand.productCount === 1 ? "item" : "items"}
                   <ChevronRight size={10} />
                 </span>

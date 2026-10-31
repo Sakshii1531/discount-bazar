@@ -206,11 +206,11 @@ const PaymentStatusPage = () => {
                                 <p className="text-emerald-600 text-sm font-black mb-6 uppercase tracking-wider">Payment Successful</p>
                                 <div className="bg-slate-50 rounded-2xl p-4 mb-8 border border-slate-100">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Order ID</span>
+                                        <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest">Order ID</span>
                                         <span className="text-xs font-black text-slate-700">#{merchantOrderId?.slice(-8).toUpperCase()}</span>
                                     </div>
                                     <div className="h-px bg-slate-200 my-2" />
-                                    <p className="text-[11px] text-slate-500 font-medium">Redirecting to your order details in 4 seconds...</p>
+                                    <p className="text-[13px] text-slate-500 font-medium">Redirecting to your order details in 4 seconds...</p>
                                 </div>
                                 <Button 
                                     onClick={() => navigate('/orders')}

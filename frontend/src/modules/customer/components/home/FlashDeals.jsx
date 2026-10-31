@@ -17,7 +17,7 @@ const FlashDeals = ({ products }) => {
                         </div>
                         <div>
                             <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
-                                <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                <span className="bg-orange-500 text-white text-[12px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
                                     Limited Time
                                 </span>
                                 <div className="flex items-center gap-1 text-orange-600 font-bold text-xs uppercase">

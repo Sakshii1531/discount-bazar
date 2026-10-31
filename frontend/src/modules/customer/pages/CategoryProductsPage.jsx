@@ -138,7 +138,7 @@ const CategoryProductsPage = () => {
                     >
                         <ChevronLeft size={24} className="text-gray-900" />
                     </button>
-                    <h1 className="text-[18px] font-bold text-gray-800 tracking-tight truncate">
+                    <h1 className="text-[20px] font-bold text-gray-800 tracking-tight truncate">
                         {isAll ? (location.state?.title || 'Lowest Price Ever') : (category?.name || (treeStatus === 'loading' ? '' : 'Category'))}
                     </h1>
                 </div>
@@ -176,7 +176,7 @@ const CategoryProductsPage = () => {
                     <>
                         {/* Sidebar (only when the category has subcategories) */}
                         {sidebarItems.length > 0 && (
-                            <aside className="w-[76px] md:w-[110px] lg:w-[130px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto overscroll-contain hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
+                            <aside className="w-[84px] md:w-[116px] lg:w-[136px] border-r border-gray-50 flex flex-col bg-white overflow-y-auto overscroll-contain hide-scrollbar sticky top-[60px] h-[calc(100vh-60px)] pb-32 flex-shrink-0">
                                 {sidebarItems.map((cat) => {
                                     const selected = String(selectedSubCategory) === cat.id;
                                     return (
@@ -198,7 +198,7 @@ const CategoryProductsPage = () => {
                                                 <CategoryIcon image={cat.image} name={cat.name} selected={selected} />
                                             </div>
                                             <span className={cn(
-                                                "text-[10px] text-center font-bold font-sans leading-tight px-1 line-clamp-2 break-words w-full",
+                                                "text-[12px] md:text-[13px] text-center font-bold font-sans leading-tight px-1 break-words [overflow-wrap:anywhere] w-full",
                                                 selected ? "text-primary" : "text-gray-600"
                                             )}>
                                                 {cat.name}

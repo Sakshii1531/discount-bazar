@@ -23,7 +23,7 @@ const CategoryStories = () => {
                                     <img src={story.image} alt={story.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
                                 </div>
                             </div>
-                            <span className="text-[10px] md:text-xs font-black text-slate-700 tracking-tight uppercase group-hover:text-primary transition-colors">{story.title}</span>
+                            <span className="text-[12px] md:text-xs font-black text-slate-700 tracking-tight uppercase group-hover:text-primary transition-colors">{story.title}</span>
                         </div>
                     ))}
                 </div>

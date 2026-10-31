@@ -70,7 +70,7 @@ const OrderTransactionsPage = () => {
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                         <div>
                             <h3 className="text-base font-semibold text-slate-800">Transaction History</h3>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="text-[13px] text-slate-500">
                                 Based on your recent orders
                             </p>
                         </div>
@@ -86,7 +86,7 @@ const OrderTransactionsPage = () => {
                             <p className="text-sm font-semibold text-slate-500 mb-1">
                                 No transactions yet
                             </p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[13px] text-slate-400">
                                 Place an order to see your payment history here.
                             </p>
                         </div>
@@ -123,12 +123,12 @@ const OrderTransactionsPage = () => {
                                                 <h4 className="font-semibold text-slate-800 text-sm">
                                                     {isRefund ? 'Refund' : 'Order Payment'}
                                                 </h4>
-                                                <p className="text-[11px] text-slate-500">
+                                                <p className="text-[13px] text-slate-500">
                                                     #{orderCode} •{' '}
                                                     {formatPaymentMethod(order)}
                                                 </p>
                                                 {createdAt && (
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                                    <p className="text-[13px] text-slate-500 mt-0.5">
                                                         {createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })},{' '}
                                                         {createdAt.toLocaleTimeString([], {
                                                             hour: '2-digit',

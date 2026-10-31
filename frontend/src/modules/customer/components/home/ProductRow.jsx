@@ -10,7 +10,7 @@ const ProductRow = ({ title, subtitle, products, badge }) => {
                 <div className="flex items-center justify-between mb-6 group cursor-pointer">
                     <div className="text-left">
                         {badge && (
-                            <span className="text-[10px] font-black text-primary-foreground bg-primary px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">
+                            <span className="text-[12px] font-black text-primary-foreground bg-primary px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">
                                 {badge}
                             </span>
                         )}

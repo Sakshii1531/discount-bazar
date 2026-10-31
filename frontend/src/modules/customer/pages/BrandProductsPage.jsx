@@ -45,9 +45,9 @@ const BrandProductsPage = () => {
                 </button>
                 <BrandAvatar name={displayName} className="h-10 w-10 text-base flex-shrink-0" />
                 <div className="min-w-0">
-                    <h1 className="text-[17px] font-bold text-gray-800 tracking-tight truncate">{displayName || 'Brand'}</h1>
+                    <h1 className="text-[19px] font-bold text-gray-800 tracking-tight truncate">{displayName || 'Brand'}</h1>
                     {listing.status === 'ready' && listing.total > 0 && (
-                        <p className="text-[11px] font-semibold text-slate-400">
+                        <p className="text-[13px] font-semibold text-slate-400">
                             {listing.total} {listing.total === 1 ? 'product' : 'products'}
                         </p>
                     )}

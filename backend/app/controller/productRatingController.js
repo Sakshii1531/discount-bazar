@@ -195,6 +195,14 @@ export const getEligibility = async (req, res) => {
       existingRatings.map((r) => [r.orderItemId.toString(), r])
     );
 
+    // Variant attributes so the customer sees "250g", not the stored SKU
+    const variantProducts = await Product.find({
+      _id: { $in: (order.items || []).filter((i) => i.variantSlot).map((i) => i.product) },
+    })
+      .select("weight variants.sku variants.name variants.size variants.colour")
+      .lean();
+    const variantProductMap = new Map(variantProducts.map((p) => [String(p._id), p]));
+
     const items = (order.items || []).map((item) => {
       const isReturned = item.returnStatus === "completed" || item.returnStatus === "approved";
       const existing = ratedItemMap.get(item._id.toString());
@@ -207,6 +215,7 @@ export const getEligibility = async (req, res) => {
         productName: item.name,
         image: item.image,
         variantSlot: item.variantSlot,
+        product: variantProductMap.get(String(item.product)) || null,
         price: item.price,
         quantity: item.quantity,
         isReturned,

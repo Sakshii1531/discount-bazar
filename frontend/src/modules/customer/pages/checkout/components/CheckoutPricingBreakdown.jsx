@@ -73,7 +73,7 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
 
         <div className="space-y-4">
           <div className="flex justify-between items-center px-2">
-            <span className="text-slate-500 font-bold text-[13px] uppercase tracking-wider">
+            <span className="text-slate-500 font-bold text-[15px] uppercase tracking-wider">
               Item Total
             </span>
             <span className="font-black text-slate-800">
@@ -81,7 +81,7 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
             </span>
           </div>
           <div className="flex justify-between items-center px-2">
-            <span className="text-slate-500 font-bold text-[13px] uppercase tracking-wider">
+            <span className="text-slate-500 font-bold text-[15px] uppercase tracking-wider">
               Delivery Fee
             </span>
             <span className="font-black text-slate-800" data-testid="checkout-delivery-fee">
@@ -91,7 +91,7 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
           {pricingPreview &&
             typeof pricingPreview.distanceKmActual === "number" &&
             typeof pricingPreview.distanceKmRounded === "number" && (
-              <div className="px-2 -mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-400">
+              <div className="px-2 -mt-3 flex items-center justify-between text-[13px] font-semibold text-slate-400">
                 <span>
                   Distance: {pricingPreview.distanceKmActual.toFixed(2)} km
                   {pricingPreview.distanceKmRounded
@@ -106,13 +106,13 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
               </div>
             )}
           <div className="flex justify-between items-center px-2">
-            <span className="text-slate-500 font-bold text-[13px] uppercase tracking-wider">
+            <span className="text-slate-500 font-bold text-[15px] uppercase tracking-wider">
               Handling Fee
             </span>
             <span className="font-black text-slate-800">{formatCurrencyInteger(handlingFee)}</span>
           </div>
           <div className="flex justify-between items-center px-2">
-            <span className="text-slate-500 font-bold text-[13px] uppercase tracking-wider">
+            <span className="text-slate-500 font-bold text-[15px] uppercase tracking-wider">
               Tax
             </span>
             <span className="font-black text-slate-800">{formatCurrencyInteger(taxAmount)}</span>
@@ -146,7 +146,7 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
               initial={{ opacity: 0, x: -5 }}
               animate={{ opacity: 1, x: 0 }}
               className="flex justify-between items-center px-3 py-2 bg-brand-50 rounded-xl border border-brand-100 mb-2">
-              <span className="text-primary font-black text-[11px] flex items-center gap-2 uppercase tracking-tight">
+              <span className="text-primary font-black text-[13px] flex items-center gap-2 uppercase tracking-tight">
                 <Wallet size={14} />
                 Wallet Applied
               </span>
@@ -160,7 +160,7 @@ const CheckoutPricingBreakdown = React.memo(function CheckoutPricingBreakdown({
                 <span className="font-[1000] text-slate-800 text-lg uppercase tracking-tight">
                   {finalAmountToPay === 0 ? "Fully Covered" : "Total Payable"}
                 </span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
+                <span className="text-[12px] text-slate-400 font-bold uppercase tracking-[0.2em]">
                   {finalAmountToPay === 0 ? "Paid via Wallet" : "Safe & Secure Payment"}
                 </span>
               </div>

@@ -178,6 +178,56 @@ const INDEX_DEFINITIONS = {
 };
 
 /**
+ * Models whose documents are permanent business records (bills, payments,
+ * ledgers, stock movements). A TTL index on any of them silently deletes
+ * history, so none may ever carry one.
+ */
+const PERMANENT_RECORD_MODELS = [
+  "Order",
+  "PosReturn",
+  "PosCustomer",
+  "PartyLedgerEntry",
+  "LedgerEntry",
+  "Transaction",
+  "Payment",
+  "StockHistory",
+  "CashDay",
+];
+
+/**
+ * Drop any TTL index found on a permanent-record collection.
+ *
+ * Removing an index from a schema does not remove it from MongoDB: the old
+ * `orders.placement.idempotencyKeyExpiry_1` TTL index stayed live after it was
+ * taken out of the schema and kept deleting every POS bill 24h after it was
+ * created. This runs on every boot so a stale TTL can never survive a deploy.
+ * Only indexes are dropped; no document is read or changed.
+ * @returns {Promise<string[]>} "collection.index" names that were dropped
+ */
+export async function dropTtlIndexesOnPermanentRecords() {
+  const dropped = [];
+  for (const modelName of PERMANENT_RECORD_MODELS) {
+    const model = mongoose.models[modelName];
+    if (!model) continue;
+    const collection = model.collection;
+    let indexes;
+    try {
+      indexes = await collection.indexes();
+    } catch (error) {
+      if (error.codeName === "NamespaceNotFound") continue;
+      throw error;
+    }
+    for (const idx of indexes) {
+      if (idx.expireAfterSeconds === undefined) continue;
+      await collection.dropIndex(idx.name);
+      dropped.push(`${collection.collectionName}.${idx.name}`);
+      logger.warn(`[DatabaseIndexManager] Dropped TTL index "${idx.name}" on ${collection.collectionName} (permanent records must not expire)`);
+    }
+  }
+  return dropped;
+}
+
+/**
  * Create all required indexes across all collections
  * @returns {Promise<void>}
  */

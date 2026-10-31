@@ -77,6 +77,25 @@ body {
   touch-action: manipulation; /* Faster taps */
 }
 
+/* Customer (User App) type scale — one step larger than the Tailwind defaults
+   for readability. `customer-app` is set on <html> by useCustomerTypography
+   while a customer screen is mounted, so portalled sheets/dialogs/toasts are
+   covered too and the seller/admin/delivery panels keep the default scale.
+   The bump shrinks as sizes grow so headings keep their hierarchy. */
+html.customer-app {
+  --text-xs: 0.8125rem;   /* 12px -> 13px */
+  --text-sm: 0.9375rem;   /* 14px -> 15px */
+  --text-base: 1.0625rem; /* 16px -> 17px */
+  --text-lg: 1.1875rem;   /* 18px -> 19px */
+  --text-xl: 1.3125rem;   /* 20px -> 21px */
+  --text-2xl: 1.5625rem;  /* 24px -> 25px */
+  --text-3xl: 1.9375rem;  /* 30px -> 31px */
+}
+
+html.customer-app body {
+  font-size: 15px;
+}
+
 /* Modal scroll lock — toggled by JS */
 html.modal-open,
 html.modal-open body {

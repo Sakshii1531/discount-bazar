@@ -89,12 +89,12 @@ const Header = () => {
                             <MapPin size={22} className="text-white fill-current" />
                         </div>
                         <div className="flex flex-col leading-tight">
-                            <span className="text-[10px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1">
+                            <span className="text-[12px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
                                 {currentLocation.time}
                             </span>
                             <div className="flex items-center gap-1 font-black text-white text-base">
-                                <span className="max-w-[150px] truncate">{currentLocation.name}</span> <span className="text-[10px] opacity-70">▼</span>
+                                <span className="max-w-[150px] truncate">{currentLocation.name}</span> <span className="text-[12px] opacity-70">▼</span>
                             </div>
                         </div>
                     </button>
@@ -128,7 +128,7 @@ const Header = () => {
                             className="hidden md:flex items-center gap-2 pl-6 border-l border-slate-200 cursor-pointer active:scale-95 transition-transform border-0 bg-transparent p-0"
                         >
                             <div className="flex flex-col items-start leading-none group">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 group-hover:text-[var(--primary)] transition-colors">
+                                <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 group-hover:text-[var(--primary)] transition-colors">
                                     Delivery in {currentLocation.time}
                                 </span>
                                 <div className="flex items-center gap-1 font-bold text-slate-700 text-sm group-hover:text-[var(--primary)] transition-colors">
@@ -164,7 +164,7 @@ const Header = () => {
                         <Link to="/wishlist" className="relative flex items-center justify-center p-2 hover:bg-slate-50 rounded-full transition-colors group">
                             <Heart className="h-6 w-6 text-slate-600 group-hover:text-[var(--primary)] transition-colors" />
                             {wishlistCount > 0 && (
-                                <span className="absolute top-0 right-0 h-5 w-5 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in duration-300">
+                                <span className="absolute top-0 right-0 h-5 w-5 rounded-full bg-primary text-[12px] font-bold text-primary-foreground flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in duration-300">
                                     {wishlistCount}
                                 </span>
                             )}
@@ -173,7 +173,7 @@ const Header = () => {
                         <Link to="/checkout" id="header-cart-icon" className="relative flex items-center justify-center p-2 hover:bg-slate-50 rounded-full transition-colors group">
                             <ShoppingCart className="h-6 w-6 text-slate-600 group-hover:text-[var(--primary)] transition-colors" />
                             {cartCount > 0 && (
-                                <span className="absolute top-0 right-0 h-5 w-5 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in duration-300">
+                                <span className="absolute top-0 right-0 h-5 w-5 rounded-full bg-primary text-[12px] font-bold text-primary-foreground flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in duration-300">
                                     {cartCount}
                                 </span>
                             )}

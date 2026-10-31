@@ -48,33 +48,14 @@ export const ICON_COMPONENTS = {
   grocery: LocalGroceryStoreIcon,
 };
 
-export const QUICK_CATEGORY_PALETTES = [
-  {
-    bgFrom: "#ffd96a",
-    bgVia: "#ffeaa0",
-    bgTo: "#fff0c7",
-    glowColor: "rgba(255,184,0,0.18)",
-    frameColor: "#f0d98a",
-  },
-  {
-    bgFrom: "var(--primary)",
-    bgVia: "#cffafe",
-    bgTo: "#ecfeff",
-    glowColor: "rgba(97,218,251,0.18)",
-    frameColor: "#a5f3fc",
-  },
-  {
-    bgFrom: "#f3a25d",
-    bgVia: "#f9c48b",
-    bgTo: "#fee0bf",
-    glowColor: "rgba(255,139,61,0.16)",
-    frameColor: "#efc08e",
-  },
-  {
-    bgFrom: "#b8eff0",
-    bgVia: "#d5f7f5",
-    bgTo: "#edfdfc",
-    glowColor: "rgba(122,215,215,0.16)",
-    frameColor: "#b9e5e3",
-  },
+// Soft background tints for category tiles, cycled by position.
+export const CATEGORY_TILE_TINTS = [
+  "#FCEFE6",
+  "#EAF3FB",
+  "#EEF6EA",
+  "#F6EEF8",
+  "#FFF6DF",
+  "#E9F6F5",
+  "#F3EFEA",
+  "#EEF1F8",
 ];

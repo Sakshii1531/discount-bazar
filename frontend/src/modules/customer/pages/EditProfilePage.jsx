@@ -420,7 +420,7 @@ const EditProfilePage = () => {
                                 </div>
                                 <div className="text-left">
                                     <div className="font-extrabold text-slate-800 group-hover:text-emerald-800">Take Photo</div>
-                                    <div className="text-[11px] text-slate-400 font-medium">Use camera to click a photo</div>
+                                    <div className="text-[13px] text-slate-400 font-medium">Use camera to click a photo</div>
                                 </div>
                             </button>
 
@@ -435,7 +435,7 @@ const EditProfilePage = () => {
                                 </div>
                                 <div className="text-left">
                                     <div className="font-extrabold text-slate-800 group-hover:text-blue-800">Choose from Gallery</div>
-                                    <div className="text-[11px] text-slate-400 font-medium">Select photo from files or gallery</div>
+                                    <div className="text-[13px] text-slate-400 font-medium">Select photo from files or gallery</div>
                                 </div>
                             </button>
 
@@ -451,7 +451,7 @@ const EditProfilePage = () => {
                                     </div>
                                     <div className="text-left">
                                         <div className="font-extrabold text-rose-600">Remove Photo</div>
-                                        <div className="text-[11px] text-rose-400 font-medium">Delete current profile picture</div>
+                                        <div className="text-[13px] text-rose-400 font-medium">Delete current profile picture</div>
                                     </div>
                                 </button>
                             )}

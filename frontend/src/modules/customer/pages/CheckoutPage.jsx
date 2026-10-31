@@ -1233,15 +1233,15 @@ const CheckoutPage = () => {
           <div className="mt-8 flex gap-6 text-slate-400">
             <div className="flex flex-col items-center gap-2">
               <div className="p-3 bg-slate-50 rounded-2xl"><Clock size={20} /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider">Fast Delivery</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider">Fast Delivery</span>
             </div>
             <div className="flex flex-col items-center gap-2">
               <div className="p-3 bg-slate-50 rounded-2xl"><Tag size={20} /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider">Daily Deals</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider">Daily Deals</span>
             </div>
             <div className="flex flex-col items-center gap-2">
               <div className="p-3 bg-slate-50 rounded-2xl"><Sparkles size={20} /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider">Fresh Items</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider">Fresh Items</span>
             </div>
           </div>
         </div>
@@ -1270,7 +1270,7 @@ const CheckoutPage = () => {
               <h1 className="text-xl md:text-3xl font-[1000] text-white tracking-tight uppercase">Checkout</h1>
               <div className="flex items-center gap-2 mt-1">
                 <span className="h-1.5 w-1.5 bg-brand-400 rounded-full animate-pulse" />
-                <p className="text-brand-100/90 text-[10px] md:text-xs font-black tracking-[0.2em] uppercase">
+                <p className="text-brand-100/90 text-[12px] md:text-xs font-black tracking-[0.2em] uppercase">
                   {cartCount} {cartCount === 1 ? "Item" : "Items"} in cart
                 </p>
               </div>
@@ -1408,7 +1408,7 @@ const CheckoutPage = () => {
                 isLoading={isPlacingOrder || isPreviewLoading || !pricingPreview}
                 text={hasOutOfStockItem ? "Remove Out of Stock Items" : belowMinimum ? `Add ₹${formatAmount(minimumOrder.remainingAmount)} more` : (finalAmountToPay === 0 ? "Place Free Order" : "Order Now")}
               />
-              <p className="text-center text-[10px] text-slate-400 font-bold mt-4 uppercase tracking-[0.1em]">
+              <p className="text-center text-[12px] text-slate-400 font-bold mt-4 uppercase tracking-[0.1em]">
                 🔒 SSL encrypted secure checkout
               </p>
             </div>
@@ -1452,12 +1452,12 @@ const CheckoutPage = () => {
                   <div className={`p-2 rounded-full ${currentAddress.id === addr.id ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"}`}>
                     <MapPin size={16} />
                   </div>
-                  <span className="font-black text-slate-800 uppercase tracking-widest text-[10px]">{addr.label}</span>
+                  <span className="font-black text-slate-800 uppercase tracking-widest text-[12px]">{addr.label}</span>
                 </div>
                 <p className="text-sm font-bold text-slate-800">{user?.name || currentAddress.name}</p>
                 <p className="text-xs text-slate-500 leading-relaxed mb-1">{addr.address}</p>
                 {addr.phone && (
-                  <p className="text-[11px] text-slate-400 font-medium">Phone: {addr.phone}</p>
+                  <p className="text-[13px] text-slate-400 font-medium">Phone: {addr.phone}</p>
                 )}
               </button>
             ))}
@@ -1615,7 +1615,7 @@ const CheckoutPage = () => {
                           <>
                             <span className="font-bold text-slate-900">₹{effective}</span>
                             {hasDiscount && (
-                              <span className="line-through text-slate-400 text-[11px]">₹{regular}</span>
+                              <span className="line-through text-slate-400 text-[13px]">₹{regular}</span>
                             )}
                           </>
                         );
@@ -1640,7 +1640,7 @@ const CheckoutPage = () => {
                   <div className="w-12 h-12 rounded-2xl bg-[#25D366]/10 text-[#25D366] flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                     <MessageCircle size={24} />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">WhatsApp</span>
+                  <span className="text-[13px] font-bold text-slate-700">WhatsApp</span>
                 </a>
 
                 {/* Telegram */}
@@ -1654,7 +1654,7 @@ const CheckoutPage = () => {
                   <div className="w-12 h-12 rounded-2xl bg-[#0088cc]/10 text-[#0088cc] flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                     <Send size={24} />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">Telegram</span>
+                  <span className="text-[13px] font-bold text-slate-700">Telegram</span>
                 </a>
 
                 {/* Messages / SMS */}
@@ -1666,7 +1666,7 @@ const CheckoutPage = () => {
                   <div className="w-12 h-12 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                     <MessageSquare size={24} />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">Messages</span>
+                  <span className="text-[13px] font-bold text-slate-700">Messages</span>
                 </a>
 
                 {/* Email */}
@@ -1678,7 +1678,7 @@ const CheckoutPage = () => {
                   <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                     <Mail size={24} />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">Email</span>
+                  <span className="text-[13px] font-bold text-slate-700">Email</span>
                 </a>
 
                 {/* X (Twitter) */}
@@ -1694,7 +1694,7 @@ const CheckoutPage = () => {
                       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                     </svg>
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">X</span>
+                  <span className="text-[13px] font-bold text-slate-700">X</span>
                 </a>
 
                 {/* Facebook */}
@@ -1710,7 +1710,7 @@ const CheckoutPage = () => {
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                     </svg>
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700">Facebook</span>
+                  <span className="text-[13px] font-bold text-slate-700">Facebook</span>
                 </a>
 
                 {/* More Apps (System dialog if supported) */}
@@ -1726,7 +1726,7 @@ const CheckoutPage = () => {
                     <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                       <Share2 size={22} />
                     </div>
-                    <span className="text-[11px] font-bold text-slate-700">More</span>
+                    <span className="text-[13px] font-bold text-slate-700">More</span>
                   </button>
                 )}
               </div>

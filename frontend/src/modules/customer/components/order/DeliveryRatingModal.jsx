@@ -258,7 +258,7 @@ const DeliveryRatingModal = ({
                       rows={3}
                       className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none font-medium placeholder:text-slate-400"
                     />
-                    <div className="text-[10px] text-right text-slate-400 font-semibold mt-1">
+                    <div className="text-[12px] text-right text-slate-400 font-semibold mt-1">
                       {comment.length}/500
                     </div>
                   </div>

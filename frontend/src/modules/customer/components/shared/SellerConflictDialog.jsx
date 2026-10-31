@@ -43,10 +43,10 @@ const SellerConflictDialog = () => {
                     <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-50 flex items-center justify-center">
                         <ShoppingCart size={26} className="text-amber-500" strokeWidth={2.5} />
                     </div>
-                    <DialogTitle className="text-center text-[17px] font-black text-slate-900 leading-snug">
+                    <DialogTitle className="text-center text-[19px] font-black text-slate-900 leading-snug">
                         Items from another store
                     </DialogTitle>
-                    <DialogDescription className="text-center text-[14px] font-medium text-slate-500 leading-relaxed">
+                    <DialogDescription className="text-center text-[16px] font-medium text-slate-500 leading-relaxed">
                         {pendingReorder
                             ? "Your cart contains items from another store. Would you like to clear your cart and reorder items from this store?"
                             : "Would you like to clear your current cart and add this product?"}
@@ -58,7 +58,7 @@ const SellerConflictDialog = () => {
                         id="seller-conflict-clear-and-add"
                         onClick={confirmSellerSwitch}
                         disabled={isReplacingCart}
-                        className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[14px] transition-all active:scale-95"
+                        className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[16px] transition-all active:scale-95"
                     >
                         {isReplacingCart ? (
                             <span className="flex items-center gap-2">
@@ -78,7 +78,7 @@ const SellerConflictDialog = () => {
                         variant="outline"
                         onClick={cancelSellerSwitch}
                         disabled={isReplacingCart}
-                        className="w-full h-12 rounded-2xl border-slate-200 text-slate-700 font-bold text-[14px] hover:bg-slate-50 transition-all active:scale-95"
+                        className="w-full h-12 rounded-2xl border-slate-200 text-slate-700 font-bold text-[16px] hover:bg-slate-50 transition-all active:scale-95"
                     >
                         Cancel
                     </Button>

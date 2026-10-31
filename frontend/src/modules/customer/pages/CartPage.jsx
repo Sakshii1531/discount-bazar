@@ -19,6 +19,7 @@ import { customerApi } from "../services/customerApi";
 import { useSettings } from "@core/context/SettingsContext";
 import MinimumOrderNotice from "../components/shared/MinimumOrderNotice";
 import { getMinimumOrderStatus } from "../utils/minimumOrder";
+import { getCartItemVariantLabel } from "../utils/variantLabel";
 
 const CartPage = () => {
     const { cart, removeFromCart, updateQuantity, cartTotal, clearCart, isItemOutOfStock } = useCart();
@@ -116,15 +117,17 @@ const CartPage = () => {
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-700">
+                                                        <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-black uppercase tracking-[0.18em] text-brand-700">
                                                             {item.category}
                                                         </span>
                                                         <h3 className="mt-2 truncate text-lg md:text-xl font-black tracking-tight text-slate-900">
                                                             {item.name}
                                                         </h3>
-                                                        <p className="mt-1 text-sm font-medium text-slate-500">
-                                                            1 kg
-                                                        </p>
+                                                        {getCartItemVariantLabel(item) && (
+                                                            <p className="mt-1 text-sm font-medium text-slate-500">
+                                                                {getCartItemVariantLabel(item)}
+                                                            </p>
+                                                        )}
                                                     </div>
 
                                                     <button
@@ -196,7 +199,7 @@ const CartPage = () => {
                         <aside className="lg:sticky lg:top-28 h-fit">
                             <div className="overflow-hidden rounded-[2rem] border border-slate-100 bg-slate-900 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
                                 <div className="bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.35),_transparent_38%),linear-gradient(180deg,_rgba(255,255,255,0.08),_transparent)] px-6 py-6">
-                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-brand-300">
+                                    <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.22em] text-brand-300">
                                         <ShieldCheck size={13} />
                                         Secure summary
                                     </div>
@@ -273,7 +276,7 @@ const CartPage = () => {
                             </div>
 
                             <div className="relative text-center">
-                                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-brand-700">
+                                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[12px] font-black uppercase tracking-[0.22em] text-brand-700">
                                     <Sparkles size={12} />
                                     Empty cart
                                 </div>

@@ -142,7 +142,7 @@ const SupportPage = () => {
 
                 {/* Legal Links */}
                 <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Legal</h3>
+                    <h3 className="text-[13px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Legal</h3>
                     <div className="space-y-3">
                         <Link to="/terms" className="flex items-center gap-2.5 text-slate-700 hover:text-slate-900 font-medium">
                             <FileText size={18} /> Terms & Conditions
@@ -188,7 +188,7 @@ const SupportPage = () => {
 
                                 <form onSubmit={handleTicketSubmit} className="space-y-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subject</label>
+                                        <label className="text-[12px] font-black text-slate-400 uppercase tracking-widest px-1">Subject</label>
                                         <input
                                             type="text"
                                             required
@@ -206,7 +206,7 @@ const SupportPage = () => {
                                                 type="button"
                                                 onClick={() => setTicketData({ ...ticketData, priority: p })}
                                                 className={cn(
-                                                    "py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                                                    "py-3 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all border",
                                                     ticketData.priority === p
                                                         ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-brand-100"
                                                         : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"
@@ -218,7 +218,7 @@ const SupportPage = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Description</label>
+                                        <label className="text-[12px] font-black text-slate-400 uppercase tracking-widest px-1">Description</label>
                                         <textarea
                                             required
                                             value={ticketData.description}
@@ -265,7 +265,7 @@ const ContactCard = ({ icon: Icon, label, sub, to, onClick }) => {
             </div>
             <div>
                 <h3 className="font-semibold text-slate-800 text-sm whitespace-nowrap">{label}</h3>
-                <p className="text-[10px] text-slate-500 font-medium">{sub}</p>
+                <p className="text-[12px] text-slate-500 font-medium">{sub}</p>
             </div>
         </div>
     );

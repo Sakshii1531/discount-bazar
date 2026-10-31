@@ -163,7 +163,7 @@ const FAQPage = () => {
                 {/* Hero / Banner */}
                 <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-emerald-500/10 rounded-3xl p-6 md:p-8 border border-primary/20 relative overflow-hidden">
                     <div className="relative z-10 max-w-xl">
-                        <span className="inline-block text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full mb-3">
+                        <span className="inline-block text-[12px] font-black uppercase tracking-widest bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full mb-3">
                             Help Center
                         </span>
                         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-2">

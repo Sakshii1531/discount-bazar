@@ -42,6 +42,10 @@ const DROP_LIST = [
   // only ONE rating in the whole collection; later ratings fail with E11000.
   { coll: "deliveryratings", name: "order_1" },
 
+  // orders: legacy TTL on the idempotency-key expiry. It deleted every bill/order
+  // 24h after creation; removed from the schema, but Mongo keeps it until dropped.
+  { coll: "orders", name: "placement.idempotencyKeyExpiry_1" },
+
   // withdrawals indexes (the collection itself is dropped below if empty).
   { coll: "withdrawals", name: "idx_status_created" },
   { coll: "withdrawals", name: "idx_user_userModel_created" },

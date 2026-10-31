@@ -153,7 +153,7 @@ const HelpModal = ({ isOpen, onClose, orderId }) => {
 
                                     <form onSubmit={handleTicketSubmit} className="space-y-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subject</label>
+                                            <label className="text-[12px] font-black text-slate-400 uppercase tracking-widest px-1">Subject</label>
                                             <input
                                                 type="text"
                                                 required
@@ -171,7 +171,7 @@ const HelpModal = ({ isOpen, onClose, orderId }) => {
                                                     type="button"
                                                     onClick={() => setTicketData({ ...ticketData, priority: p })}
                                                     className={cn(
-                                                        "py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                                                        "py-3 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all border",
                                                         ticketData.priority === p
                                                             ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-brand-100"
                                                             : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"
@@ -183,7 +183,7 @@ const HelpModal = ({ isOpen, onClose, orderId }) => {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Description</label>
+                                            <label className="text-[12px] font-black text-slate-400 uppercase tracking-widest px-1">Description</label>
                                             <textarea
                                                 required
                                                 value={ticketData.description}

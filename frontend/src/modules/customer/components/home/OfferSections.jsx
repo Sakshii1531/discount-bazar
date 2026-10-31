@@ -63,7 +63,7 @@ const OfferSections = ({ sections }) => {
                   <div className="absolute -bottom-10 right-0 w-44 h-44 bg-white/10 rounded-full blur-3xl" />
                 </div>
                 <div className="flex-1 pr-4">
-                  <p className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-black/60 mb-1">
+                  <p className="text-[12px] md:text-[13px] font-bold uppercase tracking-wider text-black/60 mb-1">
                     Trending right now
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight leading-tight drop-shadow-sm">
@@ -73,7 +73,7 @@ const OfferSections = ({ sections }) => {
                     .map((c) => (typeof c === "object" && c?.name ? c.name : null))
                     .filter(Boolean)
                     .join(", ") || section.categoryId?.name) && (
-                    <p className="text-[11px] md:text-xs font-semibold text-black/75 mt-1">
+                    <p className="text-[13px] md:text-xs font-semibold text-black/75 mt-1">
                       {(section.categoryIds || [])
                         .map((c) => (typeof c === "object" && c?.name ? c.name : null))
                         .filter(Boolean)
@@ -106,7 +106,7 @@ const OfferSections = ({ sections }) => {
                   )}
 
                   {(sectionProducts.length > 0 || sectionSellers.length > 0) && (
-                    <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-black/70 text-[9px] font-semibold text-white/90 tracking-wide flex items-center gap-1">
+                    <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-black/70 text-[11px] font-semibold text-white/90 tracking-wide flex items-center gap-1">
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400" />
                       {sectionProducts.length + sectionSellers.length} items
                     </div>
@@ -145,7 +145,7 @@ const OfferSections = ({ sections }) => {
                             )}
                           </div>
                           <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight px-1">{seller.name}</h4>
-                          <p className="text-[9px] text-brand-600 mt-1 font-extrabold uppercase tracking-widest bg-brand-50 px-2 py-0.5 rounded-full">Store</p>
+                          <p className="text-[11px] text-brand-600 mt-1 font-extrabold uppercase tracking-widest bg-brand-50 px-2 py-0.5 rounded-full">Store</p>
                         </div>
                       ))}
                       {sectionProducts.map((product) => (

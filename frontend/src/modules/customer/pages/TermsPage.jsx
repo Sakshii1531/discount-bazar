@@ -151,7 +151,7 @@ const TermsPage = () => {
                                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">
                                     Terms of Use
                                 </h2>
-                                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 bg-brand-50 text-brand-700 border border-brand-100 rounded-full">
+                                <span className="text-[12px] font-black uppercase tracking-wider px-2.5 py-0.5 bg-brand-50 text-brand-700 border border-brand-100 rounded-full">
                                     Official
                                 </span>
                             </div>

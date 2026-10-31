@@ -634,7 +634,7 @@ const AddressesPage = () => {
                     ) : addresses.map((addr) => (
                         <div key={addr.id} className="bg-white rounded-xl p-4 border border-slate-200 relative overflow-hidden">
                             {addr.isDefault && (
-                                <div className="absolute top-0 right-0 bg-slate-900 text-white text-[10px] font-semibold px-2.5 py-1 rounded-bl-lg uppercase tracking-wide">
+                                <div className="absolute top-0 right-0 bg-slate-900 text-white text-[12px] font-semibold px-2.5 py-1 rounded-bl-lg uppercase tracking-wide">
                                     Default
                                 </div>
                             )}

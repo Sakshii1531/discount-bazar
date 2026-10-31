@@ -33,7 +33,7 @@ import {
   ICON_COMPONENTS,
 } from "../constants/homeConstants";
 import PromoMarquee from "../components/home/PromoMarquee";
-import QuickCategorySlider from "../components/home/QuickCategorySlider";
+import CategoryCollageSection from "../components/home/CategoryCollageSection";
 import LowestPriceSection from "../components/home/LowestPriceSection";
 import OfferSections from "../components/home/OfferSections";
 
@@ -382,7 +382,7 @@ const Home = () => {
         const mergedAllCategory = allHeaderFromAdmin ? { ...ALL_CATEGORY, headerColor: allHeaderFromAdmin.headerColor || ALL_CATEGORY.headerColor, headerFontColor: allHeaderFromAdmin.headerFontColor || ALL_CATEGORY.headerFontColor, headerIconColor: allHeaderFromAdmin.headerIconColor || ALL_CATEGORY.headerIconColor, icon: allHeaderFromAdmin.icon || ALL_CATEGORY.icon } : ALL_CATEGORY;
         nextHomeData.categories = [mergedAllCategory, ...formattedHeaders.filter((h) => !((h.slug?.toLowerCase() === "all") || (h.name?.toLowerCase() === "all")))];
         nextHomeData.activeCategory = mergedAllCategory;
-        nextHomeData.quickCategories = dbCats.filter((cat) => cat.type === "category").map((cat) => ({ id: cat._id, name: cat.name, image: cat.image || "https://cdn-icons-png.flaticon.com/128/2321/2321831.png" }));
+        nextHomeData.quickCategories = dbCats.filter((cat) => cat.type === "category").map((cat) => ({ id: cat._id, name: cat.name, image: cat.image }));
       }
       if (prodRes.data.success) {
         const rawResult = prodRes.data.result;
@@ -449,9 +449,17 @@ const Home = () => {
   const productsById = useMemo(() => { const map = {}; products.forEach((p) => { map[p._id || p.id] = p; }); return map; }, [products]);
   const effectiveQuickCategories = useMemo(() => {
     const ids = heroConfig.categoryIds || [];
-    if (ids.length > 0) { const resolved = ids.map((id) => categoryMap[id]).filter(Boolean).map((c) => ({ id: c._id, name: c.name, image: c.image || "https://cdn-icons-png.flaticon.com/128/2321/2321831.png" })); if (resolved.length > 0) return resolved; }
+    if (ids.length > 0) { const resolved = ids.map((id) => categoryMap[id]).filter(Boolean).map((c) => ({ id: c._id, name: c.name, image: c.image })); if (resolved.length > 0) return resolved; }
     return quickCategories;
   }, [heroConfig.categoryIds, categoryMap, quickCategories]);
+  // On a header tab, only that header's categories.
+  const collageCategories = useMemo(() => {
+    if (!activeCategory || activeCategory._id === "all") return effectiveQuickCategories;
+    return effectiveQuickCategories.filter((c) => {
+      const parent = categoryMap[c.id]?.parentId;
+      return String(parent?._id || parent || "") === String(activeCategory._id);
+    });
+  }, [effectiveQuickCategories, categoryMap, activeCategory]);
 
   const sectionsForRenderer = headerSections.length ? headerSections : experienceSections;
   const isMobile = useMemo(() => isMobileOrWebView(), []);
@@ -496,7 +504,7 @@ const Home = () => {
           <div className="w-64 h-64 md:w-96 md:h-96 mb-8">{noServiceData && <Lottie animationData={noServiceData} loop={true} />}</div>
           <h3 className="text-3xl md:text-5xl font-black text-slate-800 text-center uppercase">Service <span className="text-primary">Unavailable</span></h3>
           <p className="text-slate-500 font-bold max-w-md text-center px-10 text-sm md:text-lg opacity-80">Ah! We haven't reached your neighborhood yet.</p>
-          <button onClick={() => window.dispatchEvent(new Event("open-location-drawer"))} className="mt-12 px-10 py-4 bg-primary text-primary-foreground font-black rounded-[24px] uppercase text-[13px] tracking-widest transition-all active:scale-95">Change Location</button>
+          <button onClick={() => window.dispatchEvent(new Event("open-location-drawer"))} className="mt-12 px-10 py-4 bg-primary text-primary-foreground font-black rounded-[24px] uppercase text-[15px] tracking-widest transition-all active:scale-95">Change Location</button>
         </div>
       ) : (
         <>
@@ -517,7 +525,7 @@ const Home = () => {
           </motion.div>
 
           <PromoMarquee />
-          <QuickCategorySlider categories={effectiveQuickCategories} onCategoryClick={(id) => navigate(`/category/${id}`)} />
+          <CategoryCollageSection title="Shop by category" categories={collageCategories} onCategoryClick={(id) => navigate(`/category/${id}`)} />
           <LowestPriceSection products={products} onSeeAll={() => navigate("/category/all", { state: { title: "Lowest Price Ever" } })} />
           <OfferSections sections={offerSections} />
 

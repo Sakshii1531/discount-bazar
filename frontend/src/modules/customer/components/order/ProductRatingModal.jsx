@@ -7,6 +7,7 @@ import {
   POSITIVE_FEEDBACK_TAGS,
   NEGATIVE_FEEDBACK_TAGS,
 } from "../../constants/productRatingConstants";
+import { findVariantByKey, getVariantLabel } from "../../utils/variantLabel";
 
 const TAG_LABELS = {
   GOOD_QUALITY: "Good Quality",
@@ -65,6 +66,10 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
   };
 
   const currentItem = items[currentIndex];
+  const currentVariantLabel = getVariantLabel(
+    findVariantByKey(currentItem?.product, currentItem?.variantSlot),
+    currentItem?.product,
+  );
 
   // Reset local state when switching items
   useEffect(() => {
@@ -168,7 +173,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
                 <Sparkles size={18} className="text-primary" />
                 Rate Your Products
               </h3>
-              <p className="text-[11px] text-slate-500 font-bold">
+              <p className="text-[13px] text-slate-500 font-bold">
                 Item {items.length > 0 ? currentIndex + 1 : 0} of {items.length}
               </p>
             </div>
@@ -213,11 +218,11 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
                     <h4 className="font-black text-slate-800 text-sm truncate">
                       {currentItem.productName}
                     </h4>
-                    <p className="text-[11px] text-slate-500 font-bold mt-0.5">
-                      ₹{currentItem.price} {currentItem.variantSlot ? `• ${currentItem.variantSlot}` : ""}
+                    <p className="text-[13px] text-slate-500 font-bold mt-0.5">
+                      ₹{currentItem.price} {currentVariantLabel ? `• ${currentVariantLabel}` : ""}
                     </p>
                     {currentItem.alreadyRated && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md mt-1">
+                      <span className="inline-flex items-center gap-1 text-[12px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md mt-1">
                         <Check size={10} /> Already Rated
                       </span>
                     )}
@@ -254,7 +259,7 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
 
                 {/* Contextual Feedback Tags */}
                 <div className="space-y-2">
-                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                  <p className="text-[13px] font-black text-slate-500 uppercase tracking-wider">
                     {rating >= 4 ? "What did you like?" : "What can be improved?"}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -281,12 +286,12 @@ const ProductRatingModal = ({ isOpen, onClose, orderId, onRatingSubmitted }) => 
 
                 {/* Review Comment Input */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                  <div className="flex items-center justify-between text-[13px] font-black text-slate-500 uppercase tracking-wider">
                     <span className="flex items-center gap-1">
                       <MessageSquare size={12} />
                       Optional Comment
                     </span>
-                    <span className="text-[10px] text-slate-400 font-bold">
+                    <span className="text-[12px] text-slate-400 font-bold">
                       {comment.length}/500
                     </span>
                   </div>

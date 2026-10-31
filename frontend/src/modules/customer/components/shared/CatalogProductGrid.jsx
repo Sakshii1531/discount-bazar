@@ -24,7 +24,7 @@ export const CatalogSortSelect = ({ value, onChange, className }) => (
         </option>
       ))}
     </select>
-    <span className="pointer-events-none absolute right-3 text-[10px] text-slate-400">▼</span>
+    <span className="pointer-events-none absolute right-3 text-[12px] text-slate-400">▼</span>
   </label>
 );
 
@@ -127,7 +127,7 @@ const CatalogProductGrid = ({ listing, emptyTitle, emptyText, gridClassName }) =
         </div>
       )}
       {errorMessage && (
-        <p className="text-center text-[11px] font-bold text-slate-400 py-4">{errorMessage}</p>
+        <p className="text-center text-[13px] font-bold text-slate-400 py-4">{errorMessage}</p>
       )}
     </>
   );

@@ -72,7 +72,7 @@ const ProfilePage = () => {
                         <div>
                             <h2 className="text-base leading-tight font-semibold text-slate-900">{user?.name || 'Customer'}</h2>
                             <p className="text-slate-500 text-xs font-medium flex items-center gap-1 mt-0.5">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase">India</span> +91 {formatIndiaPhone(user?.phone)}
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[12px] uppercase">India</span> +91 {formatIndiaPhone(user?.phone)}
                             </p>
                         </div>
                     </div>
@@ -86,7 +86,7 @@ const ProfilePage = () => {
                     {/* Account Section */}
                     <div className="bg-white rounded-xl overflow-hidden border border-slate-200">
                         <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Personal Account</p>
+                            <p className="text-[13px] font-semibold text-slate-500 uppercase tracking-wide">Personal Account</p>
                         </div>
                         <div className="divide-y divide-slate-100">
                             <MenuItem
@@ -135,7 +135,7 @@ const ProfilePage = () => {
                     {/* Support Section */}
                     <div className="bg-white rounded-xl overflow-hidden border border-slate-200">
                         <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Help & Settings</p>
+                            <p className="text-[13px] font-semibold text-slate-500 uppercase tracking-wide">Help & Settings</p>
                         </div>
                         <div className="divide-y divide-slate-100">
                             <MenuItem
@@ -180,7 +180,7 @@ const ProfilePage = () => {
                 </button>
 
                 <div className="text-center pb-8">
-                    <p className="text-[10px] text-slate-400 font-medium">Version 2.4.0 - {appName}</p>
+                    <p className="text-[12px] text-slate-400 font-medium">Version 2.4.0 - {appName}</p>
                 </div>
 
             </div>
@@ -236,7 +236,7 @@ const MenuItem = ({ icon: Icon, label, sub, path, color = '#334155', bg = 'rgba(
             </div>
             <div>
                 <h3 className="text-sm font-semibold text-slate-800">{label}</h3>
-                {sub && <p className="text-[11px] text-slate-500 mt-0.5">{sub}</p>}
+                {sub && <p className="text-[13px] text-slate-500 mt-0.5">{sub}</p>}
             </div>
         </div>
         <div className="p-1.5 rounded-md group-hover:bg-slate-100 transition-colors">

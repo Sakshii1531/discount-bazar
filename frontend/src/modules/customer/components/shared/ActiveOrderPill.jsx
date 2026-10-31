@@ -48,7 +48,7 @@ const ActiveOrderPill = ({ order }) => {
                                 </div>
                             ))}
                             {order.items.length > 2 && (
-                                <div className="h-8 w-8 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-[9px] font-bold z-0 text-white shadow-inner">
+                                <div className="h-8 w-8 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-[11px] font-bold z-0 text-white shadow-inner">
                                     +{order.items.length - 2}
                                 </div>
                             )}
@@ -56,10 +56,10 @@ const ActiveOrderPill = ({ order }) => {
 
                         {/* Text Section */}
                         <div className="flex-1 flex flex-col justify-center min-w-0 relative z-10">
-                            <h4 className="text-[11px] font-black leading-tight truncate uppercase tracking-tight">
+                            <h4 className="text-[13px] font-black leading-tight truncate uppercase tracking-tight">
                                 {order.status === 'delivered' ? 'Delivered' : 'Order Tracking'}
                             </h4>
-                            <p className="text-[9px] text-slate-400 font-bold leading-tight">
+                            <p className="text-[11px] text-slate-400 font-bold leading-tight">
                                 {cartCount} {cartCount === 1 ? 'item' : 'items'} • ₹{formatAmount(order.pricing.total)}
                             </p>
                         </div>

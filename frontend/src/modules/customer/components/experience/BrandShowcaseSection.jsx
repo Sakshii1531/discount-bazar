@@ -31,7 +31,7 @@ const BrandShowcaseSection = ({ section, onNavigate }) => {
       {section.title && (
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-base font-black text-[#1A1A1A]">{section.title}</h3>
-          <span className="text-[11px] font-semibold text-slate-400">
+          <span className="text-[13px] font-semibold text-slate-400">
             {visible.length} {visible.length === 1 ? "brand" : "brands"}
           </span>
         </div>
@@ -60,7 +60,7 @@ const BrandShowcaseSection = ({ section, onNavigate }) => {
               logo={brand.logo}
               className="aspect-square h-auto w-full rounded-full border-slate-100 bg-white p-1.5 text-xl shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:shadow-md"
             />
-            <span className="line-clamp-2 text-center text-[11px] font-semibold leading-snug text-slate-700 group-hover:text-primary">
+            <span className="line-clamp-2 text-center text-[13px] font-semibold leading-snug text-slate-700 group-hover:text-primary">
               {brand.name}
             </span>
           </button>
