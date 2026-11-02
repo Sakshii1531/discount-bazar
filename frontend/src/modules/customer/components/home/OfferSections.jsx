@@ -69,17 +69,6 @@ const OfferSections = ({ sections }) => {
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight leading-tight drop-shadow-sm">
                     {section.title}
                   </h3>
-                  {((section.categoryIds || [])
-                    .map((c) => (typeof c === "object" && c?.name ? c.name : null))
-                    .filter(Boolean)
-                    .join(", ") || section.categoryId?.name) && (
-                    <p className="text-[13px] md:text-xs font-semibold text-black/75 mt-1">
-                      {(section.categoryIds || [])
-                        .map((c) => (typeof c === "object" && c?.name ? c.name : null))
-                        .filter(Boolean)
-                        .join(", ") || section.categoryId?.name}
-                    </p>
-                  )}
                 </div>
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl flex-shrink-0 shadow-[0_16px_30px_rgba(0,0,0,0.25)] border border-black/10 overflow-hidden relative bg-black/10 transition-transform hover:-translate-y-1 hover:rotate-[-4deg] hover:scale-105">
                   {customSideImage ? (
@@ -103,13 +92,6 @@ const OfferSections = ({ sections }) => {
                     </>
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500" />
-                  )}
-
-                  {(sectionProducts.length > 0 || sectionSellers.length > 0) && (
-                    <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-black/70 text-[11px] font-semibold text-white/90 tracking-wide flex items-center gap-1">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400" />
-                      {sectionProducts.length + sectionSellers.length} items
-                    </div>
                   )}
 
                   {!customSideImage && (

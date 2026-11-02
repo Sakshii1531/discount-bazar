@@ -58,7 +58,8 @@ const BrandShowcaseSection = ({ section, onNavigate }) => {
             <BrandAvatar
               name={brand.name}
               logo={brand.logo}
-              className="aspect-square h-auto w-full rounded-full border-slate-100 bg-white p-1.5 text-xl shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:shadow-md"
+              circular
+              className="aspect-square h-auto w-full rounded-full border-slate-100 bg-white text-xl shadow-sm transition-all duration-200 group-hover:border-primary/40 group-hover:shadow-md"
             />
             <span className="line-clamp-2 text-center text-[13px] font-semibold leading-snug text-slate-700 group-hover:text-primary">
               {brand.name}
