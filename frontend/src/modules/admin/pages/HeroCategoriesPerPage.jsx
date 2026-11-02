@@ -7,6 +7,15 @@ import {
 } from "react-icons/hi2";
 import { adminApi } from "../services/adminApi";
 import BannerLinkPicker, { isBannerLinkComplete } from "../components/BannerLinkPicker";
+import {
+  bannerMediaPayload,
+  bannerUploadAccept,
+  bannerUploadHint,
+  hasBannerMedia,
+  uploadBannerFile,
+  useBannerUploadConfig,
+} from "../utils/bannerMedia";
+import BannerVideoPreview from "../components/BannerVideoPreview";
 import Card from "@shared/components/ui/Card";
 import Modal from "@shared/components/ui/Modal";
 import { useToast } from "@shared/components/ui/Toast";
@@ -23,6 +32,7 @@ const emptyBannerItem = () => ({
 
 export default function HeroCategoriesPerPage() {
   const { showToast } = useToast();
+  const bannerUploadConfig = useBannerUploadConfig();
   const [headers, setHeaders] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
   const [pageData, setPageData] = useState([]);
@@ -142,17 +152,13 @@ export default function HeroCategoriesPerPage() {
     if (!file) return;
     updateBannerItem(idx, { isUploading: true });
     try {
-      const fd = new FormData();
-      fd.append("image", file);
-      const res = await adminApi.uploadExperienceBanner(fd);
-      const url = res.data?.result?.url || res.data?.url;
-      if (!url) throw new Error("Upload failed");
-      updateBannerItem(idx, { imageUrl: url, isUploading: false });
-      showToast("Banner image uploaded", "success");
+      const media = await uploadBannerFile(file, bannerUploadConfig);
+      updateBannerItem(idx, { ...media, isUploading: false });
+      showToast(`Banner ${media.mediaType} uploaded`, "success");
     } catch (e) {
       console.error(e);
       updateBannerItem(idx, { isUploading: false });
-      showToast("Failed to upload banner image", "error");
+      showToast(e.message, "error");
     }
   };
 
@@ -163,8 +169,8 @@ export default function HeroCategoriesPerPage() {
   };
 
   const handleSave = async () => {
-    const items = formBanners.filter((b) => b.imageUrl).map((b) => ({
-      imageUrl: b.imageUrl,
+    const items = formBanners.filter(hasBannerMedia).map((b) => ({
+      ...bannerMediaPayload(b),
       title: (b.title || "").trim(),
       subtitle: (b.subtitle || "").trim(),
       linkType: b.linkType || "none",
@@ -174,7 +180,7 @@ export default function HeroCategoriesPerPage() {
 
     if (!editingRow) return;
     if (formBanners.some((b) => b.isUploading)) {
-      showToast("Please wait for all banner images to finish uploading", "warning");
+      showToast("Please wait for all banner files to finish uploading", "warning");
       return;
     }
     const badLink = items.findIndex((b) => !isBannerLinkComplete(b));
@@ -343,7 +349,7 @@ export default function HeroCategoriesPerPage() {
                   Add banner
                 </button>
               </div>
-              <div className="space-y-3 max-h-48 overflow-y-auto">
+              <div className="space-y-3 max-h-[28rem] overflow-y-auto">
                 {formBanners.map((item, idx) => (
                   <Card key={idx} className="p-3 bg-white border-slate-100">
                     <div className="flex items-start gap-3">
@@ -363,17 +369,24 @@ export default function HeroCategoriesPerPage() {
                           <div className="flex-1 min-w-0 space-y-1">
                             <input
                               type="file"
-                              accept="image/*"
+                              accept={bannerUploadAccept(bannerUploadConfig)}
                               className="hidden"
                               id={`hero-banner-file-${idx}`}
-                              onChange={(e) => handleBannerFileChange(idx, e.target.files?.[0])}
+                              onChange={(e) => {
+                                handleBannerFileChange(idx, e.target.files?.[0]);
+                                e.target.value = "";
+                              }}
                             />
                             <label
                               htmlFor={`hero-banner-file-${idx}`}
                               className="inline-block px-2 py-1 rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-200"
                             >
-                              {item.isUploading ? "Uploading…" : item.imageUrl ? "Change" : "Upload"}
+                              {item.isUploading ? "Uploading…" : hasBannerMedia(item) ? "Replace" : "Upload"}
                             </label>
+                            {!hasBannerMedia(item) && !item.isUploading && (
+                              <p className="text-[10px] text-slate-400">{bannerUploadHint(bannerUploadConfig)}</p>
+                            )}
+                            <BannerVideoPreview banner={item} />
                             <input
                               value={item.title || ""}
                               onChange={(e) => updateBannerItem(idx, { title: e.target.value })}

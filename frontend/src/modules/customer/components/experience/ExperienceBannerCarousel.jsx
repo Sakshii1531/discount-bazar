@@ -9,8 +9,13 @@ import {
 } from "@/core/utils/imageUtils";
 
 import { isMobileOrWebView } from "@/core/utils/deviceUtils";
+import BannerVideo from "./BannerVideo";
 
 const BANNER_CHUNK_SIZE = 20;
+
+// Keeps the MP4 and its proportions; only trims the width and bitrate sent to the device.
+const getBannerVideoSrc = (url) =>
+  applyCloudinaryTransform(url, `q_auto,c_limit,w_${window.innerWidth < 768 ? 720 : 1248}`);
 
 /** Where a banner should take the shopper, or null when it is not clickable. */
 export const resolveBannerTarget = (banner) => {
@@ -69,6 +74,11 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
   const hasMore = visibleCount < items.length;
   const navigate = useNavigate();
   const draggedRef = React.useRef(false);
+  // A playing video slide stays up for one full play, or while its sound is on.
+  const holdUntilRef = React.useRef(0);
+  const holdSlide = React.useCallback((ms) => {
+    holdUntilRef.current = Date.now() + ms;
+  }, []);
 
   const openBanner = (banner) => {
     if (draggedRef.current) return; // a swipe, not a tap
@@ -91,11 +101,16 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
     if (totalItems <= 1) return;
 
     const intervalId = setInterval(() => {
+      if (Date.now() < holdUntilRef.current) return;
       setActiveIndex((prev) => (prev + 1) % totalItems);
     }, 4500);
 
     return () => clearInterval(intervalId);
   }, [totalItems]);
+
+  React.useEffect(() => {
+    holdUntilRef.current = 0;
+  }, [activeIndex]);
 
   // Load the next chunk of banners as the carousel nears the last loaded one.
   const itemCount = items.length;
@@ -149,6 +164,19 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
         {visibleItems.map((banner, idx) => {
           const clickable = Boolean(resolveBannerTarget(banner));
           const label = banner.title || section?.title || "Banner";
+          const isVideo = banner.mediaType === "video" && Boolean(banner.videoUrl);
+          const withVideo = (image) =>
+            isVideo ? (
+              <BannerVideo
+                key={banner.videoUrl}
+                src={getBannerVideoSrc(banner.videoUrl)}
+                poster={banner.imageUrl ? image : null}
+                active={idx === activeIndex}
+                onHold={holdSlide}
+              />
+            ) : (
+              image
+            );
           return (
           <div
             key={idx}
@@ -175,6 +203,7 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
             data-testid="experience-banner"
           >
             {fullWidth ? (
+              withVideo(
               <img
                 src={getBannerOptimizedSrc(banner.imageUrl)}
                 srcSet={
@@ -193,8 +222,10 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
                 fetchPriority={idx === 0 ? "high" : "low"}
                 decoding="async"
               />
+              )
             ) : (
               <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-50 shadow-md">
+                {withVideo(
                 <img
                   src={getBannerOptimizedSrc(banner.imageUrl)}
                   srcSet={
@@ -213,6 +244,7 @@ const ExperienceBannerCarousel = ({ section, items: rawItems, fullWidth = false,
                   fetchPriority={idx === 0 ? "high" : "low"}
                   decoding="async"
                 />
+                )}
                 <BannerCaption title={banner.title} subtitle={banner.subtitle} />
               </div>
             )}

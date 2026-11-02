@@ -31,6 +31,8 @@ import BrandSelect from "@shared/components/BrandSelect";
 import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
 import ProductDeliverySettings from "../components/product/ProductDeliverySettings";
 import BulkProductUpload from "../components/product/BulkProductUpload";
+import ProductImageSlot from "../components/product/ProductImageSlot";
+import { appendProductImageEdits } from "../utils/productImages";
 import { toast } from "sonner";
 import Pagination from "@shared/components/ui/Pagination";
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
@@ -475,12 +477,7 @@ const ProductManagement = () => {
       data.append("variants", JSON.stringify(variantsToSubmit));
       data.append("returnPolicy", JSON.stringify(formData.returnPolicy || { isReturnable: false, returnWindowDays: 0, returnReasons: [] }));
 
-      if (formData.mainImageFile) {
-        data.append("mainImage", formData.mainImageFile);
-      }
-      if (formData.galleryFiles && formData.galleryFiles.length > 0) {
-        formData.galleryFiles.forEach((file) => data.append("galleryImages", file));
-      }
+      appendProductImageEdits(data, formData, editingItem?.mainImage);
 
       if (editingItem) {
         const response = await sellerApi.updateProduct(editingItem._id || editingItem.id, data);
@@ -512,23 +509,19 @@ const ProductManagement = () => {
     }
   };
 
-  const handleImageUpload = (e, type) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (type === "main") {
-          setFormData({ ...formData, mainImage: reader.result, mainImageFile: file });
-        } else {
-          setFormData({
-            ...formData,
-            galleryImages: [...formData.galleryImages, reader.result],
-            galleryFiles: [...(formData.galleryFiles || []), file]
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+  const setGalleryImage = (index, image) => {
+    setFormData((prev) => {
+      const galleryImages = [...prev.galleryImages];
+      galleryImages[Math.min(index, galleryImages.length)] = image;
+      return { ...prev, galleryImages };
+    });
+  };
+
+  const removeGalleryImage = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      galleryImages: prev.galleryImages.filter((_, i) => i !== index),
+    }));
   };
 
   const handleDeleteClick = (product) => {
@@ -1773,21 +1766,16 @@ const ProductManagement = () => {
                           Main Cover Photo
                         </label>
                         <div className="flex flex-col md:flex-row items-start gap-6">
-                          <div className="w-48 aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer overflow-hidden relative">
-                            <input
-                              type="file"
-                              className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                              onChange={(e) => handleImageUpload(e, "main")}
-                            />
-                            {formData.mainImage ? (
-                              <img src={formData.mainImage} alt="Main Preview" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <HiOutlinePhoto className="h-10 w-10 text-slate-200" />
-                                <p className="text-[10px] text-slate-600 font-bold mt-2">UPLOAD</p>
-                              </div>
-                            )}
-                          </div>
+                          <ProductImageSlot
+                            src={formData.mainImage}
+                            label="cover photo"
+                            className="w-48 aspect-square rounded-2xl"
+                            onSelect={(mainImage) => setFormData((prev) => ({ ...prev, mainImage }))}
+                            onRemove={() => setFormData((prev) => ({ ...prev, mainImage: null }))}
+                          >
+                            <HiOutlinePhoto className="h-10 w-10 text-slate-200" />
+                            <p className="text-[10px] text-slate-600 font-bold mt-2">UPLOAD</p>
+                          </ProductImageSlot>
                         </div>
                       </div>
 
@@ -1796,31 +1784,22 @@ const ProductManagement = () => {
                           Gallery Photos
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          {(formData.galleryImages || []).slice(0, 4).map((img, idx) => (
-                            <div
-                              key={`${img}-${idx}`}
-                              className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden relative">
-                              <img src={img} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
-                            </div>
-                          ))}
-                          {Array.from({ length: Math.max(0, 4 - (formData.galleryImages || []).length) }).map((_, idx) => (
-                            <div
-                              key={`upload-${idx}`}
-                              className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer overflow-hidden relative">
-                              <input
-                                type="file"
-                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                onChange={(e) => handleImageUpload(e, "gallery")}
-                              />
-                              <div className="flex flex-col items-center">
-                                <HiOutlinePhoto className="h-8 w-8 text-slate-200" />
-                                <p className="text-[10px] text-slate-600 font-bold mt-2">UPLOAD</p>
-                              </div>
-                            </div>
+                          {[0, 1, 2, 3].map((i) => (
+                            <ProductImageSlot
+                              key={i}
+                              src={formData.galleryImages?.[i]}
+                              label={`gallery photo ${i + 1}`}
+                              className="aspect-square rounded-2xl"
+                              onSelect={(image) => setGalleryImage(i, image)}
+                              onRemove={() => removeGalleryImage(i)}
+                            >
+                              <HiOutlinePhoto className="h-8 w-8 text-slate-200" />
+                              <p className="text-[10px] text-slate-600 font-bold mt-2">UPLOAD</p>
+                            </ProductImageSlot>
                           ))}
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">
-                          Existing gallery images are shown here. Uploading new images will append them to the gallery.
+                          Use the pencil to replace a photo and the bin to delete it. Changes apply when you save. With no cover, the first gallery photo becomes the cover; products with no photos are hidden from the customer app.
                         </p>
                       </div>
                     </div>

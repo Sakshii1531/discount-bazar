@@ -366,6 +366,55 @@ function applyMediaFields(productData) {
   }
 }
 
+const MAX_GALLERY_IMAGES = 4;
+const GALLERY_LAYOUT_NEW_IMAGE = "new";
+
+// Photo changes for a saved product; only what the request asks to change is
+// written. `galleryLayout` is the wanted gallery order: saved URLs to keep, and
+// "new" where the next uploaded file goes. Without it, uploads are added at the end.
+function applyProductPhotoEdits(productData, product, uploadedGallery) {
+  const { galleryLayout, removeMainImage } = productData;
+  delete productData.galleryLayout;
+  delete productData.removeMainImage;
+
+  const layout = parseJsonIfString(galleryLayout);
+  const hasLayout = Array.isArray(layout);
+  const sentUrlList = productData.galleryImages !== undefined || productData.images !== undefined;
+  if (sentUrlList && !hasLayout && uploadedGallery.length === 0) {
+    applyMediaFields(productData);
+    return;
+  }
+
+  const uploadedMain = normalizeUrl(productData.mainImage || productData.mainImageUrl);
+  delete productData.mainImageUrl;
+  delete productData.images;
+  delete productData.galleryImages;
+  delete productData.mainImage;
+
+  const savedGallery = (product.galleryImages || []).filter(Boolean);
+  const pendingUploads = [...uploadedGallery];
+  const keptGallery = hasLayout
+    ? layout
+        .map((entry) => {
+          if (entry === GALLERY_LAYOUT_NEW_IMAGE) return pendingUploads.shift();
+          return savedGallery.includes(entry) ? entry : null;
+        })
+        .filter(Boolean)
+    : savedGallery;
+  let gallery = [...keptGallery, ...pendingUploads];
+  let mainImage = uploadedMain || (String(removeMainImage) === "true" ? "" : product.mainImage || "");
+
+  // As on create: with no cover, the first gallery photo becomes the cover.
+  if (!mainImage && gallery.length > 0) {
+    [mainImage, ...gallery] = gallery;
+  }
+
+  if (mainImage !== (product.mainImage || "")) productData.mainImage = mainImage;
+  if (gallery.length !== savedGallery.length || gallery.some((url, i) => url !== savedGallery[i])) {
+    productData.galleryImages = gallery;
+  }
+}
+
 const RESTRICTED_MODERATION_FIELDS = [
   "approvalStatus",
   "approvalRequestedAt",
@@ -1219,32 +1268,29 @@ export const updateProduct = async (req, res) => {
 
     // Handle multipart files (mainImage and galleryImages)
     const files = req.files || [];
-    if (files.length > 0) {
-      const galleryUrls = [];
-      for (const file of files) {
-        try {
-          if (file.fieldname === "mainImage") {
-            const url = await uploadToCloudinary(file.buffer, "products", {
-              mimeType: file.mimetype,
-              resourceType: "image",
-            });
-            productData.mainImage = url;
-          } else if (file.fieldname === "galleryImages") {
-            const url = await uploadToCloudinary(file.buffer, "products", {
-              mimeType: file.mimetype,
-              resourceType: "image",
-            });
-            galleryUrls.push(url);
-          }
-        } catch (err) {
-          logger.error("Cloudinary upload failed during update", {
-            scope: "updateProduct",
-            error: err,
+    const uploadedGallery = [];
+    for (const file of files) {
+      try {
+        if (file.fieldname === "mainImage") {
+          const url = await uploadToCloudinary(file.buffer, "products", {
+            mimeType: file.mimetype,
+            resourceType: "image",
           });
+          productData.mainImage = url;
+        } else if (file.fieldname === "galleryImages") {
+          const url = await uploadToCloudinary(file.buffer, "products", {
+            mimeType: file.mimetype,
+            resourceType: "image",
+          });
+          uploadedGallery.push(url);
         }
-      }
-      if (galleryUrls.length > 0) {
-        productData.galleryImages = galleryUrls;
+      } catch (err) {
+        logger.error("Cloudinary upload failed during update", {
+          scope: "updateProduct",
+          error: err,
+        });
+        // Stop here: saving now would drop a photo the seller meant to replace.
+        return handleResponse(res, 502, "Could not upload the image. Nothing was changed, please try again.");
       }
     }
 
@@ -1291,7 +1337,10 @@ export const updateProduct = async (req, res) => {
 
     const skuBaseName = productData.name || product.name;
 
-    applyMediaFields(productData);
+    applyProductPhotoEdits(productData, product, uploadedGallery);
+    if (productData.galleryImages?.length > MAX_GALLERY_IMAGES) {
+      return handleResponse(res, 400, `Gallery supports at most ${MAX_GALLERY_IMAGES} images`);
+    }
 
     if (typeof productData.tags === "string") {
       productData.tags = productData.tags.split(",").map((tag) => tag.trim());

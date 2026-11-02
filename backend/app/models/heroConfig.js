@@ -2,7 +2,15 @@ import mongoose from "mongoose";
 
 const heroBannerItemSchema = new mongoose.Schema(
   {
-    imageUrl: { type: String, required: true },
+    // The banner image, or the poster shown while a video banner loads.
+    imageUrl: {
+      type: String,
+      required() {
+        return this.mediaType !== "video";
+      },
+    },
+    mediaType: { type: String, enum: ["image", "video"], default: "image" },
+    videoUrl: { type: String, trim: true },
     title: { type: String, trim: true },
     subtitle: { type: String, trim: true },
     linkType: {

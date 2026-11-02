@@ -416,6 +416,11 @@ export default [
     attach: { field: "image" },
     check: (res) => expect(res.body.result.url).toMatch(/\/uploads\/banners\/.+\.png$/),
   },
+  {
+    route: "GET /api/admin/experience/banner-upload-config",
+    as: "admin",
+    check: (res) => expect(res.body.result.allowedMimeTypes).toContain("video/mp4"),
+  },
 
   // ── Coupons ───────────────────────────────────────────────────────────────
   {

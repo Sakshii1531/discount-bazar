@@ -87,6 +87,10 @@ Redis is **mandatory in production** (`NODE_ENV=production`). Startup fails if n
 | `MEDIA_MAX_FILE_SIZE` | `5242880` | No | Max upload size in bytes (5MB) |
 | `MEDIA_ALLOWED_FORMATS` | `jpg,png,webp` | No | Allowed upload formats |
 | `MEDIA_SIGNED_URL_EXPIRY` | `900` | No | Signed URL expiry in seconds |
+| `BANNER_VIDEO_MAX_DURATION_SECONDS` | `30` | No | Longest video banner allowed, in seconds |
+| `BANNER_VIDEO_MAX_SIZE_MB` | `20` | No | Largest video banner upload, in MB |
+| `BANNER_IMAGE_MAX_SIZE_MB` | `20` | No | Largest image banner upload, in MB |
+| `BANNER_ALLOWED_MIME_TYPES` | `image/jpeg,image/png,image/webp,video/mp4` | No | File types accepted for banners. `image/gif` can also be added |
 
 ## Logging
 

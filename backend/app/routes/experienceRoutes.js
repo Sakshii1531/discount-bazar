@@ -8,14 +8,31 @@ import {
   reorderExperienceSections,
   getPublicExperienceSections,
   uploadBannerImage,
+  getBannerUploadConfig,
   getPublicHeroConfig,
   getAdminHeroConfig,
   upsertHeroConfig,
 } from "../controller/experienceController.js";
 import { verifyToken, allowRoles } from "../middleware/authMiddleware.js";
+import { getBannerMediaConfig } from "../services/bannerMediaService.js";
+import handleResponse from "../utils/helper.js";
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+
+// The upload field stays "image" for images and videos alike. This cap only
+// stops oversized bodies; the per-type limits are checked by the controller.
+const receiveBannerFile = (req, res, next) => {
+  const { maxImageBytes, maxVideoBytes } = getBannerMediaConfig();
+  const fileSize = Math.max(maxImageBytes, maxVideoBytes);
+  multer({ storage: multer.memoryStorage(), limits: { fileSize } }).single("image")(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      const maxMb = Number((fileSize / (1024 * 1024)).toFixed(2));
+      return handleResponse(res, 400, `File is too large. The maximum size is ${maxMb} MB.`);
+    }
+    return handleResponse(res, 400, err.message);
+  });
+};
 
 // Admin routes (protected)
 router.get(
@@ -38,6 +55,13 @@ router.put(
   verifyToken,
   allowRoles("admin"),
   reorderExperienceSections
+);
+
+router.get(
+  "/admin/experience/banner-upload-config",
+  verifyToken,
+  allowRoles("admin"),
+  getBannerUploadConfig
 );
 
 // Admin hero config (separate from experience sections) - before :id so "hero" is not matched as id
@@ -72,7 +96,7 @@ router.post(
   "/admin/experience/upload-banner",
   verifyToken,
   allowRoles("admin"),
-  upload.single("image"),
+  receiveBannerFile,
   uploadBannerImage
 );
 

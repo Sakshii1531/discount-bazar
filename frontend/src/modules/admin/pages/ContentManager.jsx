@@ -22,6 +22,15 @@ import { motion } from 'framer-motion';
 import { adminApi } from '../services/adminApi';
 import BannerLinkPicker, { isBannerLinkComplete } from '../components/BannerLinkPicker';
 import BrandSectionFields from '../components/BrandSectionFields';
+import {
+    bannerMediaPayload,
+    bannerUploadAccept,
+    bannerUploadHint,
+    hasBannerMedia,
+    uploadBannerFile,
+    useBannerUploadConfig,
+} from '../utils/bannerMedia';
+import BannerVideoPreview from '../components/BannerVideoPreview';
 
 const DISPLAY_TYPES = [
     { id: 'banners', label: 'Banners' },
@@ -73,6 +82,7 @@ const ContentManager = () => {
     });
 
     const bannerFileInputsRef = useRef([]);
+    const bannerUploadConfig = useBannerUploadConfig();
 
     const selectedHeader = useMemo(
         () => headerCategories.find(h => h._id === selectedHeaderId) || null,
@@ -244,12 +254,12 @@ const ContentManager = () => {
 
         if (displayType === 'banners') {
             if ((formData.bannerItems || []).some(b => b.isUploading)) {
-                showToast('Please wait for all banner images to finish uploading', 'warning');
+                showToast('Please wait for all banner files to finish uploading', 'warning');
                 return;
             }
-            const items = (formData.bannerItems || []).filter(b => b.imageUrl);
+            const items = (formData.bannerItems || []).filter(hasBannerMedia);
             if (!items.length) {
-                showToast('Please add at least one banner image', 'warning');
+                showToast('Please add at least one banner image or video', 'warning');
                 return;
             }
             const badLink = items.findIndex(b => !isBannerLinkComplete(b));
@@ -259,7 +269,7 @@ const ContentManager = () => {
             }
             config = {
                 items: items.map(b => ({
-                    imageUrl: b.imageUrl,
+                    ...bannerMediaPayload(b),
                     title: b.title?.trim() || '',
                     subtitle: b.subtitle?.trim() || '',
                     linkType: b.linkType || 'none',
@@ -365,19 +375,13 @@ const ContentManager = () => {
         if (!file) return;
         updateBannerItem(idx, { isUploading: true });
         try {
-            const fd = new FormData();
-            fd.append('image', file);
-            const res = await adminApi.uploadExperienceBanner(fd);
-            const url = res.data?.result?.url || res.data?.url;
-            if (!url) {
-                throw new Error('Upload failed');
-            }
-            updateBannerItem(idx, { imageUrl: url, isUploading: false });
-            showToast('Banner image uploaded', 'success');
+            const media = await uploadBannerFile(file, bannerUploadConfig);
+            updateBannerItem(idx, { ...media, isUploading: false });
+            showToast(`Banner ${media.mediaType} uploaded`, 'success');
         } catch (e) {
             console.error(e);
             updateBannerItem(idx, { isUploading: false });
-            showToast('Failed to upload banner image', 'error');
+            showToast(e.message, 'error');
         }
     };
 
@@ -643,7 +647,7 @@ const ContentManager = () => {
                                     Add banner
                                 </button>
                             </div>
-                            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
                                 {formData.bannerItems.map((item, idx) => (
                                     <Card key={idx} className="p-3 bg-white border-slate-100">
                                         <div className="flex items-start gap-3">
@@ -666,11 +670,12 @@ const ContentManager = () => {
                                                                 bannerFileInputsRef.current[idx] = el;
                                                             }}
                                                             type="file"
-                                                            accept="image/*"
+                                                            accept={bannerUploadAccept(bannerUploadConfig)}
                                                             className="hidden"
-                                                            onChange={(e) =>
-                                                                handleBannerFileChange(idx, e.target.files?.[0])
-                                                            }
+                                                            onChange={(e) => {
+                                                                handleBannerFileChange(idx, e.target.files?.[0]);
+                                                                e.target.value = '';
+                                                            }}
                                                         />
                                                         <button
                                                             type="button"
@@ -679,17 +684,18 @@ const ContentManager = () => {
                                                             }
                                                             className="inline-flex items-center px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors"
                                                         >
-                                                            {item.imageUrl ? 'Change image' : 'Choose image file'}
+                                                            {hasBannerMedia(item) ? 'Replace image or video' : 'Choose image or video'}
                                                         </button>
                                                         <p className="text-[10px] text-slate-400">
                                                             {item.isUploading
                                                                 ? 'Uploading...'
-                                                                : item.imageUrl
-                                                                ? 'Image uploaded'
-                                                                : 'PNG, JPG up to 5MB'}
+                                                                : hasBannerMedia(item)
+                                                                ? `${item.mediaType === 'video' ? 'Video' : 'Image'} uploaded`
+                                                                : bannerUploadHint(bannerUploadConfig)}
                                                         </p>
                                                     </div>
                                                 </div>
+                                                <BannerVideoPreview banner={item} />
                                                 <input
                                                     value={item.title || ''}
                                                     onChange={(e) => updateBannerItem(idx, { title: e.target.value })}

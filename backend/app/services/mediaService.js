@@ -510,6 +510,7 @@ async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
   else if (mimeType.includes("webp")) ext = ".webp";
   else if (mimeType.includes("gif")) ext = ".gif";
   else if (mimeType.includes("pdf")) ext = ".pdf";
+  else if (mimeType.includes("mp4")) ext = ".mp4";
   else {
     const origExt = path.extname(options.filename || "");
     ext = origExt || ".jpg";
@@ -542,7 +543,7 @@ async function uploadToCloudinary(fileBuffer, folder = "categories", options = {
 
   const uploadOptions = {
     folder,
-    resource_type: shouldOptimizeImage ? "image" : "auto",
+    resource_type: shouldOptimizeImage ? "image" : resourceType === "video" ? "video" : "auto",
     ...(shouldOptimizeImage ? getImageUploadOptions() : {}),
   };
 

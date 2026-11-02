@@ -14,6 +14,13 @@ import {
 } from "../services/experienceSectionService.js";
 import { decorateProductsWithDelivery } from "../services/deliveryQuoteService.js";
 import { getOrCreateFinanceSettings } from "../services/finance/financeSettingsService.js";
+import {
+  buildVideoPosterUrl,
+  getBannerMediaConfig,
+  hasBannerMedia,
+  inspectBannerFile,
+  normalizeBannerMedia,
+} from "../services/bannerMediaService.js";
 
 // Section edits must also clear the per-location resolved copies.
 const invalidatePublicSections = async () => {
@@ -99,9 +106,9 @@ const validateAndNormalizeConfig = async (displayType, config = {}) => {
     const items = Array.isArray(config.items) ? config.items : [];
     normalized.banners = {
       items: items
-        .filter((b) => b && b.imageUrl)
+        .filter(hasBannerMedia)
         .map((b) => ({
-          imageUrl: b.imageUrl,
+          ...normalizeBannerMedia(b),
           title: b.title,
           subtitle: b.subtitle,
           linkType: b.linkType || "none",
@@ -457,17 +464,33 @@ export const getPublicExperienceSections = async (req, res) => {
 };
 
 /* ===============================
-   ADMIN: Upload banner image
+   ADMIN: Banner upload limits (shown in the upload form)
+================================ */
+export const getBannerUploadConfig = (req, res) =>
+  handleResponse(res, 200, "Banner upload config fetched", getBannerMediaConfig());
+
+/* ===============================
+   ADMIN: Upload banner image or video
 ================================ */
 export const uploadBannerImage = async (req, res) => {
   try {
     if (req.file) {
+      const { mediaType, mimeType, duration } = inspectBannerFile(req.file.buffer);
       const uploadedUrl = await uploadToCloudinary(req.file.buffer, "banners", {
-        mimeType: req.file.mimetype,
-        resourceType: "image",
+        mimeType,
+        resourceType: mediaType,
       });
       await invalidatePublicSections();
-      return handleResponse(res, 200, "Banner image uploaded", { url: uploadedUrl });
+      if (mediaType === "video") {
+        return handleResponse(res, 200, "Banner video uploaded", {
+          url: uploadedUrl,
+          mediaType,
+          videoUrl: uploadedUrl,
+          posterUrl: buildVideoPosterUrl(uploadedUrl),
+          duration,
+        });
+      }
+      return handleResponse(res, 200, "Banner image uploaded", { url: uploadedUrl, mediaType });
     }
 
     const url = normalizeUrl(req.body?.url || req.body?.imageUrl);
@@ -475,9 +498,9 @@ export const uploadBannerImage = async (req, res) => {
       return handleResponse(res, 400, "A valid image URL is required");
     }
     await invalidatePublicSections();
-    return handleResponse(res, 200, "Banner image uploaded", { url });
+    return handleResponse(res, 200, "Banner image uploaded", { url, mediaType: "image" });
   } catch (error) {
-    return handleResponse(res, 500, error.message);
+    return handleResponse(res, error.statusCode || 500, error.message);
   }
 };
 
@@ -587,9 +610,9 @@ export const upsertHeroConfig = async (req, res) => {
 
     const bannerItems = Array.isArray(banners?.items)
       ? banners.items
-        .filter((b) => b && b.imageUrl)
+        .filter(hasBannerMedia)
         .map((b) => ({
-          imageUrl: b.imageUrl,
+          ...normalizeBannerMedia(b),
           title: b.title || "",
           subtitle: b.subtitle || "",
           linkType: b.linkType || "none",

@@ -27,6 +27,8 @@ export const adminContentApi = {
         axiosInstance.put('/admin/experience/reorder', { items }),
     uploadExperienceBanner: (formData) =>
         axiosInstance.post('/admin/experience/upload-banner', formData),
+    getBannerUploadConfig: () =>
+        axiosInstance.get('/admin/experience/banner-upload-config'),
 
     // Hero config (separate hero banners + categories per page)
     getHeroConfig: (params) =>

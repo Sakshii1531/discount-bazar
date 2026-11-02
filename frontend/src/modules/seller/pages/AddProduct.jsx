@@ -25,6 +25,8 @@ import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
 import BrandSelect from "@shared/components/BrandSelect";
 import { PurchaseGstSettings, PurchaseGstBreakdown, findPurchaseGstError } from "../components/product/PurchaseGst";
 import ProductDeliverySettings from "../components/product/ProductDeliverySettings";
+import ProductImageSlot from "../components/product/ProductImageSlot";
+import { dataURLtoFile } from "../utils/productImages";
 
 const TABS = [
   { id: "general", label: "General Info", icon: HiOutlineTag },
@@ -118,27 +120,6 @@ const getInitialFormData = () => {
   } catch (err) {
     console.warn("Failed to parse product draft:", err);
     return initialFormData;
-  }
-};
-
-const dataURLtoFile = (dataurl, filename) => {
-  try {
-    if (!dataurl || typeof dataurl !== "string" || !dataurl.startsWith("data:")) {
-      return null;
-    }
-    const arr = dataurl.split(",");
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new File([u8arr], filename, { type: mime });
-  } catch (err) {
-    console.error("Error converting dataURL to file:", err);
-    return null;
   }
 };
 
@@ -254,13 +235,12 @@ const AddProduct = () => {
   // Auto-save form draft across refreshes
   useEffect(() => {
     try {
-      const { mainImageFile, galleryFiles, ...toSave } = formData;
-      const serialized = JSON.stringify(toSave);
+      const serialized = JSON.stringify(formData);
       try {
         localStorage.setItem(STORAGE_KEY, serialized);
       } catch {
         // In case localStorage is exceeded by base64 images, save text fields without images
-        const { mainImage, galleryImages, ...textOnly } = toSave;
+        const { mainImage, galleryImages, ...textOnly } = formData;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(textOnly));
       }
       try {
@@ -276,8 +256,7 @@ const AddProduct = () => {
   useEffect(() => {
     const handleBeforeUnload = () => {
       try {
-        const { mainImageFile, galleryFiles, ...toSave } = formData;
-        const serialized = JSON.stringify(toSave);
+        const serialized = JSON.stringify(formData);
         localStorage.setItem(STORAGE_KEY, serialized);
         sessionStorage.setItem(STORAGE_KEY, serialized);
       } catch { /* storage unavailable or full: draft is not saved */ }
@@ -426,29 +405,15 @@ const AddProduct = () => {
       data.append("tags", formData.tags);
 
       // Images
-      const effectiveMainFile =
-        formData.mainImageFile ||
-        dataURLtoFile(formData.mainImage, "main-image.jpg");
-      if (effectiveMainFile) {
-        data.append("mainImage", effectiveMainFile);
+      const mainFile = dataURLtoFile(formData.mainImage, "main-image.jpg");
+      if (mainFile) {
+        data.append("mainImage", mainFile);
       }
 
-      const effectiveGalleryFiles =
-        formData.galleryFiles && formData.galleryFiles.length > 0
-          ? formData.galleryFiles
-          : (formData.galleryImages || [])
-              .map((img, i) =>
-                img instanceof File
-                  ? img
-                  : dataURLtoFile(img, `gallery_${i + 1}.jpg`)
-              )
-              .filter(Boolean);
-
-      if (effectiveGalleryFiles && effectiveGalleryFiles.length > 0) {
-        effectiveGalleryFiles.forEach((file) => {
-          data.append("galleryImages", file);
-        });
-      }
+      (formData.galleryImages || []).forEach((img, i) => {
+        const file = dataURLtoFile(img, `gallery_${i + 1}.jpg`);
+        if (file) data.append("galleryImages", file);
+      });
 
       const isFromPurchases = Boolean(returnTo && returnTo.includes("/seller/business/purchases"));
 
@@ -524,27 +489,19 @@ const AddProduct = () => {
     }
   };
 
-  const handleImageUpload = (e, type) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (type === "main") {
-          setFormData({
-            ...formData,
-            mainImage: reader.result,
-            mainImageFile: file
-          });
-        } else {
-          setFormData({
-            ...formData,
-            galleryImages: [...formData.galleryImages, reader.result],
-            galleryFiles: [...(formData.galleryFiles || []), file]
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+  const setGalleryImage = (index, image) => {
+    setFormData((prev) => {
+      const galleryImages = [...prev.galleryImages];
+      galleryImages[Math.min(index, galleryImages.length)] = image;
+      return { ...prev, galleryImages };
+    });
+  };
+
+  const removeGalleryImage = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      galleryImages: prev.galleryImages.filter((_, i) => i !== index),
+    }));
   };
 
   return (
@@ -1163,26 +1120,18 @@ const AddProduct = () => {
                   Main Cover Photo
                 </label>
                 <div className="flex flex-col md:flex-row items-start gap-6">
-                  <div className="w-48 aspect-square rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer overflow-hidden relative">
-                    <input
-                      type="file"
-                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                      onChange={(e) => handleImageUpload(e, "main")}
-                    />
-                    {formData.mainImage ? (
-                      <img
-                        src={formData.mainImage}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <>
-                        <HiOutlinePhoto className="h-10 w-10 text-slate-200 group-hover:text-primary transition-colors" />
-                        <p className="text-[9px] font-bold text-slate-600 mt-2 uppercase tracking-widest group-hover:text-primary">
-                          Upload Cover
-                        </p>
-                      </>
-                    )}
-                  </div>
+                  <ProductImageSlot
+                    src={formData.mainImage}
+                    label="cover photo"
+                    className="w-48 aspect-square rounded-lg"
+                    onSelect={(mainImage) => setFormData((prev) => ({ ...prev, mainImage }))}
+                    onRemove={() => setFormData((prev) => ({ ...prev, mainImage: null }))}
+                  >
+                    <HiOutlinePhoto className="h-10 w-10 text-slate-200 group-hover:text-primary transition-colors" />
+                    <p className="text-[9px] font-bold text-slate-600 mt-2 uppercase tracking-widest group-hover:text-primary">
+                      Upload Cover
+                    </p>
+                  </ProductImageSlot>
                   <div className="flex-1 space-y-2 pt-2">
                     <p className="text-xs font-bold text-slate-900">
                       Choose a primary image
@@ -1204,29 +1153,20 @@ const AddProduct = () => {
                   Gallery Photos (3-4 recommended, max 4) — products without images are hidden from the customer app
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div
+                  {[0, 1, 2, 3].map((i) => (
+                    <ProductImageSlot
                       key={i}
-                      className="aspect-square rounded-md border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer relative overflow-hidden">
-                      {formData.galleryImages[i - 1] ? (
-                        <img
-                          src={formData.galleryImages[i - 1]}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <>
-                          <input
-                            type="file"
-                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                            onChange={(e) => handleImageUpload(e, "gallery")}
-                          />
-                          <HiOutlinePlus className="h-5 w-5 text-slate-200 group-hover:text-primary transition-colors" />
-                          <p className="text-[8px] font-bold text-slate-600 mt-1 uppercase tracking-widest group-hover:text-primary">
-                            Add
-                          </p>
-                        </>
-                      )}
-                    </div>
+                      src={formData.galleryImages[i]}
+                      label={`gallery photo ${i + 1}`}
+                      className="aspect-square rounded-md"
+                      onSelect={(image) => setGalleryImage(i, image)}
+                      onRemove={() => removeGalleryImage(i)}
+                    >
+                      <HiOutlinePlus className="h-5 w-5 text-slate-200 group-hover:text-primary transition-colors" />
+                      <p className="text-[8px] font-bold text-slate-600 mt-1 uppercase tracking-widest group-hover:text-primary">
+                        Add
+                      </p>
+                    </ProductImageSlot>
                   ))}
                 </div>
               </div>
