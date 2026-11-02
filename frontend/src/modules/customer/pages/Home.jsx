@@ -530,7 +530,7 @@ const Home = () => {
           <OfferSections sections={offerSections} />
 
           {sectionsForRenderer.length > 0 && (
-            <div className="container mx-auto px-4 md:px-8 lg:px-[50px] py-10 md:py-16">
+            <div className="container mx-auto px-4 md:px-8 lg:px-[50px] pt-4 pb-2 md:pt-10 md:pb-8">
               <SectionRenderer sections={sectionsForRenderer} productsById={productsById} categoriesById={categoryMap} subcategoriesById={subcategoryMap} />
             </div>
           )}

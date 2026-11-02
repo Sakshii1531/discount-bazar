@@ -361,63 +361,6 @@ const NotificationComposer = () => {
                                     <p className="ds-caption text-slate-400 text-right">{message.length}/200</p>
                                 </div>
 
-                                {/* Deep Link & Image */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="ds-label">Deep Link (Optional)</label>
-                                        <div className="relative">
-                                            <HiOutlineLink className="absolute left-4 top-1/2 -translate-y-1/2 ds-icon-sm text-slate-400" />
-                                            <input
-                                                value={deepLink}
-                                                onChange={(e) => setDeepLink(e.target.value)}
-                                                className="ds-input w-full"
-                                                style={{ paddingLeft: '2.5rem' }}
-                                                placeholder="e.g. /deals/category"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="ds-label">Image (Optional)</label>
-                                        <input
-                                            ref={imageInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleImageSelect}
-                                        />
-
-                                        <button
-                                            type="button"
-                                            onClick={() => imageInputRef.current?.click?.()}
-                                            className="ds-input w-full flex items-center gap-2 justify-start text-left hover:bg-slate-50 transition-colors"
-                                        >
-                                            <HiOutlinePhoto className="ds-icon-sm text-slate-400" />
-                                            <span className="text-xs font-bold text-slate-600 truncate">
-                                                {imageFile?.name || 'Choose an image file...'}
-                                            </span>
-                                        </button>
-
-                                        {imagePreview ? (
-                                            <div className="flex items-center gap-3 pt-1">
-                                                <img
-                                                    src={imagePreview}
-                                                    alt="Selected notification"
-                                                    className="h-10 w-10 rounded-xl object-cover ring-1 ring-slate-200"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setImageFile(null);
-                                                        setImagePreview('');
-                                                    }}
-                                                    className="text-[10px] font-black uppercase tracking-widest text-rose-600 hover:text-rose-700"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </div>
                             </div>
 
                             {/* Send Button */}

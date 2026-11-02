@@ -42,4 +42,17 @@ describe('BrandAvatar', () => {
     render(<BrandAvatar name="Other" logo="https://cdn.example.com/other.png" />);
     expect(screen.getByRole('img', { name: /logo/i })).toHaveAttribute('src', 'https://cdn.example.com/other.png');
   });
+
+  it('keeps every corner of a wide logo inside a circular frame', () => {
+    render(<BrandAvatar name="Other" logo="https://cdn.example.com/other.png" circular />);
+    const img = screen.getByRole('img', { name: /logo/i });
+    Object.defineProperty(img, 'naturalWidth', { value: 200 });
+    Object.defineProperty(img, 'naturalHeight', { value: 100 });
+    fireEvent.load(img);
+
+    const width = parseFloat(img.style.width);
+    const height = parseFloat(img.style.height);
+    expect(width / height).toBeCloseTo(2);
+    expect(Math.hypot(width, height)).toBeLessThanOrEqual(100);
+  });
 });
