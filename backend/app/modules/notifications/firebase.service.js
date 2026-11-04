@@ -157,9 +157,13 @@ export async function sendFCM(tokens = [], payload = {}) {
               title,
               body,
             },
-            sound: isOrderAlert ? "order_alert.mp3" : "default",
+            // iOS cannot play .mp3 as a notification sound (only .caf/.wav/.aiff,
+            // max 30s, bundled in the app) — it silently falls back otherwise.
+            sound: isOrderAlert ? "order_alert.caf" : "default",
             badge: 1,
             contentAvailable: true,
+            // Breaks through Focus / scheduled summary so the alert rings on a locked phone.
+            ...(isOrderAlert ? { "interruption-level": "time-sensitive" } : {}),
           },
         },
       },

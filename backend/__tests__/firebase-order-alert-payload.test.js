@@ -42,6 +42,9 @@ describe("FCM order alert payloads", () => {
     expect(msg.android.notification.sound).toBe("order_alert");
     expect(msg.android.notification.tag).toBe("A1");
     expect(msg.apns.headers["apns-collapse-id"]).toBe("A1");
+    // iOS only plays bundled .caf/.wav/.aiff notification sounds.
+    expect(msg.apns.payload.aps.sound).toBe("order_alert.caf");
+    expect(msg.apns.payload.aps["interruption-level"]).toBe("time-sensitive");
   });
 
   test("seller cancellation notice replaces the alert but never rings the order tone", async () => {
@@ -55,6 +58,8 @@ describe("FCM order alert payloads", () => {
     expect(msg.android.notification.sound).toBe("default");
     expect(msg.android.notification.tag).toBe("A1");
     expect(msg.data.sound).toBeUndefined();
+    expect(msg.apns.payload.aps.sound).toBe("default");
+    expect(msg.apns.payload.aps["interruption-level"]).toBeUndefined();
   });
 
   test("rider delivery broadcast is treated as an order alert", async () => {

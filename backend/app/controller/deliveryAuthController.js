@@ -113,6 +113,10 @@ export const signupDelivery = async (req, res) => {
             await delivery.save();
         }
 
+        if (process.env.NODE_ENV !== "production") {
+            // Dev only: the SMS gateway can accept a message that the operator still drops (DLT).
+            console.log(`[otp][dev] Delivery signup OTP for ${phone}: ${otp}`);
+        }
         if (useRealSMS()) {
             try {
                 await sendSmsIndiaHubOtp({ phone, otp });
@@ -160,6 +164,9 @@ export const loginDelivery = async (req, res) => {
         delivery.otpExpiry = Date.now() + 5 * 60 * 1000;
         await delivery.save();
 
+        if (process.env.NODE_ENV !== "production") {
+            console.log(`[otp][dev] Delivery login OTP for ${phone}: ${otp}`);
+        }
         if (useRealSMS()) {
             try {
                 await sendSmsIndiaHubOtp({ phone, otp });

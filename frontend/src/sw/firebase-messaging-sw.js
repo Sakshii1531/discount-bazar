@@ -91,6 +91,7 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
 
     return {
       title,
+      isOrderAlert,
       options: {
         body: safeBody,
         tag,
@@ -111,9 +112,44 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
           role: data.role || "",
           image,
           ...data,
+          // Unique per push so a newer alert for the same order stops this one's ring loop.
+          ringId: isOrderAlert ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : "",
         },
       },
     };
+  }
+
+  // A web notification plays its sound only once, so on a locked phone a single
+  // push gives a single short "ding". To make an order alert actually ring, the
+  // same notification is re-posted (renotify: true → sound + vibration again)
+  // every few seconds until the alert is handled. The push event stays alive
+  // through waitUntil, which the Firebase SDK applies to onBackgroundMessage.
+  const RING_INTERVAL_MS = 5000;
+  const RING_MAX_DURATION_MS = 60000;
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function ringUntilHandled(title, options) {
+    const { tag } = options;
+    const ringId = options.data?.ringId;
+    if (!tag || !ringId) return;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < RING_MAX_DURATION_MS) {
+      await wait(RING_INTERVAL_MS);
+
+      // Stop when the alert was tapped, swiped away, dismissed because the order
+      // was accepted/taken elsewhere (ORDER_ALERT_DISMISS), or replaced by a newer
+      // alert / an "Order Cancelled" notice for the same order.
+      const shown = await self.registration.getNotifications({ tag });
+      if (!shown.some((n) => n.data?.ringId === ringId)) return;
+
+      // App unlocked and on screen: its in-app ringtone takes over.
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      if (windows.some((c) => c.visibilityState === "visible")) return;
+
+      await self.registration.showNotification(title, options);
+    }
   }
 
   self.addEventListener("install", () => {
@@ -297,7 +333,10 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
             .forEach((n) => n.close()),
         );
     }
-    const { title, options } = buildNotificationOptions(payload);
-    self.registration.showNotification(title, options);
+    const { title, options, isOrderAlert } = buildNotificationOptions(payload);
+    return self.registration
+      .showNotification(title, options)
+      .then(() => (isOrderAlert ? ringUntilHandled(title, options) : undefined))
+      .catch(() => undefined);
   });
 }

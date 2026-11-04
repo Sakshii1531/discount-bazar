@@ -29,6 +29,35 @@ import { toast } from 'sonner';
 import { invalidateCache } from '@core/api/dedupe';
 import { formatAmount } from "@shared/utils/currency";
 import InventoryEditModal from '../components/stock/InventoryEditModal';
+import { posVariantLabel } from '../utils/variantLabel';
+
+const getVariantInfo = (item) => {
+    const variants = Array.isArray(item?.variants) ? item.variants : [];
+    if (variants.length > 1) {
+        return {
+            isMultiple: true,
+            count: variants.length,
+            names: variants
+                .map((v) => posVariantLabel(item, v) || v?.name || v?.size || v?.sku)
+                .filter(Boolean),
+        };
+    }
+    const single = variants[0];
+    const resolved =
+        (single && posVariantLabel(item, single)) ||
+        single?.name ||
+        single?.size ||
+        posVariantLabel(item, null) ||
+        item?.weight ||
+        item?.size ||
+        item?.variantName ||
+        item?.variant ||
+        "";
+    return {
+        isMultiple: false,
+        name: resolved || "Standard",
+    };
+};
 
 const StockManagement = () => {
     const navigate = useNavigate();
@@ -152,9 +181,13 @@ const StockManagement = () => {
                 String(item.name || '').toLowerCase().includes(term) ||
                 (item.sku || '').toString().toLowerCase().includes(term) ||
                 String(item.barcode || '').toLowerCase().includes(term) ||
+                String(item.weight || '').toLowerCase().includes(term) ||
+                String(item.size || '').toLowerCase().includes(term) ||
                 variants.some((v) =>
                     String(v?.sku || '').toLowerCase().includes(term) ||
                     String(v?.barcode || '').toLowerCase().includes(term) ||
+                    String(v?.size || '').toLowerCase().includes(term) ||
+                    String(v?.colour || '').toLowerCase().includes(term) ||
                     String(v?.name || '').toLowerCase().includes(term));
             const matchesStatus = filterStatus === 'All' || item.status === filterStatus;
             return matchesSearch && matchesStatus;
@@ -261,6 +294,7 @@ const StockManagement = () => {
                                     <thead>
                                         <tr className="bg-slate-50/50 border-b border-slate-100">
                                             <th className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Product Information</th>
+                                            <th className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Variant Name</th>
                                             <th className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Inventory Capacity</th>
                                             <th className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Stock Health</th>
                                             <th className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Price</th>
@@ -271,7 +305,7 @@ const StockManagement = () => {
                                         {filteredInventory.length === 0 ? (
                                             <tr>
                                                 <td
-                                                    colSpan={5}
+                                                    colSpan={6}
                                                     className="px-6 py-10 text-center text-slate-600 text-xs font-black tracking-widest uppercase"
                                                 >
                                                     No products found for this filter.
@@ -307,6 +341,36 @@ const StockManagement = () => {
                                                                         </p>
                                                                     </div>
                                                                 </div>
+                                                            </td>
+                                                            <td className="px-6 py-5">
+                                                                {(() => {
+                                                                    const variantInfo = getVariantInfo(item);
+                                                                    if (variantInfo.isMultiple) {
+                                                                        return (
+                                                                            <div className="flex flex-col gap-1 max-w-[200px]">
+                                                                                <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/70 w-fit">
+                                                                                    {variantInfo.count} Variants
+                                                                                </span>
+                                                                                <p className="text-xs font-semibold text-slate-700 truncate" title={variantInfo.names.join(', ')}>
+                                                                                    {variantInfo.names.join(', ')}
+                                                                                </p>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return (
+                                                                        <span
+                                                                            className={cn(
+                                                                                "inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg max-w-[180px] truncate",
+                                                                                variantInfo.name === 'Standard'
+                                                                                    ? "text-slate-500 bg-slate-100/60 font-medium"
+                                                                                    : "text-slate-800 bg-slate-100"
+                                                                            )}
+                                                                            title={variantInfo.name}
+                                                                        >
+                                                                            {variantInfo.name}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </td>
                                                             <td className="px-6 py-5">
                                                                 <div className="flex items-center gap-2">
