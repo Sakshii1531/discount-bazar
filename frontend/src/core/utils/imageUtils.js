@@ -24,8 +24,9 @@ export function applyCloudinaryTransform(url, params = "f_auto,q_auto,w_400,dpr_
   if (!url) return url;
 
   if (typeof url === "string" && (url.startsWith("/uploads/") || url.includes("/uploads/"))) {
-    if (url.startsWith("/uploads/")) {
-      return `${getBackendOrigin()}${url}`;
+    const uploadIndex = url.indexOf("/uploads/");
+    if (uploadIndex !== -1) {
+      return `${getBackendOrigin()}${url.slice(uploadIndex)}`;
     }
     return url;
   }

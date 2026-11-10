@@ -1,9 +1,13 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { v2 as cloudinary } from "cloudinary";
 import MediaMetadata from "../models/mediaMetadata.js";
 import logger from "./logger.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function getMaxUploadBytes() {
   const raw = parseInt(process.env.MEDIA_MAX_FILE_SIZE || "10485760", 10);
@@ -498,7 +502,7 @@ async function deleteMedia(publicId, userId, userModel) {
 
 async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
   const sanitizeFolder = String(folder || "uploads").replace(/[^a-zA-Z0-9_\-\/]/g, "");
-  const targetDir = path.join(process.cwd(), "public", "uploads", sanitizeFolder);
+  const targetDir = path.resolve(__dirname, "../../public/uploads", sanitizeFolder);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
@@ -521,45 +525,12 @@ async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
 
   await fs.promises.writeFile(filePath, fileBuffer);
 
-  const baseUrl = (process.env.BACKEND_URL || process.env.SERVER_URL || `http://localhost:${process.env.PORT || 7000}`).replace(/\/+$/, "");
-  const fullUrl = `${baseUrl}/uploads/${sanitizeFolder}/${uniqueName}`;
-  return fullUrl;
+  return `/uploads/${sanitizeFolder}/${uniqueName}`;
 }
 
 async function uploadToCloudinary(fileBuffer, folder = "categories", options = {}) {
-  const hasCloudinaryCredentials =
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET;
-  if (!hasCloudinaryCredentials) {
-    return uploadToLocal(fileBuffer, folder, options);
-  }
-  configureCloudinary();
-  const mimeType = String(options.mimeType || "").trim().toLowerCase();
-  const resourceType = String(options.resourceType || "").trim().toLowerCase();
-  const shouldOptimizeImage =
-    options.optimize !== false &&
-    (resourceType === "image" || isImageMimeType(mimeType));
-
-  const uploadOptions = {
-    folder,
-    resource_type: shouldOptimizeImage ? "image" : resourceType === "video" ? "video" : "auto",
-    ...(shouldOptimizeImage ? getImageUploadOptions() : {}),
-  };
-
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      uploadOptions,
-      (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result.secure_url);
-        }
-      },
-    );
-    uploadStream.end(fileBuffer);
-  });
+  // Cloudinary permanently replaced with local server storage
+  return uploadToLocal(fileBuffer, folder, options);
 }
 
 async function generateSignedUploadURL(options) {

@@ -71,6 +71,14 @@ function forceExitAfterBuildPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/uploads': {
+        target: 'http://localhost:7000',
+        changeOrigin: true,
+      },
+    },
+  },
   plugins: [react(), firebaseMessagingSwPlugin(), forceExitAfterBuildPlugin()],
   resolve: {
     alias: {
