@@ -60,13 +60,13 @@ export const signupDelivery = async (req, res) => {
         if (req.files && Array.isArray(req.files)) {
             for (const file of req.files) {
                 if (file.fieldname === "profileImage") {
-                    profileImageUrl = await uploadToCloudinary(file.buffer, "delivery/profiles");
+                    profileImageUrl = await uploadToCloudinary(file.buffer, "delivery/profiles", { mimeType: file.mimetype });
                 } else if (file.fieldname === "aadhar") {
-                    aadharUrl = await uploadToCloudinary(file.buffer, "delivery/documents");
+                    aadharUrl = await uploadToCloudinary(file.buffer, "delivery/documents", { mimeType: file.mimetype });
                 } else if (file.fieldname === "pan") {
-                    panUrl = await uploadToCloudinary(file.buffer, "delivery/documents");
+                    panUrl = await uploadToCloudinary(file.buffer, "delivery/documents", { mimeType: file.mimetype });
                 } else if (file.fieldname === "dl") {
-                    dlUrl = await uploadToCloudinary(file.buffer, "delivery/documents");
+                    dlUrl = await uploadToCloudinary(file.buffer, "delivery/documents", { mimeType: file.mimetype });
                 }
             }
         }

@@ -167,6 +167,29 @@ function getDeliveryAppSettings() {
 let synthInterval = null;
 let audioCtx = null;
 
+const keepAudioContextAlive = () => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!audioCtx) audioCtx = new Ctx();
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+    // Silent carrier keeps the audio pipeline active so browser does not throttle or suspend audio in background tabs
+    if (!window.__deliverySilentAudioNode && audioCtx.createConstantSource) {
+      const src = audioCtx.createConstantSource();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.00001;
+      src.connect(gain);
+      gain.connect(audioCtx.destination);
+      src.start();
+      window.__deliverySilentAudioNode = src;
+    }
+  } catch {
+    /* ignore */
+  }
+};
+
 const playRingtoneChime = () => {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -175,20 +198,31 @@ const playRingtoneChime = () => {
     if (audioCtx.state === "suspended") {
       audioCtx.resume();
     }
-    const osc = audioCtx.createOscillator();
+    const now = audioCtx.currentTime;
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
 
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(800, now);
+    osc1.frequency.linearRampToValueAtTime(1200, now + 0.15);
+    osc1.frequency.linearRampToValueAtTime(800, now + 0.3);
 
-    osc.connect(gain);
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(450, now);
+    osc2.frequency.linearRampToValueAtTime(650, now + 0.15);
+
+    gain.gain.setValueAtTime(0.6, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
     gain.connect(audioCtx.destination);
 
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.4);
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.4);
+    osc2.stop(now + 0.4);
   } catch {
     /* ignore synth errors */
   }
@@ -198,16 +232,72 @@ const startWebAudioBeepRingtone = () => {
   const appSettings = getDeliveryAppSettings();
   if (!appSettings.sound) return;
   if (synthInterval) return;
+  keepAudioContextAlive();
   playRingtoneChime();
   synthInterval = setInterval(() => {
     playRingtoneChime();
-  }, 800);
+  }, 650);
 };
 
 const stopWebAudioBeepRingtone = () => {
   if (synthInterval) {
     clearInterval(synthInterval);
     synthInterval = null;
+  }
+};
+
+const showDeliveryOrderNotification = (payload) => {
+  const orderId = payload?.orderId;
+  if (!orderId) return;
+
+  const earnings = typeof payload.preview?.earnings === "number"
+    ? `₹${payload.preview.earnings}`
+    : (payload.paymentBreakdown?.riderPayoutTotal ? `₹${payload.paymentBreakdown.riderPayoutTotal}` : "");
+  const pickup = payload.preview?.pickupAddress || payload.pickup?.address || payload.seller?.address || "Pickup store";
+  const drop = payload.preview?.dropAddress || payload.drop?.address || "Customer location";
+
+  const title = `🚨 New Delivery Order #${orderId}!`;
+  const body = `${earnings ? `${earnings} • ` : ""}${pickup} ➔ ${drop}. Tap to accept!`;
+
+  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body,
+            icon: "/vite.svg",
+            badge: "/vite.svg",
+            tag: `delivery-${orderId}`,
+            renotify: true,
+            requireInteraction: true,
+            silent: false,
+            sound: "/sounds/order_alert.mp3",
+            vibrate: [500, 250, 500, 250, 500, 250, 500, 250, 500],
+            data: {
+              link: "/delivery",
+              orderId,
+              role: "delivery",
+            },
+          });
+        }).catch(() => {
+          new Notification(title, {
+            body,
+            icon: "/vite.svg",
+            tag: `delivery-${orderId}`,
+            requireInteraction: true,
+          });
+        });
+      } else {
+        new Notification(title, {
+          body,
+          icon: "/vite.svg",
+          tag: `delivery-${orderId}`,
+          requireInteraction: true,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
   }
 };
 
@@ -316,26 +406,33 @@ const DeliveryLayout = () => {
   const ringtoneUnlockHandlerRef = useRef(null);
 
   useEffect(() => {
-    const unlockAudio = () => {
+    const unlockAudioAndNotifications = () => {
+      keepAudioContextAlive();
       const audio = getOrderRingtone();
-      audio.play().then(() => {
-        audio.pause();
-        audio.currentTime = 0;
-      }).catch(() => {});
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx) {
-        if (!audioCtx) audioCtx = new Ctx();
-        if (audioCtx.state === "suspended") audioCtx.resume();
+      if (audio.paused) {
+        audio.play().then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        }).catch(() => {});
+      }
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
       }
     };
 
-    window.addEventListener("pointerdown", unlockAudio, { once: true });
-    window.addEventListener("touchstart", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
+    window.addEventListener("pointerdown", unlockAudioAndNotifications);
+    window.addEventListener("touchstart", unlockAudioAndNotifications);
+    window.addEventListener("keydown", unlockAudioAndNotifications);
+    window.addEventListener("click", unlockAudioAndNotifications);
+
+    // Initial warm-up
+    unlockAudioAndNotifications();
+
     return () => {
-      window.removeEventListener("pointerdown", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("pointerdown", unlockAudioAndNotifications);
+      window.removeEventListener("touchstart", unlockAudioAndNotifications);
+      window.removeEventListener("keydown", unlockAudioAndNotifications);
+      window.removeEventListener("click", unlockAudioAndNotifications);
     };
   }, []);
 
@@ -374,14 +471,15 @@ const DeliveryLayout = () => {
     audio.preload = "auto";
 
     if (appSettings.sound) {
+      keepAudioContextAlive();
       audio.muted = false;
       audio.volume = 1;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          startWebAudioBeepRingtone();
-        });
+        playPromise.catch(() => {});
       }
+      // Always run Web Audio beep ringtone in parallel so it rings reliably in background tabs
+      startWebAudioBeepRingtone();
     } else {
       // Sound disabled — keep audio muted/paused
       audio.muted = true;
@@ -390,7 +488,7 @@ const DeliveryLayout = () => {
 
     if (appSettings.vibration && typeof navigator !== "undefined" && navigator.vibrate) {
       try {
-        navigator.vibrate([400, 200, 400, 200, 400]);
+        navigator.vibrate([500, 250, 500, 250, 500, 250, 500, 250, 500]);
       } catch { /* vibration unsupported or blocked */ }
     }
 
@@ -401,11 +499,10 @@ const DeliveryLayout = () => {
         if (!currentSettings.sound) return;
         const currentAudio = getOrderRingtone();
         if (currentAudio.paused) {
-          currentAudio.play().catch(() => {
-            startWebAudioBeepRingtone();
-          });
+          currentAudio.play().catch(() => {});
         }
-      }, 1200);
+        startWebAudioBeepRingtone();
+      }, 1000);
     }
 
     if (
@@ -460,6 +557,23 @@ const DeliveryLayout = () => {
   useEffect(() => {
     activeOrderRef.current = activeOrder;
   }, [activeOrder]);
+
+  // Flash document title when an incoming delivery order alert is active
+  useEffect(() => {
+    if (!activeOrder?.id) return undefined;
+    const originalTitle = document.title;
+    let flash = false;
+    const timer = setInterval(() => {
+      document.title = flash
+        ? `🚨 (1) NEW ORDER #${activeOrder.id}!`
+        : `🔔 OPEN TAB TO ACCEPT! 🔔`;
+      flash = !flash;
+    }, 700);
+    return () => {
+      clearInterval(timer);
+      document.title = originalTitle;
+    };
+  }, [activeOrder?.id]);
 
   /** While working an active order, do not stack the global incoming-offer modal (fixes refresh on order details). */
   const suppressIncomingModal = useMemo(
@@ -881,6 +995,7 @@ const DeliveryLayout = () => {
     getOrderSocket(getToken);
     return onDeliveryBroadcast(getToken, (payload) => {
       if (activeOrderRef.current || suppressIncomingModal || atCapacityRef.current) return;
+      showDeliveryOrderNotification(payload);
       const opened = applyFromBroadcastPayload(payload);
       if (opened) return;
       fetchAvailableOrders()
@@ -943,6 +1058,9 @@ const DeliveryLayout = () => {
         toast.info(payload.title, {
           description: payload.message || payload.body,
         });
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          showDeliveryOrderNotification(payload?.data || payload);
+        }
       }
     });
   }, []);

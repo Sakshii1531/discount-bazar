@@ -1,12 +1,19 @@
 const isNewImage = (image) => typeof image === "string" && image.startsWith("data:");
 
 export const dataURLtoFile = (dataurl, filename) => {
+  if (typeof File !== "undefined" && dataurl instanceof File) return dataurl;
   if (!isNewImage(dataurl)) return null;
   try {
     const [header, base64] = dataurl.split(",");
     const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
-    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-    return new File([bytes], filename, { type: mime });
+    const cleanBase64 = String(base64 || "").replace(/[\r\n\s]/g, "");
+    const binary = atob(cleanBase64);
+    const len = binary.length;
+    const rawBytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      rawBytes[i] = binary.charCodeAt(i);
+    }
+    return new File([rawBytes], filename, { type: mime });
   } catch (err) {
     console.warn("Failed to convert image:", err);
     return null;

@@ -33,6 +33,7 @@ import ProductDeliverySettings from "../components/product/ProductDeliverySettin
 import BulkProductUpload from "../components/product/BulkProductUpload";
 import ProductImageSlot from "../components/product/ProductImageSlot";
 import { appendProductImageEdits } from "../utils/productImages";
+import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 import { toast } from "sonner";
 import Pagination from "@shared/components/ui/Pagination";
 import ReturnPolicySection from "@shared/components/ui/ReturnPolicySection";
@@ -541,7 +542,7 @@ const ProductManagement = () => {
     }
   };
 
-  const openEditModal = (item = null) => {
+  const openEditModal = (item = null, initialTab = "general") => {
     if (item) {
       setFormData({
         name: item.name || "",
@@ -653,7 +654,7 @@ const ProductManagement = () => {
       });
       setEditingItem(null);
     }
-    setModalTab("general");
+    setModalTab(initialTab);
     setIsProductModalOpen(true);
   };
 
@@ -1048,8 +1049,7 @@ const ProductManagement = () => {
                   <div
                     onClick={() => {
                       if (!hasPhoto) {
-                        openEditModal(p);
-                        setModalTab("photos");
+                        openEditModal(p, "media");
                       }
                     }}
                     className={cn(
@@ -1062,7 +1062,7 @@ const ProductManagement = () => {
                   >
                     {hasPhoto ? (
                       <img
-                        src={p.mainImage || p.image || p.galleryImages?.[0]}
+                        src={applyCloudinaryTransform(p.mainImage || p.image || p.galleryImages?.[0])}
                         alt={p.name}
                         className="h-full w-full object-cover"
                       />
@@ -1180,8 +1180,7 @@ const ProductManagement = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      openEditModal(p);
-                      setModalTab("photos");
+                      openEditModal(p, "media");
                     }}
                     className="w-full text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center justify-between transition-colors"
                   >
@@ -1261,8 +1260,7 @@ const ProductManagement = () => {
                       <div
                         onClick={() => {
                           if (!hasPhoto) {
-                            openEditModal(p);
-                            setModalTab("photos");
+                            openEditModal(p, "media");
                           }
                         }}
                         className={cn(
@@ -1275,7 +1273,7 @@ const ProductManagement = () => {
                       >
                         {hasPhoto ? (
                           <img
-                            src={p.mainImage || p.image || p.galleryImages?.[0]}
+                            src={applyCloudinaryTransform(p.mainImage || p.image || p.galleryImages?.[0])}
                             alt={p.name}
                             className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
                           />
@@ -1294,8 +1292,7 @@ const ProductManagement = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              openEditModal(p);
-                              setModalTab("photos");
+                              openEditModal(p, "media");
                             }}
                             className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 mt-1 transition-colors w-fit"
                           >
@@ -1505,7 +1502,7 @@ const ProductManagement = () => {
                       onClick={() => setModalTab(tab.id)}
                       className={cn(
                         "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left",
-                        modalTab === tab.id
+                        (modalTab === tab.id || (tab.id === "media" && modalTab === "photos"))
                           ? "bg-white text-primary shadow-sm ring-1 ring-slate-100"
                           : "text-slate-600 hover:bg-slate-100",
                       )}>
@@ -1759,7 +1756,7 @@ const ProductManagement = () => {
                     </div>
                   )}
 
-                  {modalTab === "media" && (
+                  {(modalTab === "media" || modalTab === "photos") && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-right-2 duration-300">
                       <div className="space-y-3">
                         <label className="text-xs font-bold text-slate-600 uppercase tracking-widest ml-1">

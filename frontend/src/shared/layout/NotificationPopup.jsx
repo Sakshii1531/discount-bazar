@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineBell, HiOutlineCheckCircle, HiOutlineExclamationCircle, HiOutlineClock } from 'react-icons/hi2';
 import { cn } from '@/lib/utils';
 import Button from '@shared/components/ui/Button';
+import { navigateToNotification } from '@shared/utils/notificationNavigation';
 
 const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onClose }) => {
     const navigate = useNavigate();
@@ -47,11 +48,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onClo
                                     )}
                                     onClick={() => {
                                         if (!notif.isRead) onMarkAsRead(notificationId);
-                                        const targetLink = notif?.data?.link;
-                                        if (targetLink) {
-                                            navigate(targetLink);
-                                            if (typeof onClose === 'function') onClose();
-                                        }
+                                        navigateToNotification(notif, navigate, onClose);
                                     }}
                                 >
                                     {!notif.isRead && (

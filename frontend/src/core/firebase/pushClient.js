@@ -4,6 +4,7 @@ import axiosInstance from "@core/api/axios";
 import TurboCartBridge from "../../lib/turboCartBridge";
 import { rawGet, rawSet, rawRemove, KEY_PREFIXES } from "@core/utils/storage";
 import { formatAmount } from "@shared/utils/currency";
+import { resolveNotificationRoute } from "@shared/utils/notificationNavigation";
 
 let foregroundListenerStarted = false;
 let foregroundUnsubscribe = null;
@@ -152,15 +153,13 @@ async function showSystemNotification({ title, body, data } = {}) {
   }
 
   const safeTitle = String(title || "Notification");
-  let link = data?.link || "/";
-  if ((!data?.link || data?.link === "/") && isSellerRole) {
-    const ev = String(data?.eventType || "").toUpperCase();
-    if (ev.includes("RETURN")) link = "/seller/returns";
-    else if (ev.includes("ORDER")) link = "/seller/orders";
-    else if (ev.includes("STOCK")) link = "/seller/inventory";
-    else if (ev.includes("WITHDRAWAL")) link = "/seller/withdrawals";
-    else link = "/seller";
-  }
+  const resolved = resolveNotificationRoute({
+    data,
+    role: data?.role || (isDeliveryRole ? "delivery" : isSellerRole ? "seller" : undefined),
+    eventType: data?.eventType || data?.type,
+    link: data?.link,
+  });
+  let link = typeof resolved === "string" ? resolved : (resolved?.url || data?.link || "/");
   const tag = data?.orderId || data?.eventType || "quick-commerce";
   const image = String(data?.image || data?.imageUrl || "").trim();
 
@@ -168,11 +167,15 @@ async function showSystemNotification({ title, body, data } = {}) {
     !ORDER_SETTLED_EVENTS.has(data?.eventType) && (
     data?.eventType === "NEW_ORDER" ||
     data?.type === "NEW_ORDER" ||
+    data?.eventType === "NEW_DELIVERY_BROADCAST" ||
+    data?.eventType === "DELIVERY_ASSIGNED" ||
     data?.eventType === "RETURN_REQUESTED" ||
     data?.eventType === "RETURN_DROP_OTP" ||
     data?.role === "seller" ||
+    data?.role === "delivery" ||
     data?.sound === "order_alert" ||
     String(safeTitle).toLowerCase().includes("order") ||
+    String(safeTitle).toLowerCase().includes("delivery") ||
     String(safeTitle).toLowerCase().includes("return") ||
     String(tag).toLowerCase().includes("order"));
 

@@ -23,6 +23,7 @@ import {
 import { createSocketTokenReader } from "@core/utils/authStorage";
 import { useAuth } from "@core/context/AuthContext";
 import { STORAGE_KEYS } from "@core/utils/storage";
+import { navigateToNotification } from "@/shared/utils/notificationNavigation";
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -155,7 +156,10 @@ const Notifications = () => {
                     key={notifId}
                     variants={itemVariants}
                     layout
-                    onClick={() => !notification.isRead && handleMarkAsRead(notifId)}>
+                    onClick={() => {
+                      if (!notification.isRead) handleMarkAsRead(notifId);
+                      navigateToNotification(notification, navigate, null, 'delivery');
+                    }}>
                     <Card
                       className={`p-4 border-none shadow-sm relative overflow-hidden transition-all duration-300 cursor-pointer ${!notification.isRead
                         ? "bg-brand-50/50 border-l-4 border-l-brand-500 shadow-brand-500/5 scale-[1.02]"

@@ -105,6 +105,7 @@ describe("adding photos", () => {
   });
 });
 
+// Upload failures: see api-product-images-upload-failure.e2e.test.js
 describe("replacing photos", () => {
   it("replaces the cover and leaves the gallery", async () => {
     const res = await saveForm({ cover: PNG });
@@ -122,22 +123,6 @@ describe("replacing photos", () => {
     expect(doc.galleryImages[1]).toMatch(UPLOADED);
     expect(doc.galleryImages[2]).toBe(G3);
     expect(doc.mainImage).toBe(COVER);
-  });
-
-  it("keeps the old photos when an upload fails", async () => {
-    // Fake credentials send the upload to Cloudinary, which the test harness blocks.
-    const keys = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"];
-    keys.forEach((key) => { process.env[key] = "fake"; });
-    try {
-      const res = await saveForm({ fields: { galleryLayout: JSON.stringify([G1, "new", G3]) }, gallery: [PNG] });
-      expect(res.status).toBeGreaterThanOrEqual(500);
-      expect(res.body.message).toMatch(/upload/i);
-    } finally {
-      keys.forEach((key) => { process.env[key] = ""; });
-    }
-    const doc = await saved();
-    expect(doc.galleryImages).toEqual([G1, G2, G3]);
-    expect(doc.description).not.toBe("edited");
   });
 });
 

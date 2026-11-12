@@ -28,7 +28,7 @@ function truncateText(text, maxLen = 140) {
   return `${value.slice(0, Math.max(0, maxLen - 3))}...`;
 }
 
-function getFrontendBaseUrl() {
+export function getFrontendBaseUrl() {
   const explicit =
     process.env.FRONTEND_URL ||
     process.env.WEB_APP_URL ||
@@ -38,31 +38,27 @@ function getFrontendBaseUrl() {
 
 function buildOrderLink(orderId) {
   const id = String(orderId || "").trim();
-  const baseUrl = getFrontendBaseUrl();
-  if (!id) return `${baseUrl}/orders`;
-  return `${baseUrl}/orders/${encodeURIComponent(id)}`;
+  if (!id) return "/orders";
+  return `/orders/${encodeURIComponent(id)}`;
 }
 
 function buildCustomerSupportLink(ticketId) {
-  const baseUrl = getFrontendBaseUrl();
   const id = String(ticketId || "").trim();
-  return id ? `${baseUrl}/chat?ticketId=${encodeURIComponent(id)}` : `${baseUrl}/chat`;
+  return id ? `/chat?ticketId=${encodeURIComponent(id)}` : `/chat`;
 }
 
 function buildAdminSupportLink(ticketId) {
-  const baseUrl = getFrontendBaseUrl();
   const id = String(ticketId || "").trim();
   return id
-    ? `${baseUrl}/admin/support-tickets?ticketId=${encodeURIComponent(id)}`
-    : `${baseUrl}/admin/support-tickets`;
+    ? `/admin/support-tickets?ticketId=${encodeURIComponent(id)}`
+    : `/admin/support-tickets`;
 }
 
 function buildSellerInventoryLink(productId) {
-  const baseUrl = getFrontendBaseUrl();
   const id = String(productId || "").trim();
   return id
-    ? `${baseUrl}/seller/inventory?productId=${encodeURIComponent(id)}`
-    : `${baseUrl}/seller/inventory`;
+    ? `/seller/inventory?productId=${encodeURIComponent(id)}`
+    : `/seller/inventory`;
 }
 
 function eventDefinition(eventType) {
@@ -668,19 +664,18 @@ function eventDefinition(eventType) {
 }
 
 function commLink(role, orderId, channel) {
-  const baseUrl = getFrontendBaseUrl();
   const id = encodeURIComponent(String(orderId || "").trim());
   const chat = channel ? `chat=${encodeURIComponent(channel)}` : "";
   if (role === NOTIFICATION_ROLES.DELIVERY) {
-    return `${baseUrl}/delivery/order-details/${id}${chat ? `?${chat}` : ""}`;
+    return `/delivery/order-details/${id}${chat ? `?${chat}` : ""}`;
   }
   if (role === NOTIFICATION_ROLES.SELLER) {
-    return `${baseUrl}/seller/orders?orderId=${id}${chat ? `&${chat}` : ""}`;
+    return `/seller/orders?orderId=${id}${chat ? `&${chat}` : ""}`;
   }
   if (role === NOTIFICATION_ROLES.ADMIN) {
-    return `${baseUrl}/admin/order-communications?orderId=${id}`;
+    return `/admin/order-communications?orderId=${id}`;
   }
-  return `${baseUrl}/orders/${id}${chat ? `?${chat}` : ""}`;
+  return `/orders/${id}${chat ? `?${chat}` : ""}`;
 }
 
 const COMM_EVENTS = new Set([
@@ -722,29 +717,26 @@ function eventData(eventType, payload = {}, role) {
   }
 
   if (eventType === NOTIFICATION_EVENTS.NEW_SELLER_REGISTRATION) {
-    const baseUrl = getFrontendBaseUrl();
     const sellerId = String(payload.sellerId || "").trim() || undefined;
     return {
       eventType,
       sellerId,
-      link: `${baseUrl}/admin/sellers/pending`,
+      link: `/admin/sellers/pending`,
       ...(payload.data || {}),
     };
   }
 
   if (eventType === NOTIFICATION_EVENTS.NEW_DELIVERY_REGISTRATION) {
-    const baseUrl = getFrontendBaseUrl();
     const deliveryId = String(payload.deliveryId || "").trim() || undefined;
     return {
       eventType,
       deliveryId,
-      link: `${baseUrl}/admin/delivery-boys/pending`,
+      link: `/admin/delivery-boys/pending`,
       ...(payload.data || {}),
     };
   }
 
   if (eventType === NOTIFICATION_EVENTS.WITHDRAWAL_REQUESTED) {
-    const baseUrl = getFrontendBaseUrl();
     const tab = payload.tab || (payload.userModel === "Seller" ? "sellers" : "delivery");
     return {
       eventType,
@@ -753,7 +745,7 @@ function eventData(eventType, payload = {}, role) {
       userModel: payload.userModel,
       userId: payload.userId,
       transactionId: payload.transactionId,
-      link: `${baseUrl}/admin/withdrawals?tab=${tab}`,
+      link: `/admin/withdrawals?tab=${tab}`,
       ...(payload.data || {}),
     };
   }
@@ -779,12 +771,11 @@ function eventData(eventType, payload = {}, role) {
 
   const orderId = String(payload.orderId || "").trim() || undefined;
   const checkoutGroupId = String(payload.checkoutGroupId || "").trim() || undefined;
-  const baseUrl = getFrontendBaseUrl();
   const link =
     role === NOTIFICATION_ROLES.SELLER
-      ? `${baseUrl}/seller/orders`
+      ? `/seller/orders`
       : role === NOTIFICATION_ROLES.DELIVERY
-      ? `${baseUrl}/delivery`
+      ? `/delivery`
       : buildOrderLink(orderId);
 
   const itemAmount =

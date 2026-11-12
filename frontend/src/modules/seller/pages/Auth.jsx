@@ -263,11 +263,6 @@ const Auth = () => {
       city: "",
       state: "",
     }));
-    if (window.history.state?.isMapOpen) {
-      window.history.back();
-    } else {
-      setIsMapOpen(false);
-    }
   };
 
   const [documents, setDocuments] = useState({
@@ -1324,7 +1319,7 @@ const Auth = () => {
                         type="button"
                         onClick={() => {
                           window.history.pushState(
-                            { sellerAuth: true, isLogin: false, signupStep: 2, isMapOpen: true, forgotStep: 0 },
+                            { sellerAuth: true, isLogin: false, signupStep: signupStep || 2, isMapOpen: true, forgotStep: 0 },
                             ""
                           );
                           setIsMapOpen(true);

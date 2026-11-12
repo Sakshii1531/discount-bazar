@@ -2,6 +2,7 @@ import React from "react";
 import { HiOutlinePencilSquare, HiOutlineTrash } from "react-icons/hi2";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { applyCloudinaryTransform } from "@/core/utils/imageUtils";
 
 // Reads a picked file as a data URL, which is also how the form previews it.
 const readImageFile = (file) =>
@@ -50,7 +51,7 @@ const ProductImageSlot = ({ src, label, onSelect, onRemove, className, children 
 
   return (
     <div className={cn("relative overflow-hidden border-2 border-dashed border-slate-200 bg-slate-50", className)}>
-      <img src={src} alt={label} className="h-full w-full object-cover" />
+      <img src={applyCloudinaryTransform(src)} alt={label} className="h-full w-full object-cover" />
       <div className="absolute right-1.5 top-1.5 flex gap-1.5">
         <label
           title="Replace photo"

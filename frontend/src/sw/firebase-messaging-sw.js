@@ -1,7 +1,16 @@
 /* eslint-disable no-restricted-globals */
 
 self.addEventListener("notificationclick", (event) => {
-  const link = event?.notification?.data?.link || "/";
+  const rawLink = event?.notification?.data?.link || event?.notification?.data?.url || "/";
+  let link = rawLink;
+  try {
+    if (typeof rawLink === "string" && (rawLink.startsWith("http://") || rawLink.startsWith("https://"))) {
+      const u = new URL(rawLink);
+      link = u.pathname + u.search + u.hash;
+    }
+  } catch {
+    link = rawLink;
+  }
   event.notification.close();
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
@@ -51,14 +60,34 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
     const data = payload?.data || {};
     const title = notification.title || data.title || "Notification";
     let link = data.link || "/";
-    if (!data.link || data.link === "/") {
-      if (data.role === "seller") {
-        const ev = String(data.eventType || "").toUpperCase();
+    if (typeof link === "string" && (link.startsWith("http://") || link.startsWith("https://"))) {
+      try {
+        const u = new URL(link);
+        link = u.pathname + u.search + u.hash;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!link || link === "/") {
+      const ev = String(data.eventType || "").toUpperCase();
+      if (data.role === "admin") {
+        if (ev === "NEW_SELLER_REGISTRATION") link = "/admin/sellers/pending";
+        else if (ev === "NEW_DELIVERY_REGISTRATION") link = "/admin/delivery-boys/pending";
+        else if (ev === "WITHDRAWAL_REQUESTED") link = "/admin/withdrawals";
+        else if (ev === "PRODUCT_MODERATION_REQUEST") link = "/admin/products";
+        else if (ev.includes("RETURN")) link = "/admin/returns";
+        else if (ev.includes("CANCEL")) link = "/admin/cancellations";
+        else if (ev.includes("ORDER")) link = data.orderId ? `/admin/orders/view/${data.orderId}` : "/admin/orders/all";
+        else link = "/admin";
+      } else if (data.role === "seller") {
         if (ev.includes("RETURN")) link = "/seller/returns";
         else if (ev.includes("ORDER")) link = "/seller/orders";
         else if (ev.includes("STOCK")) link = "/seller/inventory";
         else if (ev.includes("WITHDRAWAL")) link = "/seller/withdrawals";
         else link = "/seller";
+      } else if (data.role === "delivery") {
+        if (data.orderId) link = `/delivery/order-details/${data.orderId}`;
+        else link = "/delivery/dashboard";
       }
     }
     const tag = notification.tag || data.orderId || data.eventType || "quick-commerce";
@@ -68,11 +97,15 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || firebaseConfig.apiKey
       !ORDER_SETTLED_EVENTS.includes(data.eventType) && (
       data.eventType === "NEW_ORDER" ||
       data.type === "NEW_ORDER" ||
+      data.eventType === "NEW_DELIVERY_BROADCAST" ||
+      data.eventType === "DELIVERY_ASSIGNED" ||
       data.eventType === "RETURN_REQUESTED" ||
       data.eventType === "RETURN_DROP_OTP" ||
       data.role === "seller" ||
+      data.role === "delivery" ||
       data.sound === "order_alert" ||
       String(title).toLowerCase().includes("order") ||
+      String(title).toLowerCase().includes("delivery") ||
       String(title).toLowerCase().includes("return") ||
       String(tag).toLowerCase().includes("order"));
 

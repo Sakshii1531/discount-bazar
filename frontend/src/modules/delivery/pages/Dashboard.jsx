@@ -126,6 +126,9 @@ const Dashboard = () => {
       await refreshUser(); // Refresh global auth state
       setIsOnline(newStatus);
       if (newStatus) {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
         toast.success("You are now ONLINE. Finding orders...");
       } else if (res?.data?.result?.activeOrders > 0) {
         // Going offline never drops a parcel already accepted.

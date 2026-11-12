@@ -21,14 +21,21 @@ function getBackendOrigin() {
  * For local server uploads (/uploads/...), prepends backend origin.
  */
 export function applyCloudinaryTransform(url, params = "f_auto,q_auto,w_400,dpr_auto") {
-  if (!url) return url;
+  if (!url || typeof url !== "string") return url;
+  // A photo just picked in a form (not uploaded yet) is shown as-is.
+  if (/^(data|blob):/i.test(url)) return url;
 
-  if (typeof url === "string" && (url.startsWith("/uploads/") || url.includes("/uploads/"))) {
-    const uploadIndex = url.indexOf("/uploads/");
-    if (uploadIndex !== -1) {
-      return `${getBackendOrigin()}${url.slice(uploadIndex)}`;
+  // Server uploads: "/uploads/..." or an absolute URL whose path starts with
+  // /uploads/ (saved before uploads became relative) — served by this backend.
+  // Other sites' ".../wp-content/uploads/..." images are left alone.
+  if (url.startsWith("/uploads/")) return `${getBackendOrigin()}${url}`;
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      const { pathname, search } = new URL(url);
+      if (pathname.startsWith("/uploads/")) return `${getBackendOrigin()}${pathname}${search}`;
+    } catch {
+      return url;
     }
-    return url;
   }
 
   if (!CLOUDINARY_REGEX.test(url)) return url;

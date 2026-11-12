@@ -1,5 +1,6 @@
 import admin from "firebase-admin";
 import { getFirebaseAdminApp } from "../../config/firebaseAdmin.js";
+import { getFrontendBaseUrl } from "./notification.builder.js";
 
 const MAX_FCM_MULTICAST_TOKENS = 500;
 
@@ -85,7 +86,12 @@ export async function sendFCM(tokens = [], payload = {}) {
   const messaging = getMessagingClient();
   const data = toStringMap(payload.data || {});
   const link = data.link || payload?.data?.link || "";
-  const resolvedLink = isWebLink(link) ? link : "";
+  const baseUrl = getFrontendBaseUrl();
+  const resolvedLink = isWebLink(link)
+    ? link
+    : link
+    ? `${baseUrl}${link.startsWith("/") ? "" : "/"}${link}`
+    : "";
   const title = payload.title || "";
   const body = payload.body || payload.message || "";
   const tag = data.orderId || data.eventType || "quick-commerce";

@@ -500,6 +500,42 @@ async function deleteMedia(publicId, userId, userModel) {
   await media.softDelete();
 }
 
+const MIME_EXTENSIONS = [
+  [/jpe?g/, ".jpg"],
+  [/png/, ".png"],
+  [/webp/, ".webp"],
+  [/gif/, ".gif"],
+  [/pdf/, ".pdf"],
+  [/mp4/, ".mp4"],
+  [/webm/, ".webm"],
+  [/quicktime/, ".mov"],
+];
+
+// File type from the content's leading bytes, for callers that pass no mime type.
+function sniffExtension(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return "";
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return ".jpg";
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return ".png";
+  if (buf.toString("ascii", 0, 4) === "GIF8") return ".gif";
+  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return ".webp";
+  if (buf.toString("ascii", 0, 5) === "%PDF-") return ".pdf";
+  if (buf.toString("ascii", 4, 8) === "ftyp") return buf.toString("ascii", 8, 10) === "qt" ? ".mov" : ".mp4";
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return ".webm";
+  return "";
+}
+
+/**
+ * Extension for a stored upload, from a fixed safe list only (never the client's
+ * file name), so /uploads can never serve HTML or script. The declared mime type
+ * wins; otherwise the content is sniffed; unknown content falls back to ".jpg".
+ */
+export function localUploadExtension(fileBuffer, mimeType) {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  const declared = mime && MIME_EXTENSIONS.find(([re]) => re.test(mime));
+  if (declared) return declared[1];
+  return sniffExtension(fileBuffer) || ".jpg";
+}
+
 async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
   const sanitizeFolder = String(folder || "uploads").replace(/[^a-zA-Z0-9_\-\/]/g, "");
   const targetDir = path.resolve(__dirname, "../../public/uploads", sanitizeFolder);
@@ -507,19 +543,7 @@ async function uploadToLocal(fileBuffer, folder = "categories", options = {}) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  const mimeType = String(options.mimeType || "").trim().toLowerCase();
-  let ext = "";
-  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) ext = ".jpg";
-  else if (mimeType.includes("png")) ext = ".png";
-  else if (mimeType.includes("webp")) ext = ".webp";
-  else if (mimeType.includes("gif")) ext = ".gif";
-  else if (mimeType.includes("pdf")) ext = ".pdf";
-  else if (mimeType.includes("mp4")) ext = ".mp4";
-  else {
-    const origExt = path.extname(options.filename || "");
-    ext = origExt || ".jpg";
-  }
-
+  const ext = localUploadExtension(fileBuffer, options.mimeType);
   const uniqueName = `${Date.now()}_${crypto.randomBytes(4).toString("hex")}${ext}`;
   const filePath = path.join(targetDir, uniqueName);
 

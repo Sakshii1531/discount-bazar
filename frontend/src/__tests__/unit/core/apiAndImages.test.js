@@ -71,6 +71,20 @@ describe('core/utils/imageUtils', () => {
     expect(applyCloudinaryTransform('/uploads/a.png')).toMatch(/^https?:\/\/[^/]+\/uploads\/a\.png$/);
   });
 
+  it('points old absolute upload URLs at the backend origin', () => {
+    const out = applyCloudinaryTransform('http://localhost:7000/uploads/products/a.jpg');
+    expect(out).toMatch(/^https?:\/\/[^/]+\/uploads\/products\/a\.jpg$/);
+    expect(out).toBe(applyCloudinaryTransform('/uploads/products/a.jpg'));
+  });
+
+  it('leaves other sites\' /uploads/ images and picked (data/blob) photos alone', () => {
+    const wp = 'https://shop.example/wp-content/uploads/2024/a.jpg';
+    expect(applyCloudinaryTransform(wp)).toBe(wp);
+    const picked = 'data:image/png;base64,AAAA/uploads/BBBB';
+    expect(applyCloudinaryTransform(picked)).toBe(picked);
+    expect(applyCloudinaryTransform('blob:http://x/1')).toBe('blob:http://x/1');
+  });
+
   it('detects Cloudinary URLs and builds srcset', () => {
     expect(isCloudinaryUrl(raw)).toBe(true);
     expect(isCloudinaryUrl('https://x.com/a.png')).toBe(false);

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Bell, BellRing, Check } from "lucide-react";
 import { customerApi } from "../services/customerApi";
 import { toast } from "sonner";
+import { navigateToNotification } from "@/shared/utils/notificationNavigation";
 
 const NotificationsPage = () => {
     const navigate = useNavigate();
@@ -93,7 +94,8 @@ const NotificationsPage = () => {
                     notifications.map((notification) => (
                         <div 
                             key={notification.id} 
-                            className={`p-4 rounded-2xl border flex gap-4 ${
+                            onClick={() => navigateToNotification(notification, navigate, null, 'customer')}
+                            className={`p-4 rounded-2xl border flex gap-4 cursor-pointer hover:shadow-sm transition-all active:scale-[0.99] ${
                                 notification.isRead 
                                 ? "bg-white border-slate-100" 
                                 : "bg-primary/5 border-primary/20"

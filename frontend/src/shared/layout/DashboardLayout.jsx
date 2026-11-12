@@ -18,6 +18,7 @@ import { createSocketTokenReader } from '@core/utils/authStorage';
 import { STORAGE_KEYS } from '@core/utils/storage';
 import orderAlertSound from '@/assets/sounds/order_alert.mp3';
 import { formatAmount } from "@shared/utils/currency";
+import { navigateToNotification } from '@shared/utils/notificationNavigation';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -700,7 +701,12 @@ const DashboardLayout = ({ children, navItems, title }) => {
                     label: 'View',
                     onClick: () => {
                         stopWithdrawalRing();
-                        navigate(link);
+                        navigateToNotification(
+                            { data: payload, link, type: 'WITHDRAWAL_REQUESTED' },
+                            navigate,
+                            null,
+                            'admin'
+                        );
                     },
                 },
                 onDismiss: () => {

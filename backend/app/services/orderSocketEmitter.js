@@ -4,6 +4,7 @@
 
 import mongoose from "mongoose";
 import Notification from "../models/notification.js";
+import Delivery from "../models/delivery.js";
 import { 
   getDeliveryPartnerIdsWithinSellerRadius,
   getDeliveryPartnerIdsWithinCustomerRadius
@@ -338,7 +339,21 @@ export async function emitDeliveryBroadcastForSeller(sellerId, payload) {
   const sid = normalizeSellerId(sellerId);
   if (!sid) return;
 
-  const ids = await getDeliveryPartnerIdsWithinSellerRadius(sid);
+  let ids = await getDeliveryPartnerIdsWithinSellerRadius(sid);
+  // Fallback: If no rider found with strict GPS within radius, fallback to all online & verified riders
+  if (!ids || ids.length === 0) {
+    try {
+      const onlineRiders = await Delivery.find({
+        isOnline: true,
+        isVerified: true,
+        isActive: { $ne: false },
+      }).distinct("_id");
+      ids = (onlineRiders || []).map((id) => id.toString());
+    } catch {
+      ids = [];
+    }
+  }
+
   const body = { ...payload, at: new Date().toISOString() };
 
   if (s) {
@@ -359,7 +374,7 @@ export async function emitDeliveryBroadcastForSeller(sellerId, payload) {
   }
 
   // Avoid duplicate DB rows when delivery search retries with wider ring
-  if (!payload.retryAttempt) {
+  if (ids.length > 0 && !payload.retryAttempt) {
     try {
       await Notification.insertMany(
         ids.map((id) => ({
