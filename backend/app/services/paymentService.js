@@ -16,6 +16,7 @@ import { DEFAULT_SELLER_TIMEOUT_MS, WORKFLOW_STATUS } from "../constants/orderWo
 import { afterPlaceOrderV2 } from "./orderWorkflowService.js";
 import { releaseReservedStockForOrder } from "./stockService.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
+import { emitNewOrderToSeller } from "./orderSocketEmitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import logger from "./logger.js";
 import { getActivePaymentProvider } from "./payment/providerRegistry.js";
@@ -290,6 +291,30 @@ async function moveOrderToSellerPendingAfterPayment(orderId) {
     { new: true },
   );
   if (updatedOrder) {
+    // Wake the seller's open panel immediately (ring + accept popup), same as
+    // the COD path in orderPlacementService — otherwise online-paid orders
+    // only surface on the seller's next 15 s poll.
+    if (updatedOrder.seller) {
+      const itemAmount =
+        updatedOrder.paymentBreakdown?.productSubtotal ??
+        updatedOrder.pricing?.subtotal ??
+        updatedOrder.pricing?.total ??
+        0;
+      const netEarnings =
+        updatedOrder.paymentBreakdown?.sellerPayoutTotal ??
+        updatedOrder.pricing?.subtotal ??
+        updatedOrder.pricing?.total ??
+        0;
+      emitNewOrderToSeller(updatedOrder.seller, {
+        orderId: updatedOrder.orderId,
+        workflowStatus: WORKFLOW_STATUS.SELLER_PENDING,
+        sellerPendingExpiresAt: sellerPendingUntil,
+        pricing: updatedOrder.pricing,
+        paymentBreakdown: updatedOrder.paymentBreakdown,
+        itemAmount,
+        netEarnings,
+      });
+    }
     void afterPlaceOrderV2(updatedOrder).catch((error) => {
       logger.warn("afterPlaceOrderV2 failed", {
         scope: "moveOrderToSellerPendingAfterPayment",

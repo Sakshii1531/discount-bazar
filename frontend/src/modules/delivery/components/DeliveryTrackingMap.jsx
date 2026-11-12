@@ -609,14 +609,6 @@ const DeliveryTrackingMapComponent = ({
       <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur px-2 py-1 rounded-md text-[10px] text-slate-600 font-bold border border-slate-200 shadow-sm">
         {routeLoading ? "Updating route…" : isOnRoute || !decodedPath?.length ? "Tracking View" : "Off route — rerouting…"}
       </div>
-      {routeData?.degraded && (
-        <div className="absolute top-2 left-2 bg-amber-50/95 text-amber-900 text-[10px] px-2 py-1 rounded border border-amber-200 max-w-[85%] leading-snug">
-          Route unavailable. Add{" "}
-          <span className="font-mono">GOOGLE_MAPS_API_KEY</span> to the{" "}
-          <strong>backend</strong> <span className="font-mono">.env</span>, enable
-          Directions API + billing, then restart the API server.
-        </div>
-      )}
     </div>
   );
 }

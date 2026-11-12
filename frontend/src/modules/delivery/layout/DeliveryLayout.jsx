@@ -60,7 +60,7 @@ const resolveOrderAddresses = (obj, isReturnPickup) => {
 
   if (isReturnPickup) {
     // Return Pickup: Customer Pickup -> Customer Address, Return -> Seller Store
-    const custAddr = 
+    const custAddr =
       (typeof obj.preview?.pickup === "string" && obj.preview.pickup !== "Customer Address" ? obj.preview.pickup : "") ||
       (typeof obj.preview?.customerAddress === "string" ? obj.preview.customerAddress : "") ||
       extractAddressString(obj.address) ||
@@ -69,7 +69,7 @@ const resolveOrderAddresses = (obj, isReturnPickup) => {
       (typeof obj.pickup === "string" ? obj.pickup : "") ||
       "Customer Address";
 
-    const sellerAddr = 
+    const sellerAddr =
       (typeof obj.preview?.drop === "string" && obj.preview.drop !== "Seller Store" ? obj.preview.drop : "") ||
       (typeof obj.preview?.dropAddress === "string" ? obj.preview.dropAddress : "") ||
       obj.seller?.shopName ||
@@ -82,7 +82,7 @@ const resolveOrderAddresses = (obj, isReturnPickup) => {
     drop = sellerAddr;
   } else {
     // Normal Order: Pickup -> Seller Store, Drop -> Customer Address
-    const sellerAddr = 
+    const sellerAddr =
       (typeof obj.preview?.pickup === "string" ? obj.preview.pickup : "") ||
       obj.seller?.shopName ||
       obj.seller?.name ||
@@ -90,7 +90,7 @@ const resolveOrderAddresses = (obj, isReturnPickup) => {
       (typeof obj.pickup === "string" ? obj.pickup : "") ||
       "Store Location";
 
-    const custAddr = 
+    const custAddr =
       (typeof obj.preview?.drop === "string" ? obj.preview.drop : "") ||
       extractAddressString(obj.address) ||
       extractAddressString(obj.deliveryAddress) ||
@@ -164,86 +164,128 @@ function getDeliveryAppSettings() {
   }
 }
 
-let synthInterval = null;
 let audioCtx = null;
+let orderAlertAudioBuffer = null;
+let activeBufferSource = null;
+let silentCarrierSource = null;
 
-const keepAudioContextAlive = () => {
-  try {
+const getSharedAudioContext = () => {
+  if (!audioCtx && typeof window !== "undefined") {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === "suspended") {
-      audioCtx.resume();
+    if (Ctx) audioCtx = new Ctx();
+  }
+  return audioCtx;
+};
+
+const prefetchOrderAlertBuffer = async () => {
+  if (orderAlertAudioBuffer) return orderAlertAudioBuffer;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return null;
+  const sources = ["/sounds/order_alert.mp3", orderAlertSound, "/order_alert.mp3"].filter(Boolean);
+  for (const src of sources) {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) continue;
+      const arrayBuffer = await res.arrayBuffer();
+      orderAlertAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      if (orderAlertAudioBuffer) return orderAlertAudioBuffer;
+    } catch {
+      /* try next source */
     }
-    // Silent carrier keeps the audio pipeline active so browser does not throttle or suspend audio in background tabs
-    if (!window.__deliverySilentAudioNode && audioCtx.createConstantSource) {
-      const src = audioCtx.createConstantSource();
-      const gain = audioCtx.createGain();
-      gain.gain.value = 0.00001;
-      src.connect(gain);
-      gain.connect(audioCtx.destination);
-      src.start();
-      window.__deliverySilentAudioNode = src;
+  }
+  return null;
+};
+
+export const activateAudioSession = () => {
+  try {
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => { });
+    }
+    prefetchOrderAlertBuffer();
+
+    // Low-level carrier signal prevents Chrome from marking AudioContext idle and suspending it in background tabs
+    if (!silentCarrierSource && ctx.createBufferSource) {
+      const sampleRate = ctx.sampleRate || 44100;
+      const buffer = ctx.createBuffer(1, sampleRate, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < sampleRate; i++) {
+        data[i] = 0.00005 * Math.sin(2 * Math.PI * 20 * (i / sampleRate));
+      }
+      const carrier = ctx.createBufferSource();
+      carrier.buffer = buffer;
+      carrier.loop = true;
+
+      const carrierGainNode = ctx.createGain();
+      carrierGainNode.gain.value = 0.0001; // completely silent to human ear
+
+      carrier.connect(carrierGainNode);
+      carrierGainNode.connect(ctx.destination);
+      carrier.start(0);
+      silentCarrierSource = carrier;
     }
   } catch {
     /* ignore */
   }
 };
 
-const playRingtoneChime = () => {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === "suspended") {
-      audioCtx.resume();
+// Every looping source ever started, so a stop can silence all of them —
+// never just the last one referenced.
+const liveBufferSources = new Set();
+// Bumped on every stop: an async start that began before the stop sees a
+// stale generation after its awaits and bails instead of ringing forever.
+let ringtoneGeneration = 0;
+let pendingDecodedPlay = null;
+
+const playDecodedOrderAlertRingtone = () => {
+  if (activeBufferSource || pendingDecodedPlay) return pendingDecodedPlay;
+  const generation = ringtoneGeneration;
+  pendingDecodedPlay = (async () => {
+    try {
+      const ctx = getSharedAudioContext();
+      if (!ctx) return;
+      if (ctx.state === "suspended") {
+        await ctx.resume().catch(() => { });
+      }
+      const buf = await prefetchOrderAlertBuffer();
+      // Stopped (order accepted / skipped / expired) while we were loading.
+      if (!buf || generation !== ringtoneGeneration || activeBufferSource) return;
+
+      const source = ctx.createBufferSource();
+      source.buffer = buf;
+      source.loop = true; // Seamless loop of the real MP3
+
+      const ringtoneGainNode = ctx.createGain();
+      ringtoneGainNode.gain.value = 1.0;
+
+      source.connect(ringtoneGainNode);
+      ringtoneGainNode.connect(ctx.destination);
+      source.start(0);
+      liveBufferSources.add(source);
+      source.onended = () => liveBufferSources.delete(source);
+      activeBufferSource = source;
+    } catch (err) {
+      console.warn("Web Audio order alert playback failed:", err);
+    } finally {
+      pendingDecodedPlay = null;
     }
-    const now = audioCtx.currentTime;
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(800, now);
-    osc1.frequency.linearRampToValueAtTime(1200, now + 0.15);
-    osc1.frequency.linearRampToValueAtTime(800, now + 0.3);
-
-    osc2.type = "triangle";
-    osc2.frequency.setValueAtTime(450, now);
-    osc2.frequency.linearRampToValueAtTime(650, now + 0.15);
-
-    gain.gain.setValueAtTime(0.6, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + 0.4);
-    osc2.stop(now + 0.4);
-  } catch {
-    /* ignore synth errors */
-  }
+  })();
+  return pendingDecodedPlay;
 };
 
-const startWebAudioBeepRingtone = () => {
-  const appSettings = getDeliveryAppSettings();
-  if (!appSettings.sound) return;
-  if (synthInterval) return;
-  keepAudioContextAlive();
-  playRingtoneChime();
-  synthInterval = setInterval(() => {
-    playRingtoneChime();
-  }, 650);
-};
-
-const stopWebAudioBeepRingtone = () => {
-  if (synthInterval) {
-    clearInterval(synthInterval);
-    synthInterval = null;
+const stopDecodedOrderAlertRingtone = () => {
+  ringtoneGeneration += 1;
+  for (const source of liveBufferSources) {
+    try {
+      source.stop();
+      source.disconnect();
+    } catch {
+      /* already stopped */
+    }
   }
+  liveBufferSources.clear();
+  activeBufferSource = null;
 };
 
 const showDeliveryOrderNotification = (payload) => {
@@ -407,26 +449,25 @@ const DeliveryLayout = () => {
 
   useEffect(() => {
     const unlockAudioAndNotifications = () => {
-      keepAudioContextAlive();
+      activateAudioSession();
       const audio = getOrderRingtone();
-      if (audio.paused) {
+      // Only prime the element when nothing is ringing — during an alert the
+      // Web Audio loop is already playing and this would add a second ring.
+      if (audio.paused && !activeOrderRef.current && !activeBufferSource) {
         audio.play().then(() => {
           audio.pause();
           audio.currentTime = 0;
-        }).catch(() => {});
+        }).catch(() => { });
       }
       if (typeof Notification !== "undefined" && Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
+        Notification.requestPermission().catch(() => { });
       }
     };
 
-    window.addEventListener("pointerdown", unlockAudioAndNotifications);
-    window.addEventListener("touchstart", unlockAudioAndNotifications);
-    window.addEventListener("keydown", unlockAudioAndNotifications);
-    window.addEventListener("click", unlockAudioAndNotifications);
-
-    // Initial warm-up
-    unlockAudioAndNotifications();
+    window.addEventListener("pointerdown", unlockAudioAndNotifications, { passive: true });
+    window.addEventListener("touchstart", unlockAudioAndNotifications, { passive: true });
+    window.addEventListener("keydown", unlockAudioAndNotifications, { passive: true });
+    window.addEventListener("click", unlockAudioAndNotifications, { passive: true });
 
     return () => {
       window.removeEventListener("pointerdown", unlockAudioAndNotifications);
@@ -456,12 +497,53 @@ const DeliveryLayout = () => {
 
   const getOrderRingtone = () => {
     if (!orderRingtoneRef.current) {
-      const audio = new Audio(orderAlertSound);
+      const audio = new Audio("/sounds/order_alert.mp3");
       audio.loop = true;
       audio.preload = "auto";
+      audio.onerror = () => {
+        if (orderAlertSound && audio.src !== orderAlertSound) {
+          audio.src = orderAlertSound;
+        }
+      };
       orderRingtoneRef.current = audio;
     }
     return orderRingtoneRef.current;
+  };
+
+  /**
+   * Exactly ONE ringtone at a time. The Web Audio loop is preferred (keeps
+   * ringing in background tabs); the <audio> element is only a stand-in
+   * while that loop is loading / the AudioContext is still locked, and is
+   * paused the moment the Web Audio loop takes over.
+   */
+  const playSingleRingtone = () => {
+    const audio = getOrderRingtone();
+    const silenceElement = () => {
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    };
+
+    if (activeBufferSource) {
+      silenceElement();
+      return;
+    }
+
+    const ctx = getSharedAudioContext();
+    const webAudioReady = Boolean(orderAlertAudioBuffer && ctx && ctx.state === "running");
+    if (!webAudioReady && audio.paused) {
+      audio.muted = false;
+      audio.volume = 1;
+      audio.play().catch(() => { });
+    }
+
+    const pending = playDecodedOrderAlertRingtone();
+    if (pending && typeof pending.then === "function") {
+      pending.then(() => {
+        if (activeBufferSource) silenceElement();
+      });
+    }
   };
 
   const startOrderRingtone = () => {
@@ -471,19 +553,13 @@ const DeliveryLayout = () => {
     audio.preload = "auto";
 
     if (appSettings.sound) {
-      keepAudioContextAlive();
-      audio.muted = false;
-      audio.volume = 1;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {});
-      }
-      // Always run Web Audio beep ringtone in parallel so it rings reliably in background tabs
-      startWebAudioBeepRingtone();
+      activateAudioSession();
+      playSingleRingtone();
     } else {
       // Sound disabled — keep audio muted/paused
       audio.muted = true;
       audio.pause();
+      stopDecodedOrderAlertRingtone();
     }
 
     if (appSettings.vibration && typeof navigator !== "undefined" && navigator.vibrate) {
@@ -497,11 +573,7 @@ const DeliveryLayout = () => {
         if (!activeOrderRef.current) return;
         const currentSettings = getDeliveryAppSettings();
         if (!currentSettings.sound) return;
-        const currentAudio = getOrderRingtone();
-        if (currentAudio.paused) {
-          currentAudio.play().catch(() => {});
-        }
-        startWebAudioBeepRingtone();
+        playSingleRingtone();
       }, 1000);
     }
 
@@ -514,12 +586,7 @@ const DeliveryLayout = () => {
         if (!activeOrderRef.current) return;
         const currentSettings = getDeliveryAppSettings();
         if (!currentSettings.sound) return;
-        const currentAudio = getOrderRingtone();
-        if (currentAudio.paused) {
-          currentAudio.play().catch(() => {
-            startWebAudioBeepRingtone();
-          });
-        }
+        playSingleRingtone();
       };
       ringtoneUnlockHandlerRef.current = unlockPlayback;
       window.addEventListener("focus", unlockPlayback);
@@ -531,7 +598,7 @@ const DeliveryLayout = () => {
   };
 
   const stopOrderRingtone = () => {
-    stopWebAudioBeepRingtone();
+    stopDecodedOrderAlertRingtone();
     const audio = orderRingtoneRef.current;
     if (ringtoneRetryTimerRef.current) {
       clearInterval(ringtoneRetryTimerRef.current);
@@ -606,7 +673,7 @@ const DeliveryLayout = () => {
     const { total, subtotal, couponDiscount, couponCode, walletAmount, paymentMethod, isPaidOnline, isFullyWalletPaid, cashToCollect } = extractOrderValueAndDiscount(payload);
     const earnings = typeof payload.preview?.earnings === "number" ? payload.preview.earnings : (payload.paymentBreakdown?.riderPayoutTotal ?? Math.round(total * 0.1));
 
-    setActiveOrder({
+    const incomingOffer = {
       id: payload.orderId,
       mongoId: payload._id,
       pickup,
@@ -627,7 +694,10 @@ const DeliveryLayout = () => {
       expiresAt: payload.deliverySearchExpiresAt || new Date(Date.now() + 60000).toISOString(),
       isReturnPickup,
       items: payload.items || [],
-    });
+    };
+    activeOrderRef.current = incomingOffer;
+    setActiveOrder(incomingOffer);
+    startOrderRingtone();
     return true;
   }, []);
 
@@ -658,7 +728,7 @@ const DeliveryLayout = () => {
     const { total, subtotal, couponDiscount, couponCode, walletAmount, paymentMethod, isPaidOnline, isFullyWalletPaid, cashToCollect } = extractOrderValueAndDiscount(newOrder);
     const earnings = newOrder.paymentBreakdown?.riderPayoutTotal ?? newOrder.riderEarnings ?? Math.round(total * 0.1);
 
-    setActiveOrder({
+    const incomingOffer = {
       id: newOrder.orderId,
       mongoId: newOrder._id,
       pickup,
@@ -679,7 +749,10 @@ const DeliveryLayout = () => {
       expiresAt: newOrder.deliverySearchExpiresAt || new Date(Date.now() + 60000).toISOString(),
       isReturnPickup,
       items: newOrder.items || [],
-    });
+    };
+    activeOrderRef.current = incomingOffer;
+    setActiveOrder(incomingOffer);
+    startOrderRingtone();
   }, []);
 
   useEffect(() => {
@@ -991,13 +1064,17 @@ const DeliveryLayout = () => {
 
   useEffect(() => {
     if (user?.isOnline === false) return undefined;
+    activateAudioSession();
     const getToken = getDeliveryToken;
     getOrderSocket(getToken);
     return onDeliveryBroadcast(getToken, (payload) => {
       if (activeOrderRef.current || suppressIncomingModal || atCapacityRef.current) return;
       showDeliveryOrderNotification(payload);
       const opened = applyFromBroadcastPayload(payload);
-      if (opened) return;
+      if (opened) {
+        startOrderRingtone();
+        return;
+      }
       fetchAvailableOrders()
         .then((res) => {
           if (!res?.data?.success) return;
@@ -1280,6 +1357,7 @@ const DeliveryLayout = () => {
       const orderId = activeOrder.id;
       shownOrderIdsRef.current = new Set(shownOrderIdsRef.current).add(orderId);
       markIncomingOrderHandled(orderId);
+      activeOrderRef.current = null;
       stopOrderRingtone();
       setActiveOrder(null);
       dismissOrderAlertNotifications(orderId);
