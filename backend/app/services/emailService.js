@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import logger from "./logger.js";
+import { absoluteMediaUrl } from "../utils/mediaUrl.js";
 
 let cachedTransporter = null;
 
@@ -116,7 +117,8 @@ export async function getEmailBranding() {
     return {
       appName: settings?.appName || DEFAULT_BRAND.appName,
       primaryColor: /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : DEFAULT_BRAND.primaryColor,
-      logoUrl: /^https?:\/\//.test(settings?.logoUrl || "") ? settings.logoUrl : "",
+      // Mail clients need an absolute URL; uploaded logos are stored as /uploads/... paths.
+      logoUrl: absoluteMediaUrl(settings?.logoUrl),
       supportEmail: settings?.supportEmail || "",
     };
   } catch (error) {

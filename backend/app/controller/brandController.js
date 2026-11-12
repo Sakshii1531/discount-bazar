@@ -8,6 +8,7 @@ import { buildSearchRegex } from "../utils/regex.js";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
 import logger from "../services/logger.js";
+import { isMediaUrl } from "../utils/mediaUrl.js";
 
 const ALLOWED_KEYS = ["name", "slug", "description", "status"];
 const PUBLIC_FIELDS = "name slug logo";
@@ -51,7 +52,7 @@ async function resolveLogo(req, data) {
     });
   } else if (typeof req.body.logo === "string") {
     const logo = req.body.logo.trim();
-    if (logo === "" || /^https?:\/\//i.test(logo)) data.logo = logo;
+    if (logo === "" || isMediaUrl(logo)) data.logo = logo;
   }
 }
 

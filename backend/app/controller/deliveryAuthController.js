@@ -12,6 +12,7 @@ import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.const
 import { emitPendingReviewUpdateToAdmins } from "../services/orderSocketEmitter.js";
 import { updateDeliveryPartnerAggregates } from "../services/deliveryRatingService.js";
 import { countRiderActiveOrders } from "../services/delivery/riderActiveOrdersService.js";
+import { isMediaUrl } from "../utils/mediaUrl.js";
 
 const RIDER_OTP_MAX_FAILED_ATTEMPTS = () =>
     parseInt(process.env.OTP_MAX_FAILED_ATTEMPTS || "5", 10);
@@ -77,10 +78,10 @@ export const signupDelivery = async (req, res) => {
         ).trim();
         const normalizedProfileImage = String(req.body?.profileImageUrl || req.body?.profileImage || "").trim();
 
-        if (/^https?:\/\//i.test(normalizedAadhar)) aadharUrl = normalizedAadhar;
-        if (/^https?:\/\//i.test(normalizedPan)) panUrl = normalizedPan;
-        if (/^https?:\/\//i.test(normalizedDl)) dlUrl = normalizedDl;
-        if (/^https?:\/\//i.test(normalizedProfileImage)) profileImageUrl = normalizedProfileImage;
+        if (isMediaUrl(normalizedAadhar)) aadharUrl = normalizedAadhar;
+        if (isMediaUrl(normalizedPan)) panUrl = normalizedPan;
+        if (isMediaUrl(normalizedDl)) dlUrl = normalizedDl;
+        if (isMediaUrl(normalizedProfileImage)) profileImageUrl = normalizedProfileImage;
 
         const deliveryData = {
             name,

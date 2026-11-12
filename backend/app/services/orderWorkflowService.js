@@ -48,12 +48,14 @@ import logger from "./logger.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 
 const DELIVERY_SEARCH_MAX_ATTEMPTS = () =>
-  parseInt(process.env.DELIVERY_SEARCH_MAX_ATTEMPTS || "3", 10);
+  parseInt(process.env.DELIVERY_SEARCH_MAX_ATTEMPTS || "2", 10);
 
 const DELIVERY_RADIUS_MULTIPLIER = () =>
   parseFloat(process.env.DELIVERY_RADIUS_MULTIPLIER || "1.5");
 const INITIAL_DELIVERY_RADIUS_M = () =>
   parseInt(process.env.INITIAL_DELIVERY_RADIUS_METERS || "5000", 10);
+const MAX_DELIVERY_RADIUS_M = () =>
+  parseInt(process.env.MAX_DELIVERY_RADIUS_METERS || "8000", 10);
 
 /** Payload for `delivery:broadcast` + Notification.data — lets the app show a modal without relying on GET /available alone. */
 function deliveryBroadcastPayloadFromOrder(order, extra = {}) {
@@ -550,9 +552,12 @@ export async function processDeliveryTimeoutJob({ orderId, attempt }) {
   const maxAttempts = DELIVERY_SEARCH_MAX_ATTEMPTS();
 
   if (currentAttempt < maxAttempts) {
-    const nextRadius = Math.round(
-      (meta.radiusMeters || INITIAL_DELIVERY_RADIUS_M()) *
-        DELIVERY_RADIUS_MULTIPLIER(),
+    const nextRadius = Math.min(
+      Math.round(
+        (meta.radiusMeters || INITIAL_DELIVERY_RADIUS_M()) *
+          DELIVERY_RADIUS_MULTIPLIER(),
+      ),
+      MAX_DELIVERY_RADIUS_M(),
     );
     const deliveryMs = DEFAULT_DELIVERY_TIMEOUT_MS();
     const nextExpiry = new Date(now.getTime() + deliveryMs);

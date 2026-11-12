@@ -39,7 +39,9 @@ beforeEach(async () => {
 afterEach(clearDatabase);
 afterAll(async () => {
   for (const url of uploaded) {
-    const file = path.join(process.cwd(), "public", new URL(url).pathname);
+    // Uploads are saved as /uploads/... paths (older ones as absolute URLs).
+    const pathname = /^https?:\/\//i.test(url) ? new URL(url).pathname : url;
+    const file = path.join(process.cwd(), "public", pathname);
     if (fs.existsSync(file)) fs.unlinkSync(file);
   }
   await stopTestApp();
@@ -136,6 +138,23 @@ describe("replacing photos", () => {
     const doc = await saved();
     expect(doc.galleryImages).toEqual([G1, G2, G3]);
     expect(doc.description).not.toBe("edited");
+  });
+});
+
+describe("adding the first photo to a draft product", () => {
+  it("saves the uploaded cover and submits the product for approval", async () => {
+    await Product.updateOne(
+      { _id: product._id },
+      { $set: { mainImage: "", galleryImages: [], approvalStatus: "draft" } },
+    );
+    const res = await saveForm({ cover: PNG });
+    expect(res.status).toBe(200);
+    expect(res.body.result.mainImage).toMatch(/^\/uploads\/products\/.+\.png$/);
+    const doc = await saved();
+    expect(doc.mainImage).toMatch(UPLOADED);
+    expect(doc.approvalStatus).not.toBe("draft");
+    const file = path.join(process.cwd(), "public", doc.mainImage);
+    expect(fs.existsSync(file)).toBe(true);
   });
 });
 

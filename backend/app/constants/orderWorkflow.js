@@ -18,7 +18,12 @@ export const WORKFLOW_STATUS = {
 export const DEFAULT_SELLER_TIMEOUT_MS = () =>
   parseInt(process.env.SELLER_TIMEOUT_MS || "3600000", 10); // 1 hour for seller to accept/reject
 export const DEFAULT_DELIVERY_TIMEOUT_MS = () =>
-  parseInt(process.env.DELIVERY_TIMEOUT_MS || "60000", 10);
+  parseInt(
+    process.env.DELIVERY_TIMEOUT_MS ||
+      process.env.DEFAULT_DELIVERY_TIMEOUT_MS ||
+      "300000",
+    10,
+  );
 
 /**
  * Return-pickup broadcast assignment knobs — mirror the

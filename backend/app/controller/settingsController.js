@@ -9,6 +9,7 @@ import {
   DEFAULT_PRODUCT_APPROVAL_CONFIG,
   normalizeProductApprovalConfig,
 } from "../services/productModerationService.js";
+import { isMediaUrl } from "../utils/mediaUrl.js";
 
 /** Allowed keys for settings update (strip unknown keys) */
 const ALLOWED_KEYS = [
@@ -310,7 +311,7 @@ export const uploadSettingsImage = async (req, res) => {
     }
 
     const providedUrl = String(req.body?.url || req.body?.imageUrl || "").trim();
-    if (!providedUrl || !/^https?:\/\//i.test(providedUrl)) {
+    if (!providedUrl || !isMediaUrl(providedUrl)) {
       return handleResponse(res, 400, "A valid image URL is required");
     }
 

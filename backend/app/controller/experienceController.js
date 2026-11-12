@@ -21,6 +21,7 @@ import {
   inspectBannerFile,
   normalizeBannerMedia,
 } from "../services/bannerMediaService.js";
+import { normalizeMediaUrl } from "../utils/mediaUrl.js";
 
 // Section edits must also clear the per-location resolved copies.
 const invalidatePublicSections = async () => {
@@ -87,10 +88,7 @@ const validateBasePayload = async (body) => {
 
 const normalizeUrl = (value) => {
   const normalized = String(value || "").trim();
-  if (!normalized || !/^https?:\/\//i.test(normalized)) {
-    return "";
-  }
-  return normalized;
+  return normalizeMediaUrl(normalized);
 };
 
 // Keep the admin's chosen order (and drop ids that failed validation / repeats).

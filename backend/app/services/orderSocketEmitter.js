@@ -422,14 +422,16 @@ export async function retractDeliveryBroadcastForOrder(orderId, winnerDeliveryId
       .select("_id recipient")
       .lean();
 
+    // Always notify the general online room so every connected rider's app immediately clears this order
+    if (s) {
+      s.to("delivery:online").emit("delivery:broadcast:withdrawn", {
+        orderId,
+        winnerDeliveryId: winnerId,
+        at: new Date().toISOString(),
+      });
+    }
+
     if (!notifications.length) {
-      if (s) {
-        s.to("delivery:online").emit("delivery:broadcast:withdrawn", {
-          orderId,
-          winnerDeliveryId: winnerId,
-          at: new Date().toISOString(),
-        });
-      }
       return { removedCount: 0 };
     }
 

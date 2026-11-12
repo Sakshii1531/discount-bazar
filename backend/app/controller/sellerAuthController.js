@@ -15,6 +15,7 @@ import Admin from "../models/admin.js";
 import { emitNotificationEvent } from "../modules/notifications/notification.emitter.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/notification.constants.js";
 import { emitPendingReviewUpdateToAdmins } from "../services/orderSocketEmitter.js";
+import { isMediaUrl } from "../utils/mediaUrl.js";
 
 /* ===============================
    Utils
@@ -54,8 +55,7 @@ const parseDocumentsPayload = (documents) => {
 };
 
 const isValidUploadedDocumentReference = (value) => {
-    const normalized = String(value || "").trim();
-    return /^https?:\/\//i.test(normalized);
+    return isMediaUrl(value);
 };
 
 const resolveSellerDocuments = (body = {}, parsedDocuments = {}) => {
@@ -69,7 +69,7 @@ const resolveSellerDocuments = (body = {}, parsedDocuments = {}) => {
 
     for (const [field, candidate] of Object.entries(directFields)) {
         const normalized = String(candidate || "").trim();
-        if (normalized && /^https?:\/\//i.test(normalized)) {
+        if (normalized && isMediaUrl(normalized)) {
             resolved[field] = normalized;
         }
     }

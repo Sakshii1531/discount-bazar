@@ -25,6 +25,7 @@ import { formatAmount } from "@shared/utils/currency";
 import ActiveDeliveriesSection from "../components/ActiveDeliveriesSection";
 import CancelledReturnTasks from "../components/CancelledReturnTasks";
 import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
+import { onDeliveryBroadcastWithdrawn } from "@/core/services/orderSocket";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -105,6 +106,18 @@ const Dashboard = () => {
     fetchNotifications();
     if (isOnline) fetchAvailableOrders();
   }, [isOnline, activeTab, searchPaused]);
+
+  useEffect(() => {
+    if (!isOnline) return undefined;
+    const getToken = () => localStorage.getItem("token") || localStorage.getItem("delivery_token");
+    return onDeliveryBroadcastWithdrawn(getToken, (payload) => {
+      const orderId = payload?.orderId;
+      if (!orderId) return;
+      setAvailableOrders((prev) =>
+        prev.filter((o) => o.orderId !== orderId && o.id !== orderId && o._id !== orderId)
+      );
+    });
+  }, [isOnline]);
 
   const handleOnlineToggle = async () => {
     const newStatus = !isOnline;

@@ -72,6 +72,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { getOrderStatusVariant } from '../components/orders';
 import { useSellerOrders } from '../context/SellerOrdersContext';
 import CancelledReturnsPanel from '../components/orders/CancelledReturnsPanel';
+import useOrderBill from '../components/orders/useOrderBill';
 
 // Show the real order ID (new IDs are already short: ORD- + 8 chars) so every order stays unique on screen.
 const formatMinOrderId = (rawId, index = 0) => {
@@ -131,6 +132,7 @@ const Orders = () => {
     const [isQuickViewModalOpen, setIsQuickViewModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const { showToast } = useToast();
+    const { openBill, loadingId: billLoadingId, billModal } = useOrderBill();
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
@@ -864,6 +866,7 @@ const Orders = () => {
 
                                                 {/* Card Quick Actions */}
                                                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                                                    <div className="flex items-center gap-1.5">
                                                     <button
                                                         onClick={() => handleViewDetails(order)}
                                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -871,6 +874,21 @@ const Orders = () => {
                                                         <HiOutlineEye className="h-3.5 w-3.5 text-slate-500" />
                                                         <span>View Details</span>
                                                     </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openBill(order.id);
+                                                        }}
+                                                        disabled={billLoadingId === order.id}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                                                        title="View / print bill"
+                                                    >
+                                                        {billLoadingId === order.id
+                                                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                                                            : <HiOutlinePrinter className="h-3.5 w-3.5 text-slate-500" />}
+                                                        <span>Bill</span>
+                                                    </button>
+                                                    </div>
 
                                                     <div className="flex items-center gap-1.5">
                                                         {isPending && (
@@ -1033,8 +1051,22 @@ const Orders = () => {
                                                             <button
                                                                 onClick={() => handleViewDetails(order)}
                                                                 className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100"
+                                                                title="View details"
                                                             >
                                                                 <HiOutlineEye className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openBill(order.id);
+                                                                }}
+                                                                disabled={billLoadingId === order.id}
+                                                                className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100 disabled:opacity-60 disabled:cursor-wait"
+                                                                title="View / print bill"
+                                                            >
+                                                                {billLoadingId === order.id
+                                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                    : <HiOutlinePrinter className="h-4 w-4" />}
                                                             </button>
                                                             {order.status.toLowerCase() === 'pending' && (
                                                                 <>
@@ -1413,6 +1445,19 @@ const Orders = () => {
                                     <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:items-center justify-end">
                                         <div className="flex gap-2 items-center">
                                             <button onClick={() => setIsDetailsModalOpen(false)} className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">CLOSE</button>
+                                            <button
+                                                onClick={() => {
+                                                    const id = selectedOrder.id;
+                                                    // Close the details sheet first: its body scroll-lock would offset the printed bill.
+                                                    setIsDetailsModalOpen(false);
+                                                    openBill(id);
+                                                }}
+                                                disabled={billLoadingId === selectedOrder.id}
+                                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 shadow-sm transition-all disabled:opacity-60 disabled:cursor-wait"
+                                            >
+                                                <HiOutlinePrinter className="h-4 w-4 text-slate-500" />
+                                                Bill
+                                            </button>
                                             <div className="relative inline-block w-40">
                                                 <select
                                                     value={selectedOrder.status.toLowerCase()}
@@ -1446,6 +1491,7 @@ const Orders = () => {
                     </AnimatePresence>
                 </>
             )}
+            {billModal}
         </div>
     );
 };

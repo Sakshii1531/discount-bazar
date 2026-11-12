@@ -10,12 +10,14 @@ import {
     HiOutlineArchiveBox,
     HiOutlineUser,
     HiOutlineArrowDownTray,
+    HiOutlinePrinter,
 } from "react-icons/hi2";
 import Button from "@shared/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { sellerApi } from "../../services/sellerApi";
 import { formatAmount } from "@shared/utils/currency";
 import { downloadPosOnlineOrdersPDF } from "@/lib/posPdfExport";
+import useOrderBill from "../orders/useOrderBill";
 
 /**
  * Clean & minimal online orders queue for POS counter.
@@ -27,6 +29,7 @@ const OnlineOrdersPanel = ({ orders = [], onChanged, shopName }) => {
     const navigate = useNavigate();
     const [busyId, setBusyId] = useState(null);
     const [filter, setFilter] = useState("all");
+    const { openBill, loadingId: billLoadingId, billModal } = useOrderBill();
 
     const updateStatus = async (order, status, label) => {
         setBusyId(order.orderId);
@@ -303,6 +306,16 @@ const OnlineOrdersPanel = ({ orders = [], onChanged, shopName }) => {
                                     </div>
                                 )}
 
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    isLoading={billLoadingId === order.orderId}
+                                    onClick={() => openBill(order.orderId)}
+                                    className="h-8 px-3 text-xs font-semibold"
+                                >
+                                    <HiOutlinePrinter className="h-3.5 w-3.5 mr-1" /> Bill
+                                </Button>
+
                                 <button
                                     type="button"
                                     onClick={() => navigate(`/seller/orders?search=${encodeURIComponent(order.orderId)}`)}
@@ -316,6 +329,7 @@ const OnlineOrdersPanel = ({ orders = [], onChanged, shopName }) => {
                     );
                 })}
             </div>
+            {billModal}
         </div>
     );
 };

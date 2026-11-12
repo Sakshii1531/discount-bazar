@@ -1,3 +1,4 @@
+import { isMediaUrl } from "../../../utils/mediaUrl.js";
 const SELLER_DOC_LABELS = {
   tradeLicense: "Trade License",
   gstCertificate: "GST Certificate",
@@ -15,7 +16,7 @@ function getSellerDocumentLabel(key) {
 }
 
 function isViewableDocumentUrl(value = "") {
-  return /^https?:\/\//i.test(String(value).trim());
+  return isMediaUrl(value);
 }
 
 export function formatSellerDocuments(documents) {

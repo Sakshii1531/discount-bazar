@@ -12,6 +12,7 @@ import { buildKey, delPattern, getOrSet, getTTL } from "../services/cacheService
 const clearPublicOfferSectionCache = () =>
   delPattern(`${buildKey("offersections", "public")}:*`).catch(() => 0);
 import { getCustomerVisibleFilter } from "../services/productModerationService.js";
+import { isLocalUploadPath } from "../utils/mediaUrl.js";
 
 export const getPublicOfferSections = async (req, res) => {
   try {
@@ -113,11 +114,11 @@ export const getAdminOfferSections = async (req, res) => {
   }
 };
 
-// Empty clears the custom image; otherwise it must be an http(s) URL.
+// Empty clears the custom image; otherwise an http(s) URL or an /uploads/... path.
 function parseSideImageUrl(value) {
   const url = String(value ?? "").trim();
   if (!url) return { url: "" };
-  if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) {
+  if (!(/^https?:\/\/\S+$/i.test(url) || isLocalUploadPath(url)) || url.length > 2048) {
     return { error: "Side image must be a valid image URL" };
   }
   return { url };
