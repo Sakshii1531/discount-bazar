@@ -4,3 +4,5 @@ temp_interactive_push.bat
 .vercel
 uploads.zip
 uploads/
+config.bat
+node_modules

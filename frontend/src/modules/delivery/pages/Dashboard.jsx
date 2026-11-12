@@ -26,6 +26,7 @@ import ActiveDeliveriesSection from "../components/ActiveDeliveriesSection";
 import CancelledReturnTasks from "../components/CancelledReturnTasks";
 import { useActiveDeliveries } from "../context/ActiveDeliveriesContext";
 import { onDeliveryBroadcastWithdrawn } from "@/core/services/orderSocket";
+import { activateAudioSession } from "../layout/DeliveryLayout";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ const Dashboard = () => {
       await refreshUser(); // Refresh global auth state
       setIsOnline(newStatus);
       if (newStatus) {
+        activateAudioSession();
         if (typeof Notification !== "undefined" && Notification.permission === "default") {
           Notification.requestPermission().catch(() => {});
         }
