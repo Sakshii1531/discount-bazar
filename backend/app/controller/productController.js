@@ -24,6 +24,7 @@ import {
 } from "../services/searchSyncService.js";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
+import { normalizeMediaUrl } from "../utils/mediaUrl.js";
 import logger from "../services/logger.js";
 import {
   PRODUCT_APPROVAL_STATUS,
@@ -139,9 +140,7 @@ function parseJsonIfString(value) {
 }
 
 function normalizeUrl(value) {
-  const normalized = String(value || "").trim();
-  if (!/^https?:\/\//i.test(normalized)) return "";
-  return normalized;
+  return normalizeMediaUrl(value);
 }
 
 function parseImageList(input) {

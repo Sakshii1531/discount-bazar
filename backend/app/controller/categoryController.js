@@ -3,18 +3,13 @@ import handleResponse from "../utils/helper.js";
 import getPagination from "../utils/pagination.js";
 import { buildKey, getOrSet, getTTL, invalidate } from "../services/cacheService.js";
 import { uploadToCloudinary } from "../services/mediaService.js";
+import { normalizeMediaUrl } from "../utils/mediaUrl.js";
 import mongoose from "mongoose";
 import { invalidateCategoryName } from "../services/entityNameCache.js";
 import { buildSearchRegex } from "../utils/regex.js";
 
 function normalizeUrl(value) {
-  if (!value || typeof value !== "string") return "";
-  const normalized = value.trim();
-  if (!normalized) return "";
-  if (!/^https?:\/\//i.test(normalized)) {
-    return "";
-  }
-  return normalized;
+  return normalizeMediaUrl(value);
 }
 
 function categoryCacheKey({ tree = false, type = "all" } = {}) {
